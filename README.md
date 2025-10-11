@@ -93,7 +93,6 @@ opt.step()
 ## Reference Bench (CPU/Mac, MPS/Mac, CUDA/Win)
 
 **TinyMix; 120 steps (warmup 30–50).**  
-画像は `bench/plots/` を参照。
 
 | Device | Optimizer | Median step time |
 |-------:|:---------:|-----------------:|
