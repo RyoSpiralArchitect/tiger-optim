@@ -1,0 +1,14 @@
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tiger-optim"
+version = "2.1.0"
+description = "Tiger Optimizer (PyTorch) — v2.1.0 upgrades"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "AGPL-3.0-only OR SpiralReality Commercial"}
+authors = [{name="SpiralReality", email="contact@example.com"}]
+dependencies = ["torch>=1.13"]
