@@ -1,0 +1,7 @@
+
+from .tiger import Tiger
+from .tagged import build_tagged_param_groups
+from .schedulers import TagWarmupDecay
+
+__all__ = ["Tiger","build_tagged_param_groups","TagWarmupDecay"]
+__version__ = "2.1.0"
