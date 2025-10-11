@@ -171,7 +171,7 @@ We’d love **fresh results on modern GPUs** (Ampere/Ada/Hopper; CUDA 11.8+/12.x
 Royalty (OEM): 0.5% Tiger‑attributable GTV **or** $0.05/MAU (higher of), floor **$50k/yr**, cap **$250k/yr**.  
 Premium (Commercial): LoRA‑PID inertia + minima/recovery, QKV dual‑objective auto‑LR (γ auto‑scale + accel clip), scalarless foreach + Triton stats, pending arithmetic pipelines, Auto‑FFN asym.  
 Early adopters: first 10 customers −25% (year 1).  
-Contact: **contact@spiralreality.example**
+Contact: **kishkavsesvit@icloud.com**
 
 > If community CUDA runs show Tiger ≥ AdamW (median) on modern GPUs by ≥5%, we’ll switch to **Assertive** pricing (Pro=$12k / Enterprise=$30k / OEM=$90k+royalty).
 
