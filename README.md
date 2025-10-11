@@ -156,7 +156,10 @@ We’d love **fresh results on modern GPUs** (Ampere/Ada/Hopper; CUDA 11.8+/12.x
 
 ## Pricing & Licensing
 
-**AGPL‑3.0** for the public build.  
+## License
+SpiralReality and its components are licensed under the  
+[GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)](https://www.gnu.org/licenses/agpl-3.0.html).  
+© 2025 Ryo ∴ SpiralArchitect and SpiralReality. for the public build.  
 **Commercial License** available for proprietary integration; see `docs/PRICING.md`.
 
 ### Pricing (Annual) — Conservative (current)
