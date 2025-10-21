@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tiger-optim"
-version = "2.1.2"
+version = "2.2.0"
 description = "Tiger Optimizer (PyTorch) — v2.1.0 upgrades"
 readme = "README.md"
 requires-python = ">=3.8"

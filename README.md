@@ -90,23 +90,77 @@ opt.step()
 
 ---
 
-## Acceleration: TorchScript fused primitives
+## Acceleration toolchain (Rust & Julia)
 
-Tiger ships pure-PyTorch kernels for its softsign, RMS and vector-norm
-operations. When TorchScript is available (it ships with PyTorch by default)
-the kernels are scripted once at import time, producing fused graphs that avoid
-Python dispatch and scalar argument boxing.
+Tiger v2.2.0 sharpens the optional CPU accelerators for the softsign, RMS and
+vector-norm primitives that dominate small-model training on AdamW-style loops.
 
-The accelerated helpers fall back to the eager implementations automatically.
-You can confirm what is active on your system:
+- **Rust (`bench/rust_accel`)** — a lightweight `cdylib` compiled via `cargo`
+  provides SIMD-friendly kernels that PyTorch can call through `ctypes`.
+- **Julia (`juliacall`)** — if you have Julia ≥1.9 and the `juliacall` Python
+  bridge installed, Tiger dispatches the same primitives to an optimized Julia
+  loop.
+
+The runtime now profiles each backend invocation and automatically reorders the
+priority list to favour the fastest working implementation. Backends that keep
+raising errors (or return `None`) are temporarily suppressed so your training
+loop never stalls on a flaky native module.
+
+Runtime selection is automatic. You can inspect the availability at runtime:
 
 ```python
-from tiger_optim import available_backends
-print(available_backends())  # e.g. {"torchscript_softsign": True, ...}
+from tiger_optim import available_backends, current_backend_priority
+print(available_backends())  # e.g. {"rust": True, "julia": False}
+print(current_backend_priority())  # runtime ordering after scoring
 ```
 
-TorchScript works across CPU, CUDA and MPS backends without additional build
-steps, so the optimization path is now completely dependency free.
+### Runtime configuration
+
+Tiger now exposes lightweight runtime controls so you can experiment without
+restarting your notebook or script:
+
+```python
+from tiger_optim import (
+    available_backends,
+    backend_diagnostics,
+    configure_backends,
+    current_backend_priority,
+    refresh_backend_state,
+    reset_backend_configuration,
+)
+
+# Prefer Julia over Rust for the current process, but keep Rust as a fallback
+configure_backends(preferred=["julia", "rust"])
+
+# Disable all native accelerators (forces the PyTorch eager path)
+configure_backends(disabled=["all"])
+
+# Clear runtime overrides and reset performance history, e.g. after rebuilding a backend
+reset_backend_configuration()
+refresh_backend_state(reload=True, reset_metrics=True)
+print(available_backends())
+print(current_backend_priority())
+print(backend_diagnostics())
+```
+
+Prefer environment variables? Set them before import:
+
+```bash
+export TIGER_ACCEL_DISABLE=all          # disable all accelerators
+export TIGER_ACCEL_PREFER=julia,rust    # Julia first, Rust fallback
+```
+
+Both signals are lazily cached, so changes made at runtime can be picked up via
+`refresh_backend_state()`.
+
+To pre-build the Rust library:
+
+```bash
+cargo build --release --manifest-path bench/rust_accel/Cargo.toml
+```
+
+If neither accelerator is available Tiger falls back to the stock PyTorch
+implementations, so you can opt-in incrementally.
 
 ---
 

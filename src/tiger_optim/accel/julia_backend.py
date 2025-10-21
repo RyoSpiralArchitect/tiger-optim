@@ -22,8 +22,12 @@ from __future__ import annotations
 
 from typing import Optional
 
-import numpy as np
 import torch
+
+try:  # pragma: no cover - optional dependency
+    import numpy as np
+except Exception:  # pragma: no cover - numpy is optional for Julia acceleration
+    np = None  # type: ignore[assignment]
 
 try:  # pragma: no cover - optional dependency
     from juliacall import Main as jl
@@ -32,7 +36,7 @@ except Exception:  # pragma: no cover - Julia is optional
 
 __all__ = ["softsign", "rms", "norm", "is_available"]
 
-if jl is not None:
+if jl is not None and np is not None:
     jl.seval(
         """
         module TigerAccel
@@ -71,6 +75,8 @@ else:
 
 
 def _numpy_view(x: torch.Tensor) -> Optional[np.ndarray]:
+    if np is None:
+        return None
     if x.device.type != "cpu":
         return None
     if not x.is_contiguous():
@@ -82,7 +88,7 @@ def _numpy_view(x: torch.Tensor) -> Optional[np.ndarray]:
 
 
 def softsign(x: torch.Tensor, tau: float) -> Optional[torch.Tensor]:
-    if jl is None:
+    if jl is None or np is None:
         return None
     arr = _numpy_view(x)
     if arr is None:
@@ -90,16 +96,16 @@ def softsign(x: torch.Tensor, tau: float) -> Optional[torch.Tensor]:
     if arr.dtype == np.float32 and _SOFTSIGN32 is not None:
         dest = np.empty_like(arr)
         _SOFTSIGN32(dest, arr, np.float32(tau))
-        return torch.from_numpy(dest.copy())
+        return torch.from_numpy(dest.copy()).to(dtype=x.dtype, device=x.device)
     if arr.dtype == np.float64 and _SOFTSIGN64 is not None:
         dest = np.empty_like(arr)
         _SOFTSIGN64(dest, arr, np.float64(tau))
-        return torch.from_numpy(dest.copy())
+        return torch.from_numpy(dest.copy()).to(dtype=x.dtype, device=x.device)
     return None
 
 
 def rms(x: torch.Tensor) -> Optional[float]:
-    if jl is None:
+    if jl is None or np is None:
         return None
     arr = _numpy_view(x)
     if arr is None:
@@ -112,7 +118,7 @@ def rms(x: torch.Tensor) -> Optional[float]:
 
 
 def norm(x: torch.Tensor) -> Optional[float]:
-    if jl is None:
+    if jl is None or np is None:
         return None
     arr = _numpy_view(x)
     if arr is None:
@@ -125,4 +131,4 @@ def norm(x: torch.Tensor) -> Optional[float]:
 
 
 def is_available() -> bool:
-    return jl is not None
+    return jl is not None and np is not None
