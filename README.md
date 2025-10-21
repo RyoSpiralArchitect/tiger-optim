@@ -90,32 +90,23 @@ opt.step()
 
 ---
 
-## Acceleration toolchain (Rust & Julia)
+## Acceleration: TorchScript fused primitives
 
-Tiger v2.1.1 introduces optional CPU accelerators for the softsign, RMS and
-vector-norm primitives that dominate small-model training on AdamW-style loops.
+Tiger ships pure-PyTorch kernels for its softsign, RMS and vector-norm
+operations. When TorchScript is available (it ships with PyTorch by default)
+the kernels are scripted once at import time, producing fused graphs that avoid
+Python dispatch and scalar argument boxing.
 
-- **Rust (`bench/rust_accel`)** — a lightweight `cdylib` compiled via `cargo`
-  provides SIMD-friendly kernels that PyTorch can call through `ctypes`.
-- **Julia (`juliacall`)** — if you have Julia ≥1.9 and the `juliacall` Python
-  bridge installed, Tiger dispatches the same primitives to an optimized Julia
-  loop.
-
-Runtime selection is automatic. You can inspect the availability at runtime:
+The accelerated helpers fall back to the eager implementations automatically.
+You can confirm what is active on your system:
 
 ```python
 from tiger_optim import available_backends
-print(available_backends())  # e.g. {"rust": True, "julia": False}
+print(available_backends())  # e.g. {"torchscript_softsign": True, ...}
 ```
 
-To pre-build the Rust library:
-
-```bash
-cargo build --release --manifest-path bench/rust_accel/Cargo.toml
-```
-
-If neither accelerator is available Tiger falls back to the stock PyTorch
-implementations, so you can opt-in incrementally.
+TorchScript works across CPU, CUDA and MPS backends without additional build
+steps, so the optimization path is now completely dependency free.
 
 ---
 
