@@ -19,8 +19,19 @@
 # ============================================================================
 
 from __future__ import annotations
-import torch, torch.nn as nn
+
+from dataclasses import dataclass
 from typing import Dict, Iterable, List, Tuple, Optional
+
+import torch
+import torch.nn as nn
+
+__all__ = [
+    "ParamGroupSummary",
+    "build_tagged_param_groups",
+    "collect_param_group_stats",
+    "summarize_param_groups",
+]
 
 _NORM_TYPES = (nn.LayerNorm, nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.GroupNorm,
                nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d)
@@ -113,8 +124,68 @@ def build_tagged_param_groups(model: nn.Module, *, base_lr: float=3e-4, base_wd:
     return param_groups
 
 
+@dataclass(frozen=True)
+class ParamGroupSummary:
+    """Lightweight container describing the composition of a parameter group."""
+
+    idx: int
+    tag: str
+    lr: float
+    weight_decay: float
+    lr_scale: float
+    n_tensors: int
+    n_params: int
+    param_ratio: float
+
+
+def collect_param_group_stats(param_groups: Iterable[dict]) -> List[ParamGroupSummary]:
+    """Return structured statistics for each parameter group.
+
+    Args:
+        param_groups: Iterable of parameter group dictionaries.
+
+    Returns:
+        A list of :class:`ParamGroupSummary` entries mirroring the original order.
+    """
+
+    pg_list = list(param_groups)
+    staged: List[Tuple[int, dict, int, int]] = []
+    total_params = 0
+
+    for idx, group in enumerate(pg_list):
+        params = [p for p in group.get("params", []) if isinstance(p, torch.Tensor)]
+        n_tensors = len(params)
+        n_params = int(sum(int(p.numel()) for p in params))
+        staged.append((idx, group, n_tensors, n_params))
+        total_params += n_params
+
+    if not staged:
+        return []
+
+    summaries: List[ParamGroupSummary] = []
+    denom = float(total_params) if total_params else 0.0
+
+    for idx, group, n_tensors, n_params in staged:
+        ratio = (n_params / denom) if denom else 0.0
+        summaries.append(
+            ParamGroupSummary(
+                idx=idx,
+                tag=str(group.get("block_tag", "default")),
+                lr=float(group.get("lr", 0.0)),
+                weight_decay=float(group.get("weight_decay", 0.0)),
+                lr_scale=float(group.get("lr_scale", 1.0)),
+                n_tensors=n_tensors,
+                n_params=n_params,
+                param_ratio=ratio,
+            )
+        )
+
+    return summaries
+
+
 def summarize_param_groups(param_groups: Iterable[dict], *, precision: int = 4,
-                           sort_by: str = "tag") -> str:
+                           sort_by: str = "tag",
+                           include_share: bool = False) -> str:
     """Return a human-friendly table describing tagged parameter groups.
 
     The function operates purely on the optimizer param group dictionaries and
@@ -125,54 +196,52 @@ def summarize_param_groups(param_groups: Iterable[dict], *, precision: int = 4,
         param_groups: Iterable of parameter group dictionaries.
         precision: Number of decimal places for floating point columns.
         sort_by: Sort order – ``"tag"`` (default), ``"index"`` or ``"n_params"``.
+        include_share: When ``True`` append a column with the percentage of
+            parameters captured by each group.
 
     Returns:
         A multi-line string with a compact summary table.
     """
-    rows = []
-    total_params = 0
-    pg_list = list(param_groups)
-    for idx, group in enumerate(pg_list):
-        params = [p for p in group.get("params", []) if isinstance(p, torch.Tensor)]
-        n_tensors = len(params)
-        n_params = int(sum(int(p.numel()) for p in params))
-        total_params += n_params
-        rows.append({
-            "idx": idx,
-            "tag": str(group.get("block_tag", "default")),
-            "lr": float(group.get("lr", 0.0)),
-            "wd": float(group.get("weight_decay", 0.0)),
-            "lr_scale": float(group.get("lr_scale", 1.0)),
-            "n_tensors": n_tensors,
-            "n_params": n_params,
-        })
-
+    rows = collect_param_group_stats(param_groups)
     if not rows:
         return "(no parameter groups)"
 
+    total_params = sum(row.n_params for row in rows)
+
     key = str(sort_by).lower()
     if key == "tag":
-        rows.sort(key=lambda r: (r["tag"], r["idx"]))
+        rows.sort(key=lambda r: (r.tag, r.idx))
     elif key == "n_params":
-        rows.sort(key=lambda r: (-r["n_params"], r["idx"]))
+        rows.sort(key=lambda r: (-r.n_params, r.idx))
     else:
-        rows.sort(key=lambda r: r["idx"])
+        rows.sort(key=lambda r: r.idx)
 
     def fmt_float(val: float) -> str:
         if abs(val) >= 1e4 or (0 < abs(val) < 1e-3):
             return f"{val:.{precision}e}"
         return f"{val:.{precision}f}"
 
+    def fmt_percent(value: float) -> str:
+        return f"{value * 100:.{precision}f}%"
+
     headers = ["idx", "tag", "tensors", "params", "lr", "wd", "lr_scale"]
-    table = [[
-        str(row["idx"]),
-        row["tag"],
-        str(row["n_tensors"]),
-        f"{row['n_params']:,}",
-        fmt_float(row["lr"]),
-        fmt_float(row["wd"]),
-        fmt_float(row["lr_scale"]),
-    ] for row in rows]
+    if include_share:
+        headers.append("share")
+
+    table = []
+    for row in rows:
+        cols = [
+            str(row.idx),
+            row.tag,
+            str(row.n_tensors),
+            f"{row.n_params:,}",
+            fmt_float(row.lr),
+            fmt_float(row.weight_decay),
+            fmt_float(row.lr_scale),
+        ]
+        if include_share:
+            cols.append(fmt_percent(row.param_ratio))
+        table.append(cols)
 
     widths = [max(len(h), *(len(row[i]) for row in table)) for i, h in enumerate(headers)]
 
