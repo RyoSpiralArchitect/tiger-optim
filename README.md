@@ -90,6 +90,35 @@ opt.step()
 
 ---
 
+## Acceleration toolchain (Rust & Julia)
+
+Tiger v2.1.1 introduces optional CPU accelerators for the softsign, RMS and
+vector-norm primitives that dominate small-model training on AdamW-style loops.
+
+- **Rust (`bench/rust_accel`)** — a lightweight `cdylib` compiled via `cargo`
+  provides SIMD-friendly kernels that PyTorch can call through `ctypes`.
+- **Julia (`juliacall`)** — if you have Julia ≥1.9 and the `juliacall` Python
+  bridge installed, Tiger dispatches the same primitives to an optimized Julia
+  loop.
+
+Runtime selection is automatic. You can inspect the availability at runtime:
+
+```python
+from tiger_optim import available_backends
+print(available_backends())  # e.g. {"rust": True, "julia": False}
+```
+
+To pre-build the Rust library:
+
+```bash
+cargo build --release --manifest-path bench/rust_accel/Cargo.toml
+```
+
+If neither accelerator is available Tiger falls back to the stock PyTorch
+implementations, so you can opt-in incrementally.
+
+---
+
 ## Reference Bench (CPU/Mac, MPS/Mac, CUDA/Win)
 
 **TinyMix; 120 steps (warmup 30–50).**  

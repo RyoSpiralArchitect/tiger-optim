@@ -20,7 +20,7 @@
 
 from __future__ import annotations
 import torch, torch.nn as nn
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, Iterable, List, Tuple, Optional
 
 _NORM_TYPES = (nn.LayerNorm, nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.GroupNorm,
                nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d)
@@ -111,3 +111,75 @@ def build_tagged_param_groups(model: nn.Module, *, base_lr: float=3e-4, base_wd:
             for k,v in tag_overrides[tg].items(): g[k] = v
         param_groups.append(g)
     return param_groups
+
+
+def summarize_param_groups(param_groups: Iterable[dict], *, precision: int = 4,
+                           sort_by: str = "tag") -> str:
+    """Return a human-friendly table describing tagged parameter groups.
+
+    The function operates purely on the optimizer param group dictionaries and
+    therefore works for both the output of :func:`build_tagged_param_groups`
+    and live ``optimizer.param_groups`` instances.
+
+    Args:
+        param_groups: Iterable of parameter group dictionaries.
+        precision: Number of decimal places for floating point columns.
+        sort_by: Sort order – ``"tag"`` (default), ``"index"`` or ``"n_params"``.
+
+    Returns:
+        A multi-line string with a compact summary table.
+    """
+    rows = []
+    total_params = 0
+    pg_list = list(param_groups)
+    for idx, group in enumerate(pg_list):
+        params = [p for p in group.get("params", []) if isinstance(p, torch.Tensor)]
+        n_tensors = len(params)
+        n_params = int(sum(int(p.numel()) for p in params))
+        total_params += n_params
+        rows.append({
+            "idx": idx,
+            "tag": str(group.get("block_tag", "default")),
+            "lr": float(group.get("lr", 0.0)),
+            "wd": float(group.get("weight_decay", 0.0)),
+            "lr_scale": float(group.get("lr_scale", 1.0)),
+            "n_tensors": n_tensors,
+            "n_params": n_params,
+        })
+
+    if not rows:
+        return "(no parameter groups)"
+
+    key = str(sort_by).lower()
+    if key == "tag":
+        rows.sort(key=lambda r: (r["tag"], r["idx"]))
+    elif key == "n_params":
+        rows.sort(key=lambda r: (-r["n_params"], r["idx"]))
+    else:
+        rows.sort(key=lambda r: r["idx"])
+
+    def fmt_float(val: float) -> str:
+        if abs(val) >= 1e4 or (0 < abs(val) < 1e-3):
+            return f"{val:.{precision}e}"
+        return f"{val:.{precision}f}"
+
+    headers = ["idx", "tag", "tensors", "params", "lr", "wd", "lr_scale"]
+    table = [[
+        str(row["idx"]),
+        row["tag"],
+        str(row["n_tensors"]),
+        f"{row['n_params']:,}",
+        fmt_float(row["lr"]),
+        fmt_float(row["wd"]),
+        fmt_float(row["lr_scale"]),
+    ] for row in rows]
+
+    widths = [max(len(h), *(len(row[i]) for row in table)) for i, h in enumerate(headers)]
+
+    def fmt_row(cols):
+        return " ".join(col.ljust(widths[i]) for i, col in enumerate(cols))
+
+    lines = [fmt_row(headers), fmt_row(["-" * w for w in widths])]
+    lines.extend(fmt_row(row) for row in table)
+    lines.append("Total params: {:,}".format(total_params))
+    return "\n".join(lines)
