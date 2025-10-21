@@ -44,13 +44,21 @@ def _is_compiling() -> bool:
     except Exception:
         return False
 
-def _scalar_like(reference: Optional[torch.Tensor], value: float, *, dtype: Optional[torch.dtype] = None) -> torch.Tensor:
-    """Create a scalar tensor that matches ``reference`` when provided."""
+def _scalar_like(
+    reference: Optional[torch.Tensor],
+    value: float,
+    *,
+    dtype: Optional[torch.dtype] = None,
+    device: Optional[torch.device] = None,
+) -> torch.Tensor:
+    """Create a scalar tensor aligned with ``reference`` or explicit overrides."""
 
     if reference is not None:
         return reference.new_tensor(value, dtype=dtype)
-    target_dtype = dtype if dtype is not None else torch.float32
-    return torch.tensor(value, dtype=target_dtype)
+    target_dtype = dtype if dtype is not None else torch.get_default_dtype()
+    if device is None:
+        return torch.tensor(value, dtype=target_dtype)
+    return torch.tensor(value, dtype=target_dtype, device=device)
 
 
 def _median_tensor(vals: List[torch.Tensor], *, reference: Optional[torch.Tensor] = None) -> torch.Tensor:
