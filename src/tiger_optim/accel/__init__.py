@@ -27,7 +27,7 @@ from functools import lru_cache
 from importlib import import_module
 from time import perf_counter
 from types import ModuleType
-from typing import Dict, Iterator, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterator, Optional, Sequence, Tuple
 
 import torch
 
@@ -55,6 +55,28 @@ _SUPPRESSION_THRESHOLD = 3
 _PROFILED_ATTRS: set[str] = set()
 
 
+def _shares_storage(left: torch.Tensor, right: torch.Tensor) -> bool:
+    """Return ``True`` when ``left`` and ``right`` share the same underlying storage."""
+
+    if left is right:
+        return True
+    try:  # Prefer the dedicated alias query when available.
+        return bool(torch._C._is_alias_of(left, right))  # type: ignore[attr-defined]
+    except (AttributeError, RuntimeError, TypeError):
+        pass
+    for attr in ("untyped_storage", "storage"):
+        get_storage = getattr(left, attr, None)
+        other_storage = getattr(right, attr, None)
+        if get_storage is None or other_storage is None:
+            continue
+        try:
+            if get_storage().data_ptr() == other_storage().data_ptr():  # type: ignore[operator]
+                return True
+        except (AttributeError, RuntimeError):
+            continue
+    return False
+
+
 def _coerce_backend_value(reference: torch.Tensor, value: object) -> torch.Tensor:
     """Return ``value`` as a tensor matching ``reference``'s dtype and device."""
 
@@ -62,7 +84,7 @@ def _coerce_backend_value(reference: torch.Tensor, value: object) -> torch.Tenso
         tensor = value
         if tensor.device != reference.device or tensor.dtype != reference.dtype:
             tensor = tensor.to(dtype=reference.dtype, device=reference.device)
-        if tensor.data_ptr() == reference.data_ptr():
+        if _shares_storage(reference, tensor):
             tensor = tensor.clone()
         return tensor
     return reference.new_tensor(value)
@@ -357,7 +379,13 @@ def _iter_backends() -> Iterator[Tuple[str, ModuleType]]:
         yield name, module
 
 
-def _dispatch(name: str, module: ModuleType, attr: str, *args) -> Optional[object]:
+def _dispatch(
+    name: str,
+    module: ModuleType,
+    attr: str,
+    validator: Callable[[object], object],
+    *args,
+) -> Optional[object]:
     func = getattr(module, attr, None)
     if func is None:
         return None
@@ -372,11 +400,16 @@ def _dispatch(name: str, module: ModuleType, attr: str, *args) -> Optional[objec
     if result is None:
         _handle_failure(name, metrics, "returned None")
         return None
+    try:
+        validated = validator(result)
+    except Exception as exc:
+        _handle_failure(name, metrics, exc)
+        return None
     _record_success(name, metrics, duration)
-    return result
+    return validated
 
 
-def _profile_backends(attr: str, *args) -> Optional[object]:
+def _profile_backends(attr: str, validator: Callable[[object], object], *args) -> Optional[object]:
     available = list(_iter_backends())
     if len(available) <= 1:
         _mark_profiled(attr)
@@ -387,7 +420,7 @@ def _profile_backends(attr: str, *args) -> Optional[object]:
     best_score = float("inf")
 
     for name, module in available:
-        result = _dispatch(name, module, attr, *args)
+        result = _dispatch(name, module, attr, validator, *args)
         if result is None:
             continue
         results[name] = result
@@ -405,13 +438,15 @@ def _profile_backends(attr: str, *args) -> Optional[object]:
     return results.get(best_name)
 
 
-def _accelerated_result(attr: str, *args) -> Optional[object]:
+def _accelerated_result(
+    attr: str, validator: Callable[[object], object], *args
+) -> Optional[object]:
     if _needs_profiling(attr):
-        profiled = _profile_backends(attr, *args)
+        profiled = _profile_backends(attr, validator, *args)
         if profiled is not None:
             return profiled
     for name, module in _iter_backends():
-        result = _dispatch(name, module, attr, *args)
+        result = _dispatch(name, module, attr, validator, *args)
         if result is not None:
             return result
     return None
@@ -425,9 +460,17 @@ def fast_softsign(x: torch.Tensor, tau: float) -> torch.Tensor:
     if x.requires_grad:
         return x / (x.abs() + tau)
     if x.device.type == "cpu":
-        result = _accelerated_result("softsign", x, tau)
+        def _validate(result: object) -> torch.Tensor:
+            tensor = _coerce_backend_value(x, result)
+            if tensor.shape != x.shape:
+                raise ValueError(
+                    "softsign backend must return a tensor matching the input shape"
+                )
+            return tensor
+
+        result = _accelerated_result("softsign", _validate, x, tau)
         if result is not None:
-            return _coerce_backend_value(x, result)
+            return result
     return x / (x.abs() + tau)
 
 
@@ -439,9 +482,15 @@ def fast_rms(x: torch.Tensor) -> torch.Tensor:
     if x.requires_grad:
         return x.pow(2).mean().sqrt()
     if x.device.type == "cpu":
-        result = _accelerated_result("rms", x)
+        def _validate(result: object) -> torch.Tensor:
+            tensor = _coerce_backend_value(x, result)
+            if tensor.dim() != 0:
+                raise ValueError("rms backend must return a scalar tensor")
+            return tensor
+
+        result = _accelerated_result("rms", _validate, x)
         if result is not None:
-            return _coerce_backend_value(x, result)
+            return result
     return x.pow(2).mean().sqrt()
 
 
@@ -453,9 +502,15 @@ def fast_norm(x: torch.Tensor) -> torch.Tensor:
     if x.requires_grad:
         return torch.linalg.vector_norm(x)
     if x.device.type == "cpu":
-        result = _accelerated_result("norm", x)
+        def _validate(result: object) -> torch.Tensor:
+            tensor = _coerce_backend_value(x, result)
+            if tensor.dim() != 0:
+                raise ValueError("norm backend must return a scalar tensor")
+            return tensor
+
+        result = _accelerated_result("norm", _validate, x)
         if result is not None:
-            return _coerce_backend_value(x, result)
+            return result
     return torch.linalg.vector_norm(x)
 
 

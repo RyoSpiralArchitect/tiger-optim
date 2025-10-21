@@ -295,3 +295,78 @@ def test_accelerated_results_preserve_requires_grad(monkeypatch):
     finally:
         accel.reset_backend_configuration()
         accel.refresh_backend_state(reload=True, reset_metrics=True)
+
+
+def test_softsign_backend_shape_mismatch_falls_back(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+
+    class BadSoftsignBackend:
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+        @staticmethod
+        def softsign(x: torch.Tensor, tau: float) -> torch.Tensor:
+            return torch.ones(x.shape[:-1], dtype=x.dtype)
+
+    backend = BadSoftsignBackend()
+    try:
+        accel.configure_backends(disabled=["julia", "go"])
+        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.refresh_backend_state(reset_metrics=True)
+
+        x = torch.randn(6)
+        tau = 0.75
+        expected = x / (x.abs() + tau)
+
+        actual = accel.fast_softsign(x, tau)
+        assert torch.allclose(actual, expected)
+
+        diagnostics = accel.backend_diagnostics()
+        assert diagnostics["rust"]["failures"] >= 1
+    finally:
+        accel.reset_backend_configuration()
+        accel.refresh_backend_state(reload=True, reset_metrics=True)
+
+
+def test_scalar_backends_validate_shape(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+
+    class BadScalarBackend:
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+        @staticmethod
+        def rms(x: torch.Tensor) -> torch.Tensor:
+            return torch.ones_like(x)
+
+        @staticmethod
+        def norm(x: torch.Tensor) -> torch.Tensor:
+            return torch.ones_like(x)
+
+    backend = BadScalarBackend()
+    try:
+        accel.configure_backends(disabled=["julia", "go"])
+        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.refresh_backend_state(reset_metrics=True)
+
+        x = torch.randn(10)
+        expected_rms = x.pow(2).mean().sqrt()
+        expected_norm = torch.linalg.vector_norm(x)
+
+        actual_rms = accel.fast_rms(x)
+        actual_norm = accel.fast_norm(x)
+
+        assert torch.allclose(actual_rms, expected_rms)
+        assert torch.allclose(actual_norm, expected_norm)
+
+        diagnostics = accel.backend_diagnostics()
+        assert diagnostics["rust"]["failures"] >= 2
+    finally:
+        accel.reset_backend_configuration()
+        accel.refresh_backend_state(reload=True, reset_metrics=True)
