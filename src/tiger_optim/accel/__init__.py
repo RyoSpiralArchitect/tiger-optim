@@ -82,12 +82,22 @@ def _coerce_backend_value(reference: torch.Tensor, value: object) -> torch.Tenso
 
     if isinstance(value, torch.Tensor):
         tensor = value
-        if tensor.device != reference.device or tensor.dtype != reference.dtype:
-            tensor = tensor.to(dtype=reference.dtype, device=reference.device)
-        if _shares_storage(reference, tensor):
-            tensor = tensor.clone()
-        return tensor
-    return reference.new_tensor(value)
+    else:
+        try:
+            tensor = torch.as_tensor(value, dtype=reference.dtype)
+        except (TypeError, ValueError):
+            tensor = reference.new_tensor(value)
+        else:
+            if tensor.device != reference.device:
+                tensor = tensor.to(device=reference.device)
+            if tensor.dtype != reference.dtype:
+                tensor = tensor.to(dtype=reference.dtype)
+
+    if tensor.device != reference.device or tensor.dtype != reference.dtype:
+        tensor = tensor.to(dtype=reference.dtype, device=reference.device)
+    if _shares_storage(reference, tensor):
+        tensor = tensor.clone()
+    return tensor
 
 
 @dataclass

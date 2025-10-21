@@ -370,3 +370,27 @@ def test_scalar_backends_validate_shape(monkeypatch):
     finally:
         accel.reset_backend_configuration()
         accel.refresh_backend_state(reload=True, reset_metrics=True)
+
+
+def test_coerce_backend_value_clones_shared_storage(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+
+    reference = torch.arange(6, dtype=torch.float32)
+    alias = reference.view(-1)
+
+    coerced = accel._coerce_backend_value(reference, alias)
+
+    assert coerced is not alias
+    assert coerced.data_ptr() != alias.data_ptr()
+    assert torch.allclose(coerced, alias)
+
+
+def test_coerce_backend_value_accepts_sequence(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+
+    reference = torch.zeros(3, dtype=torch.float16)
+    coerced = accel._coerce_backend_value(reference, [1.0, 2.0, 3.0])
+
+    assert coerced.dtype == reference.dtype
+    assert coerced.device == reference.device
+    assert torch.allclose(coerced, reference.new_tensor([1.0, 2.0, 3.0]))
