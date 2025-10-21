@@ -141,3 +141,157 @@ def test_backend_priority_reorders_by_latency(monkeypatch):
         assert diagnostics["julia"]["successes"] > 0
     finally:
         accel.reset_backend_configuration()
+
+
+def test_tensor_backend_results_are_normalized(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+
+    class TensorBackend:
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+        @staticmethod
+        def softsign(x: torch.Tensor, tau: float) -> torch.Tensor:
+            return torch.full_like(x, 0.5, dtype=torch.float64)
+
+        @staticmethod
+        def rms(x: torch.Tensor) -> torch.Tensor:
+            return torch.tensor(3.0, dtype=torch.float64)
+
+        @staticmethod
+        def norm(x: torch.Tensor) -> torch.Tensor:
+            return torch.tensor(4.0, dtype=torch.float64)
+
+    backend = TensorBackend()
+    try:
+        accel.configure_backends(disabled=["julia", "go"])
+        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.refresh_backend_state(reset_metrics=True)
+
+        x = torch.randn(7, dtype=torch.float16)
+        softsign = accel.fast_softsign(x, tau=0.3)
+        assert softsign.dtype == x.dtype
+        assert softsign.device == x.device
+        assert torch.allclose(softsign, torch.full_like(x, 0.5))
+
+        rms = accel.fast_rms(x)
+        assert rms.dtype == x.dtype
+        assert rms.device == x.device
+        assert torch.allclose(rms, x.new_tensor(3.0))
+
+        norm = accel.fast_norm(x)
+        assert norm.dtype == x.dtype
+        assert norm.device == x.device
+        assert torch.allclose(norm, x.new_tensor(4.0))
+    finally:
+        accel.reset_backend_configuration()
+        accel.refresh_backend_state(reload=True, reset_metrics=True)
+
+
+def test_fast_paths_skip_accel_when_requires_grad(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+
+    class TrackingBackend:
+        def __init__(self) -> None:
+            self.softsign_calls = 0
+            self.rms_calls = 0
+            self.norm_calls = 0
+
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+        def softsign(self, x: torch.Tensor, tau: float) -> torch.Tensor:
+            self.softsign_calls += 1
+            return torch.full_like(x, 0.0)
+
+        def rms(self, x: torch.Tensor) -> torch.Tensor:
+            self.rms_calls += 1
+            return torch.tensor(0.0)
+
+        def norm(self, x: torch.Tensor) -> torch.Tensor:
+            self.norm_calls += 1
+            return torch.tensor(0.0)
+
+    backend = TrackingBackend()
+    try:
+        accel.configure_backends(disabled=["julia", "go"])
+        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.refresh_backend_state(reset_metrics=True)
+
+        x = torch.randn(5, requires_grad=True)
+        tau = 0.25
+
+        softsign = accel.fast_softsign(x, tau)
+        assert backend.softsign_calls == 0
+        assert softsign.requires_grad
+        expected_softsign = x / (x.abs() + tau)
+        assert torch.allclose(softsign, expected_softsign)
+
+        rms = accel.fast_rms(x)
+        assert backend.rms_calls == 0
+        assert rms.requires_grad
+        expected_rms = x.pow(2).mean().sqrt()
+        assert torch.allclose(rms, expected_rms)
+
+        norm = accel.fast_norm(x)
+        assert backend.norm_calls == 0
+        assert norm.requires_grad
+        expected_norm = torch.linalg.vector_norm(x)
+        assert torch.allclose(norm, expected_norm)
+    finally:
+        accel.reset_backend_configuration()
+        accel.refresh_backend_state(reload=True, reset_metrics=True)
+
+
+def test_accelerated_results_preserve_requires_grad(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+
+    class GradBackend:
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+        @staticmethod
+        def softsign(x: torch.Tensor, tau: float) -> torch.Tensor:
+            return torch.full_like(x, 0.25, requires_grad=True)
+
+        @staticmethod
+        def rms(x: torch.Tensor) -> torch.Tensor:
+            value = x.new_tensor(1.5)
+            value.requires_grad_()
+            return value
+
+        @staticmethod
+        def norm(x: torch.Tensor) -> torch.Tensor:
+            value = x.new_tensor(2.5)
+            value.requires_grad_()
+            return value
+
+    backend = GradBackend()
+    try:
+        accel.configure_backends(disabled=["julia", "go"])
+        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.refresh_backend_state(reset_metrics=True)
+
+        x = torch.randn(6, dtype=torch.float32)
+        tau = 0.1
+
+        softsign = accel.fast_softsign(x, tau)
+        assert softsign.requires_grad
+
+        rms = accel.fast_rms(x)
+        assert rms.requires_grad
+
+        norm = accel.fast_norm(x)
+        assert norm.requires_grad
+    finally:
+        accel.reset_backend_configuration()
+        accel.refresh_backend_state(reload=True, reset_metrics=True)

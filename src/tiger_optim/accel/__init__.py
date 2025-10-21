@@ -55,6 +55,19 @@ _SUPPRESSION_THRESHOLD = 3
 _PROFILED_ATTRS: set[str] = set()
 
 
+def _coerce_backend_value(reference: torch.Tensor, value: object) -> torch.Tensor:
+    """Return ``value`` as a tensor matching ``reference``'s dtype and device."""
+
+    if isinstance(value, torch.Tensor):
+        tensor = value
+        if tensor.device != reference.device or tensor.dtype != reference.dtype:
+            tensor = tensor.to(dtype=reference.dtype, device=reference.device)
+        if tensor.data_ptr() == reference.data_ptr():
+            tensor = tensor.clone()
+        return tensor
+    return reference.new_tensor(value)
+
+
 @dataclass
 class _BackendMetrics:
     name: str
@@ -409,10 +422,12 @@ def fast_softsign(x: torch.Tensor, tau: float) -> torch.Tensor:
 
     if x.numel() == 0:
         return x.clone()
+    if x.requires_grad:
+        return x / (x.abs() + tau)
     if x.device.type == "cpu":
         result = _accelerated_result("softsign", x, tau)
-        if isinstance(result, torch.Tensor):
-            return result.to(dtype=x.dtype, device=x.device)
+        if result is not None:
+            return _coerce_backend_value(x, result)
     return x / (x.abs() + tau)
 
 
@@ -421,10 +436,12 @@ def fast_rms(x: torch.Tensor) -> torch.Tensor:
 
     if x.numel() == 0:
         return torch.zeros((), dtype=x.dtype, device=x.device)
+    if x.requires_grad:
+        return x.pow(2).mean().sqrt()
     if x.device.type == "cpu":
         result = _accelerated_result("rms", x)
         if result is not None:
-            return torch.tensor(result, dtype=x.dtype, device=x.device)
+            return _coerce_backend_value(x, result)
     return x.pow(2).mean().sqrt()
 
 
@@ -433,10 +450,12 @@ def fast_norm(x: torch.Tensor) -> torch.Tensor:
 
     if x.numel() == 0:
         return torch.zeros((), dtype=x.dtype, device=x.device)
+    if x.requires_grad:
+        return torch.linalg.vector_norm(x)
     if x.device.type == "cpu":
         result = _accelerated_result("norm", x)
         if result is not None:
-            return torch.tensor(result, dtype=x.dtype, device=x.device)
+            return _coerce_backend_value(x, result)
     return torch.linalg.vector_norm(x)
 
 
