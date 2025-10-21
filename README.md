@@ -90,6 +90,26 @@ opt.step()
 
 ---
 
+## Acceleration: TorchScript fused primitives
+
+Tiger ships pure-PyTorch kernels for its softsign, RMS and vector-norm
+operations. When TorchScript is available (it ships with PyTorch by default)
+the kernels are scripted once at import time, producing fused graphs that avoid
+Python dispatch and scalar argument boxing.
+
+The accelerated helpers fall back to the eager implementations automatically.
+You can confirm what is active on your system:
+
+```python
+from tiger_optim import available_backends
+print(available_backends())  # e.g. {"torchscript_softsign": True, ...}
+```
+
+TorchScript works across CPU, CUDA and MPS backends without additional build
+steps, so the optimization path is now completely dependency free.
+
+---
+
 ## Reference Bench (CPU/Mac, MPS/Mac, CUDA/Win)
 
 **TinyMix; 120 steps (warmup 30–50).**  
