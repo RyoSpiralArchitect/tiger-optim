@@ -59,10 +59,10 @@ def _coerce_backend_value(reference: torch.Tensor, value: object) -> torch.Tenso
     """Return ``value`` as a tensor matching ``reference``'s dtype and device."""
 
     if isinstance(value, torch.Tensor):
-        tensor = value.detach()
+        tensor = value
         if tensor.device != reference.device or tensor.dtype != reference.dtype:
             tensor = tensor.to(dtype=reference.dtype, device=reference.device)
-        elif tensor.data_ptr() == reference.data_ptr():
+        if tensor.data_ptr() == reference.data_ptr():
             tensor = tensor.clone()
         return tensor
     return reference.new_tensor(value)

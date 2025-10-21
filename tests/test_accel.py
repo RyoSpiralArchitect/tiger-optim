@@ -247,3 +247,51 @@ def test_fast_paths_skip_accel_when_requires_grad(monkeypatch):
     finally:
         accel.reset_backend_configuration()
         accel.refresh_backend_state(reload=True, reset_metrics=True)
+
+
+def test_accelerated_results_preserve_requires_grad(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+
+    class GradBackend:
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+        @staticmethod
+        def softsign(x: torch.Tensor, tau: float) -> torch.Tensor:
+            return torch.full_like(x, 0.25, requires_grad=True)
+
+        @staticmethod
+        def rms(x: torch.Tensor) -> torch.Tensor:
+            value = x.new_tensor(1.5)
+            value.requires_grad_()
+            return value
+
+        @staticmethod
+        def norm(x: torch.Tensor) -> torch.Tensor:
+            value = x.new_tensor(2.5)
+            value.requires_grad_()
+            return value
+
+    backend = GradBackend()
+    try:
+        accel.configure_backends(disabled=["julia", "go"])
+        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.refresh_backend_state(reset_metrics=True)
+
+        x = torch.randn(6, dtype=torch.float32)
+        tau = 0.1
+
+        softsign = accel.fast_softsign(x, tau)
+        assert softsign.requires_grad
+
+        rms = accel.fast_rms(x)
+        assert rms.requires_grad
+
+        norm = accel.fast_norm(x)
+        assert norm.requires_grad
+    finally:
+        accel.reset_backend_configuration()
+        accel.refresh_backend_state(reload=True, reset_metrics=True)
