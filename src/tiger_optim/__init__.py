@@ -16,7 +16,12 @@
 # ====================================================================
 
 from .tiger import Tiger
-from .tagged import build_tagged_param_groups, summarize_param_groups
+from .tagged import (
+    ParamGroupSummary,
+    build_tagged_param_groups,
+    collect_param_group_stats,
+    summarize_param_groups,
+)
 from .schedulers import TagWarmupDecay
 from .accel import (
     available_backends,
@@ -29,7 +34,9 @@ from .accel import (
 
 __all__ = [
     "Tiger",
+    "ParamGroupSummary",
     "build_tagged_param_groups",
+    "collect_param_group_stats",
     "summarize_param_groups",
     "TagWarmupDecay",
     "available_backends",
