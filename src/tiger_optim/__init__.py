@@ -18,6 +18,13 @@
 from .tiger import Tiger
 from .tagged import build_tagged_param_groups, summarize_param_groups
 from .schedulers import TagWarmupDecay
+from .accel import available_backends
 
-__all__ = ["Tiger","build_tagged_param_groups","summarize_param_groups","TagWarmupDecay"]
-__version__ = "2.1.0"
+__all__ = [
+    "Tiger",
+    "build_tagged_param_groups",
+    "summarize_param_groups",
+    "TagWarmupDecay",
+    "available_backends",
+]
+__version__ = "2.1.1"
