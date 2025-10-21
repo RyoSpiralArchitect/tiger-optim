@@ -90,6 +90,83 @@ opt.step()
 
 ---
 
+## Acceleration toolchain (Rust, Julia & Go)
+
+Tiger v2.3.0 sharpens the optional CPU accelerators for the softsign, RMS and
+vector-norm primitives that dominate small-model training on AdamW-style loops.
+
+- **Rust (`bench/rust_accel`)** — a lightweight `cdylib` compiled via `cargo`
+  provides SIMD-friendly kernels that PyTorch can call through `ctypes`.
+- **Julia (`juliacall`)** — if you have Julia ≥1.9 and the `juliacall` Python
+  bridge installed, Tiger dispatches the same primitives to an optimized Julia
+  loop.
+- **Go (`bench/go_accel`)** — when `go build` is available we compile a
+  `c-shared` module that delivers the same kernels with zero-copy slices.
+
+The runtime now profiles each backend invocation and automatically reorders the
+priority list to favour the fastest working implementation. Backends that keep
+raising errors (or return `None`) are temporarily suppressed so your training
+loop never stalls on a flaky native module.
+
+Runtime selection is automatic. You can inspect the availability at runtime:
+
+```python
+from tiger_optim import available_backends, current_backend_priority
+print(available_backends())  # e.g. {"rust": True, "julia": False, "go": False}
+print(current_backend_priority())  # runtime ordering after scoring
+```
+
+### Runtime configuration
+
+Tiger now exposes lightweight runtime controls so you can experiment without
+restarting your notebook or script:
+
+```python
+from tiger_optim import (
+    available_backends,
+    backend_diagnostics,
+    configure_backends,
+    current_backend_priority,
+    refresh_backend_state,
+    reset_backend_configuration,
+)
+
+# Prefer Julia over Rust for the current process, but keep Rust as a fallback
+configure_backends(preferred=["julia", "rust"])
+
+# Disable all native accelerators (forces the PyTorch eager path)
+configure_backends(disabled=["all"])
+
+# Clear runtime overrides and reset performance history, e.g. after rebuilding a backend
+reset_backend_configuration()
+refresh_backend_state(reload=True, reset_metrics=True)
+print(available_backends())
+print(current_backend_priority())
+print(backend_diagnostics())
+```
+
+Prefer environment variables? Set them before import:
+
+```bash
+export TIGER_ACCEL_DISABLE=all          # disable all accelerators
+export TIGER_ACCEL_PREFER=julia,rust    # Julia first, Rust fallback
+```
+
+Both signals are lazily cached, so changes made at runtime can be picked up via
+`refresh_backend_state()`.
+
+To pre-build the Rust or Go libraries:
+
+```bash
+cargo build --release --manifest-path bench/rust_accel/Cargo.toml
+go build -buildmode=c-shared -o bench/go_accel/build/libtiger_go_accel.so ./bench/go_accel
+```
+
+If neither accelerator is available Tiger falls back to the stock PyTorch
+implementations, so you can opt-in incrementally.
+
+---
+
 ## Reference Bench (CPU/Mac, MPS/Mac, CUDA/Win)
 
 **TinyMix; 120 steps (warmup 30–50).**  
