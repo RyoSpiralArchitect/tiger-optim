@@ -1,5 +1,5 @@
-# tiger-optim
-Tiger Optimizer — beyond AdamW. A precision beast born from pure Python and stubborn curiosity — LoRA-aware, QKV-adaptive, trust-ratio-driven 🐅
+# Tiger Optimizer
+— **beyond AdamW. A precision beast born from pure Python and stubborn curiosity — LoRA-aware, QKV-adaptive, trust-ratio-driven 🐅**
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="AGPL-3.0">
@@ -8,8 +8,6 @@ Tiger Optimizer — beyond AdamW. A precision beast born from pure Python and st
   <img src="https://img.shields.io/badge/PyTorch-2.x-lightgrey.svg" alt="PyTorch 2.x">
   <a href="issues?q=label%3Abenchmark"><img src="https://img.shields.io/badge/Benchmarks-help%20wanted-brightgreen.svg" alt="Benchmarks: help wanted"></a>
 </p>
-
-<h1 align="center">Tiger Optimizer</h1>
 <p align="center"><i>Sign‑aware, trust‑ratio, LoRA‑PID with inertia — precise like a tiger.</i></p>
 
 > **Bold, evidence‑based.** Tiger is verified on Apple’s MPS backend (real hardware).  
