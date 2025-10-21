@@ -24,9 +24,19 @@ from typing import Dict, List, Optional, Tuple, Union
 import torch
 from torch.optim import Optimizer
 
-def _rms(x): return x.pow(2).mean().sqrt()
-def _norm(x): return torch.linalg.vector_norm(x)
-def _softsign(x, tau): return x / (x.abs() + tau)
+from .accel import fast_norm, fast_rms, fast_softsign
+
+
+def _rms(x):
+    return fast_rms(x)
+
+
+def _norm(x):
+    return fast_norm(x)
+
+
+def _softsign(x, tau):
+    return fast_softsign(x, tau)
 def _to_dtype(x: torch.Tensor, dtype: torch.dtype): return x if x.dtype == dtype else x.to(dtype)
 def _is_compiling() -> bool:
     try:
