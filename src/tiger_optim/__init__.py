@@ -39,4 +39,4 @@ __all__ = [
     "backend_diagnostics",
     "current_backend_priority",
 ]
-__version__ = "2.2.0"
+__version__ = "2.3.0"

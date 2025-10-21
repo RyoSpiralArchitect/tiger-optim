@@ -44,7 +44,7 @@ __all__ = [
 ]
 
 _BACKEND_MODULES: Dict[str, Optional[ModuleType]] = {}
-_BACKEND_ORDER: Tuple[str, ...] = ("rust", "julia")
+_BACKEND_ORDER: Tuple[str, ...] = ("rust", "julia", "go")
 _CONFIG_LOCK = threading.RLock()
 _METRICS_LOCK = threading.RLock()
 _PROFILE_LOCK = threading.RLock()

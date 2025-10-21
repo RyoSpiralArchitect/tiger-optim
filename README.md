@@ -88,9 +88,9 @@ opt.step()
 
 ---
 
-## Acceleration toolchain (Rust & Julia)
+## Acceleration toolchain (Rust, Julia & Go)
 
-Tiger v2.2.0 sharpens the optional CPU accelerators for the softsign, RMS and
+Tiger v2.3.0 sharpens the optional CPU accelerators for the softsign, RMS and
 vector-norm primitives that dominate small-model training on AdamW-style loops.
 
 - **Rust (`bench/rust_accel`)** — a lightweight `cdylib` compiled via `cargo`
@@ -98,6 +98,8 @@ vector-norm primitives that dominate small-model training on AdamW-style loops.
 - **Julia (`juliacall`)** — if you have Julia ≥1.9 and the `juliacall` Python
   bridge installed, Tiger dispatches the same primitives to an optimized Julia
   loop.
+- **Go (`bench/go_accel`)** — when `go build` is available we compile a
+  `c-shared` module that delivers the same kernels with zero-copy slices.
 
 The runtime now profiles each backend invocation and automatically reorders the
 priority list to favour the fastest working implementation. Backends that keep
@@ -108,7 +110,7 @@ Runtime selection is automatic. You can inspect the availability at runtime:
 
 ```python
 from tiger_optim import available_backends, current_backend_priority
-print(available_backends())  # e.g. {"rust": True, "julia": False}
+print(available_backends())  # e.g. {"rust": True, "julia": False, "go": False}
 print(current_backend_priority())  # runtime ordering after scoring
 ```
 
@@ -151,10 +153,11 @@ export TIGER_ACCEL_PREFER=julia,rust    # Julia first, Rust fallback
 Both signals are lazily cached, so changes made at runtime can be picked up via
 `refresh_backend_state()`.
 
-To pre-build the Rust library:
+To pre-build the Rust or Go libraries:
 
 ```bash
 cargo build --release --manifest-path bench/rust_accel/Cargo.toml
+go build -buildmode=c-shared -o bench/go_accel/build/libtiger_go_accel.so ./bench/go_accel
 ```
 
 If neither accelerator is available Tiger falls back to the stock PyTorch

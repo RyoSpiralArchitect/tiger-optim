@@ -61,12 +61,14 @@ def test_configure_backends_runtime_disable(monkeypatch):
 def test_available_backends_shape(monkeypatch):
     accel = _reload_accel(monkeypatch, TIGER_ACCEL_DISABLE="all")
     status = accel.available_backends()
-    assert set(status.keys()) == {"rust", "julia"}
+    assert set(status.keys()) == {"rust", "julia", "go"}
     assert all(isinstance(flag, bool) for flag in status.values())
 
 
 def test_backend_failure_suppression(monkeypatch):
     accel = _reload_accel(monkeypatch)
+
+    accel.configure_backends(preferred=["rust"], disabled=["julia", "go"])
 
     class FailingBackend:
         def __init__(self) -> None:
@@ -81,24 +83,28 @@ def test_backend_failure_suppression(monkeypatch):
             raise RuntimeError("boom")
 
     failing = FailingBackend()
-    monkeypatch.setitem(accel._BACKEND_MODULES, "rust", failing)
-    accel.refresh_backend_state(reset_metrics=True)
+    try:
+        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", failing)
+        accel.refresh_backend_state(reset_metrics=True)
 
-    x = torch.randn(8)
-    for _ in range(4):
-        accel.fast_rms(x)
+        x = torch.randn(8)
+        for _ in range(4):
+            accel.fast_rms(x)
 
-    diagnostics = accel.backend_diagnostics()
-    assert diagnostics["rust"]["failures"] >= 3
-    assert diagnostics["rust"]["suppressed"] is True
+        diagnostics = accel.backend_diagnostics()
+        assert diagnostics["rust"]["failures"] >= 3
+        assert diagnostics["rust"]["suppressed"] is True
 
-    expected = x.pow(2).mean().sqrt()
-    actual = accel.fast_rms(x)
-    assert torch.allclose(actual, expected)
+        expected = x.pow(2).mean().sqrt()
+        actual = accel.fast_rms(x)
+        assert torch.allclose(actual, expected)
+    finally:
+        accel.reset_backend_configuration()
 
 
 def test_backend_priority_reorders_by_latency(monkeypatch):
     accel = _reload_accel(monkeypatch)
+    accel.configure_backends(disabled=["go"])
 
     class FakeBackend:
         def __init__(self, delay: float) -> None:
@@ -118,17 +124,20 @@ def test_backend_priority_reorders_by_latency(monkeypatch):
 
     slow = FakeBackend(delay=0.01)
     fast = FakeBackend(delay=0.0)
-    monkeypatch.setitem(accel._BACKEND_MODULES, "rust", slow)
-    monkeypatch.setitem(accel._BACKEND_MODULES, "julia", fast)
-    accel.refresh_backend_state(reset_metrics=True)
+    try:
+        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", slow)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "julia", fast)
+        accel.refresh_backend_state(reset_metrics=True)
 
-    x = torch.randn(128)
-    for _ in range(5):
-        accel.fast_norm(x)
+        x = torch.randn(128)
+        for _ in range(5):
+            accel.fast_norm(x)
 
-    order = accel.current_backend_priority()
-    assert order and order[0] == "julia"
+        order = accel.current_backend_priority()
+        assert order and order[0] == "julia"
 
-    diagnostics = accel.backend_diagnostics()
-    assert diagnostics["rust"]["successes"] > 0
-    assert diagnostics["julia"]["successes"] > 0
+        diagnostics = accel.backend_diagnostics()
+        assert diagnostics["rust"]["successes"] > 0
+        assert diagnostics["julia"]["successes"] > 0
+    finally:
+        accel.reset_backend_configuration()
