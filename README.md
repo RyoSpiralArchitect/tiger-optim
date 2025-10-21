@@ -1,5 +1,4 @@
-# tiger-optim
-Tiger Optimizer — beyond AdamW. A precision beast born from pure Python and stubborn curiosity — LoRA-aware, QKV-adaptive, trust-ratio-driven 🐅
+# Tiger Optimizer — beyond AdamW. A precision beast born from pure Python and stubborn curiosity — LoRA-aware, QKV-adaptive, trust-ratio-driven 🐅
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="AGPL-3.0">
