@@ -94,8 +94,9 @@ def fused_apply_updates(params, updates):
 
         n = param.numel()
         if n:
-            flat_param = param.reshape(-1)
-            if not flat_param.is_contiguous():
+            try:
+                flat_param = param.view(-1)
+            except RuntimeError:
                 return False, "param_non_contiguous"
             if update.device != target_device or update.dtype != target_dtype:
                 update_chunk = update.to(device=target_device, dtype=target_dtype)
