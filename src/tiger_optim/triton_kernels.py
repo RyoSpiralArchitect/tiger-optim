@@ -81,9 +81,7 @@ def fused_apply_updates(params, updates):
     if target_device.type != "cuda":
         return False, "non_cuda_bucket"
 
-    segments = []
-    param_chunks = []
-    update_chunks = []
+    apply_inputs = []
     total = 0
 
     for param, update in zip(params, updates):
@@ -95,26 +93,24 @@ def fused_apply_updates(params, updates):
             return False, "shape_mismatch"
 
         n = param.numel()
-        start = total
-        end = start + n
-        segments.append((param, start, end))
         if n:
-            param_chunks.append(param.reshape(-1).contiguous())
+            try:
+                flat_param = param.view(-1)
+            except RuntimeError:
+                return False, "param_non_contiguous"
             if update.device != target_device or update.dtype != target_dtype:
                 update_chunk = update.to(device=target_device, dtype=target_dtype)
             else:
                 update_chunk = update
-            update_chunks.append(update_chunk.reshape(-1).contiguous())
-        total = end
+            flat_update = update_chunk.reshape(-1).contiguous()
+            apply_inputs.append((flat_param, flat_update, n))
+            total += n
 
     if total == 0:
         return False, "empty"
 
     if triton is None:
         raise RuntimeError("Triton not available")
-
-    Pbig = torch.cat(param_chunks, dim=0)
-    Ubig = torch.cat(update_chunks, dim=0)
 
     @triton.jit
     def apply_sum_kernel(p_ptr, u_ptr, N, BLOCK: tl.constexpr):
@@ -127,13 +123,9 @@ def fused_apply_updates(params, updates):
         tl.store(p_ptr + offs, p, mask=mask)
 
     BLOCK = 1024
-    grid = ((total + BLOCK - 1) // BLOCK,)
-    apply_sum_kernel[grid](Pbig, Ubig, total, BLOCK=BLOCK)
-
-    for param, start, end in segments:
-        if end <= start:
-            continue
-        param.copy_(Pbig[start:end].view_as(param))
+    for flat_param, flat_update, n in apply_inputs:
+        grid = ((n + BLOCK - 1) // BLOCK,)
+        apply_sum_kernel[grid](flat_param, flat_update, n, BLOCK=BLOCK)
 
     # NOTE: This 'fused' path focuses on in-place apply; bucket-wide stats are recommended
     # via bucket_stats_triton to avoid a second global memory pass.

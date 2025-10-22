@@ -94,6 +94,35 @@ def _median_tensor(
         median = median.to(dtype=target_dtype)
     return median
 
+
+def _reference_tensor(
+    reference: Optional[torch.Tensor],
+    *candidates: object,
+) -> Optional[torch.Tensor]:
+    if reference is not None:
+        return reference
+
+    def _scan(obj: object) -> Optional[torch.Tensor]:
+        if isinstance(obj, torch.Tensor):
+            return obj
+        if isinstance(obj, Mapping):
+            for value in obj.values():
+                found = _scan(value)
+                if found is not None:
+                    return found
+        elif isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
+            for item in obj:
+                found = _scan(item)
+                if found is not None:
+                    return found
+        return None
+
+    for candidate in candidates:
+        found = _scan(candidate)
+        if found is not None:
+            return found
+    return None
+
 class _Profiler:
     def __init__(self, enabled=False, path="bench/profiles/tiger.jsonl", interval=10, ema_decay=0.9):
         self.enabled = bool(enabled)
@@ -396,6 +425,9 @@ class Tiger(Optimizer):
                     _LOG.debug("Triton fused apply fallback (%s)", message, exc_info=exc)
                 else:
                     _LOG.debug("Triton fused apply fallback (%s)", message)
+            reason = status if reason_payload is None else f"{status}:{reason_payload}"
+            if hasattr(self, "_fused_apply_failures"):
+                self._fused_apply_failures.append(reason)
 
         if not params or not updates:
             record("empty")
@@ -403,11 +435,11 @@ class Tiger(Optimizer):
 
         device = params[0].device
         if device.type != "cuda":
-            record("non_cuda_bucket")
+            record("non_cuda_param")
             return False
 
         if not torch.cuda.is_available():
-            record("no_cuda")
+            record("cuda_unavailable")
             return False
 
         if len(params) != len(updates):
@@ -433,8 +465,6 @@ class Tiger(Optimizer):
         except Exception as exc:
             record("kernel_exception", exc=exc)
             return False
-        return True
-
         kernel_ok: bool
         kernel_detail: Optional[str]
         if isinstance(kernel_result, tuple):
