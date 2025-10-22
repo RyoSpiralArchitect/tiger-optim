@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 import math, time, os, json
+from collections.abc import Mapping, Sequence
 from typing import Dict, List, Optional, Tuple, Union
 import torch
 from torch.optim import Optimizer
@@ -62,13 +63,36 @@ def _scalar_like(
     return torch.tensor(value, dtype=target_dtype, device=device)
 
 
+def _reference_tensor(*candidates: object) -> Optional[torch.Tensor]:
+    """Return the first tensor discovered within the provided candidates."""
+
+    stack: List[object] = [c for c in candidates if c is not None]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, torch.Tensor):
+            return current
+        if isinstance(current, Mapping):
+            stack.extend(current.values())
+        elif isinstance(current, Sequence) and not isinstance(current, (str, bytes)):
+            stack.extend(current)
+    return None
+
+
 def _median_tensor(vals: List[torch.Tensor], *, reference: Optional[torch.Tensor] = None) -> torch.Tensor:
+    ref = reference if reference is not None else _reference_tensor(vals)
     if len(vals) == 0:
-        return _scalar_like(reference, 0.0, dtype=reference.dtype if reference is not None else torch.float32)
+        return _scalar_like(ref, 0.0, dtype=ref.dtype if ref is not None else None,
+                            device=ref.device if ref is not None else None)
     t = torch.stack(vals)  # (N,)
     k = len(vals)//2
     topk = torch.topk(t, k+1, largest=False).values
-    return topk[-1]
+    median = topk[-1]
+    if ref is not None:
+        target_kwargs: Dict[str, object] = {"dtype": ref.dtype}
+        if ref.device.type != "meta":
+            target_kwargs["device"] = ref.device
+        median = median.to(**target_kwargs)
+    return median
 
 class _Profiler:
     def __init__(self, enabled=False, path="bench/profiles/tiger.jsonl", interval=10, ema_decay=0.9):
@@ -269,6 +293,7 @@ class Tiger(Optimizer):
         self._qkv_lr_ema: Dict[int, Dict[str, float]] = {}
         self._qkv_disp_ema: Dict[int, float] = {}
         self._qkv_disp_ema_prev: Dict[int, float] = {}
+        self._fused_apply_failures: List[str] = []
 
     # ---------- Public API ----------
     def report_metrics(self, loss: Optional[float] = None, **kwargs):
@@ -310,9 +335,10 @@ class Tiger(Optimizer):
 
     # ---------- Bucket stats helpers ----------
     def _bucket_global_rms(self, updates: List[torch.Tensor], source="global", *, reference: Optional[torch.Tensor] = None):
-        ref_tensor = reference if reference is not None else (updates[0] if updates else None)
+        ref_tensor = _reference_tensor(reference, updates)
         if not updates:
-            return _scalar_like(ref_tensor, 1.0, dtype=torch.float32)
+            return _scalar_like(ref_tensor, 1.0, dtype=torch.float32,
+                                device=ref_tensor.device if ref_tensor is not None else None)
         ups32 = [u.to(torch.float32) for u in updates]
         if source == "global":
             ss = torch.stack([torch.sum(u*u) for u in ups32]).sum()
@@ -335,16 +361,56 @@ class Tiger(Optimizer):
             ps32  = [p.detach().to(torch.float32) for p in params]
             ussq = torch.stack([torch.sum(u*u) for u in ups32]).sum()
             pssq = torch.stack([torch.sum(p*p) for p in ps32]).sum()
-            ref_tensor = ups32[0] if ups32 else (ps32[0] if ps32 else None)
-            n = _scalar_like(ref_tensor, float(sum(int(u.numel()) for u in ups32)), dtype=torch.float32)
+            ref_tensor = _reference_tensor(ups32, ps32)
+            n = _scalar_like(ref_tensor, float(sum(int(u.numel()) for u in ups32)), dtype=torch.float32,
+                             device=ref_tensor.device if ref_tensor is not None else None)
             return ussq, pssq, n
 
+    def _record_fused_apply_failure(self, reason: str, error: Optional[BaseException] = None) -> None:
+        message = reason if error is None else f"{reason}:{error}"
+        self._fused_apply_failures.append(message)
+
     def _fused_apply_triton(self, params: List[torch.Tensor], updates: List[torch.Tensor]):
+        if not params or not updates:
+            self._record_fused_apply_failure("empty_bucket")
+            return False
+        if len(params) != len(updates):
+            self._record_fused_apply_failure("length_mismatch")
+            return False
+        if not torch.cuda.is_available():
+            self._record_fused_apply_failure("cuda_unavailable")
+            return False
+        if any(p.device.type != "cuda" for p in params):
+            self._record_fused_apply_failure("non_cuda_param")
+            return False
+        if any(u.device.type != "cuda" for u in updates):
+            self._record_fused_apply_failure("non_cuda_update")
+            return False
+        target_device = params[0].device
+        if any(p.device != target_device for p in params):
+            self._record_fused_apply_failure("param_device_mismatch")
+            return False
+        if any(u.device != target_device for u in updates):
+            self._record_fused_apply_failure("update_device_mismatch")
+            return False
+        for param, update in zip(params, updates):
+            if update.shape != param.shape:
+                self._record_fused_apply_failure("shape_mismatch")
+                return False
         try:
             from .triton_kernels import fused_apply_updates
-            return bool(fused_apply_updates(params, updates))
-        except Exception:
+        except Exception as exc:
+            self._record_fused_apply_failure("import_error", exc)
             return False
+        try:
+            result = fused_apply_updates(params, updates)
+        except Exception as exc:
+            self._record_fused_apply_failure("kernel_exception", exc)
+            return False
+        if not result:
+            self._record_fused_apply_failure("kernel_declined")
+            return False
+        return True
 
     # ---------- Internal helpers ----------
     def _maybe_auto_blend(self):
@@ -387,8 +453,11 @@ class Tiger(Optimizer):
         prof_c = dict(foreach_wd=0, foreach_update=0, foreach_update_tensors=0,
                       foreach_bucket_size=0, foreach_bucket_global_rms=None, foreach_bucket_trust_est=None, foreach_bucket_source=None,
                       agc_clips=0, nonfinite_skips=0, pruned_params=0, pruned_elems=0,
+                      foreach_triton_failures=None,
                       qkv_q_r=None, qkv_k_r=None, qkv_v_r=None, qkv_q_rms=None, qkv_k_rms=None, qkv_v_rms=None,
                       qkv_gamma_eff=None, qkv_disp=None, qkv_disp_ema=None, qkv_step_clip_eff=None, qkv_accel=None)
+
+        self._fused_apply_failures = []
 
         # sparse state pruning flags
         sprune_thr = float(self.defaults["state_prune_threshold"])
@@ -819,6 +888,11 @@ class Tiger(Optimizer):
 
         if not (_is_compiling() and self.defaults.get("compile_guard", True)):
             self._maybe_auto_blend()
+
+        if self._fused_apply_failures:
+            prof_c["foreach_triton_failures"] = list(self._fused_apply_failures)
+        else:
+            prof_c["foreach_triton_failures"] = None
 
         step_ms = 1000.0 * (time.perf_counter() - t0)
         self._prof.log_step(step_ms, self._global_step, payload=prof_c)
