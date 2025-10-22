@@ -38,8 +38,10 @@ def bucket_stats_triton(updates, params):
     u = _concat_views(updates)
     p = _concat_views(params)
     if u is None:
-        device = updates[0].device if len(updates)>0 else "cpu"
-        return torch.tensor(0.0, dtype=torch.float32, device=device), torch.tensor(0.0, dtype=torch.float32, device=device), torch.tensor(0.0, dtype=torch.float32, device=device)
+        reference = updates[0] if updates else (params[0] if params else None)
+        device = reference.device if reference is not None else torch.device("cpu")
+        zero = torch.zeros((), dtype=torch.float32, device=device)
+        return zero, zero.clone(), zero.clone()
 
     N = u.numel()
     if p is None or p.numel()==0:
@@ -70,18 +72,42 @@ def bucket_stats_triton(updates, params):
 def fused_apply_updates(params, updates):
     if triton is None:
         raise RuntimeError("Triton not available")
-    # Concatenate into big buffers and remember ranges
-    p_views, u_views, ranges = [], [], []
+    if not params or not updates:
+        return False
+    if len(params) != len(updates):
+        raise ValueError("params and updates must have identical lengths")
+
+    target_device = params[0].device
+    target_dtype = params[0].dtype
+    segments = []
+    param_chunks = []
+    update_chunks = []
     total = 0
-    for P, U in zip(params, updates):
-        pv = P.contiguous().view(-1)
-        uv = U.contiguous().view(-1).to(P.dtype)
-        n = pv.numel()
-        p_views.append(pv); u_views.append(uv)
-        ranges.append((total, total+n))
-        total += n
-    Pbig = torch.cat(p_views, dim=0)
-    Ubig = torch.cat(u_views, dim=0)
+
+    for param, update in zip(params, updates):
+        if param.device != target_device or param.dtype != target_dtype:
+            return False
+        if update.shape != param.shape:
+            return False
+
+        n = param.numel()
+        start = total
+        end = start + n
+        segments.append((param, start, end))
+        if n:
+            param_chunks.append(param.reshape(-1).contiguous())
+            if update.device != target_device or update.dtype != target_dtype:
+                update_chunk = update.to(device=target_device, dtype=target_dtype)
+            else:
+                update_chunk = update
+            update_chunks.append(update_chunk.reshape(-1).contiguous())
+        total = end
+
+    if total == 0:
+        return False
+
+    Pbig = torch.cat(param_chunks, dim=0)
+    Ubig = torch.cat(update_chunks, dim=0)
 
     @triton.jit
     def apply_sum_kernel(p_ptr, u_ptr, N, BLOCK: tl.constexpr):
@@ -90,16 +116,17 @@ def fused_apply_updates(params, updates):
         mask = offs < N
         p = tl.load(p_ptr + offs, mask=mask, other=0.0)
         u = tl.load(u_ptr + offs, mask=mask, other=0.0)
-        # apply
         p = p + u
         tl.store(p_ptr + offs, p, mask=mask)
-        # local ssq accum (not returned here; could be extended to a reduction buffer)
-        # (intentionally minimal to avoid extra writes)
-        # A production version would write partial sums to a buffer for host reduction.
 
     BLOCK = 1024
-    grid = ( (total + BLOCK - 1)//BLOCK, )
+    grid = ((total + BLOCK - 1) // BLOCK,)
     apply_sum_kernel[grid](Pbig, Ubig, total, BLOCK=BLOCK)
+
+    for param, start, end in segments:
+        if end <= start:
+            continue
+        param.copy_(Pbig[start:end].view_as(param))
 
     # NOTE: This 'fused' path focuses on in-place apply; bucket-wide stats are recommended
     # via bucket_stats_triton to avoid a second global memory pass.
