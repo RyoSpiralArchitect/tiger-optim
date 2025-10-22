@@ -1,5 +1,6 @@
 import contextlib
 
+import pytest
 import torch
 
 from tiger_optim import tiger
@@ -40,3 +41,20 @@ def test_scalar_like_allows_device_override_with_reference():
     value = tiger._scalar_like(reference, 3.0, device=torch.device("meta"))
     assert value.device.type == "meta"
     assert value.dtype == reference.dtype
+
+
+def test_median_tensor_empty_uses_reference_metadata():
+    reference = torch.ones((), dtype=torch.float16)
+    result = tiger._median_tensor([], reference=reference)
+    assert result.device == reference.device
+    assert result.dtype == reference.dtype
+    assert result.item() == pytest.approx(0.0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
+def test_median_tensor_empty_on_cuda_matches_reference_device():
+    reference = torch.zeros((), dtype=torch.float32, device=torch.device("cuda"))
+    result = tiger._median_tensor([], reference=reference)
+    assert result.device == reference.device
+    assert result.dtype == reference.dtype
+    assert result.item() == pytest.approx(0.0)
