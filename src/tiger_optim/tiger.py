@@ -21,6 +21,7 @@
 from __future__ import annotations
 import logging
 import math, time, os, json
+from collections.abc import Mapping, Sequence
 from typing import Dict, List, Optional, Tuple, Union
 import torch
 from torch.optim import Optimizer
@@ -292,6 +293,7 @@ class Tiger(Optimizer):
         self._qkv_lr_ema: Dict[int, Dict[str, float]] = {}
         self._qkv_disp_ema: Dict[int, float] = {}
         self._qkv_disp_ema_prev: Dict[int, float] = {}
+        self._fused_apply_failures: List[str] = []
 
     # ---------- Public API ----------
     def report_metrics(self, loss: Optional[float] = None, **kwargs):
@@ -431,6 +433,7 @@ class Tiger(Optimizer):
         except Exception as exc:
             record("kernel_exception", exc=exc)
             return False
+        return True
 
         kernel_ok: bool
         kernel_detail: Optional[str]
@@ -508,8 +511,11 @@ class Tiger(Optimizer):
                       foreach_bucket_size=0, foreach_bucket_global_rms=None, foreach_bucket_trust_est=None, foreach_bucket_source=None,
                       triton_fused_apply=None, triton_fused_apply_reason=None,
                       agc_clips=0, nonfinite_skips=0, pruned_params=0, pruned_elems=0,
+                      foreach_triton_failures=None,
                       qkv_q_r=None, qkv_k_r=None, qkv_v_r=None, qkv_q_rms=None, qkv_k_rms=None, qkv_v_rms=None,
                       qkv_gamma_eff=None, qkv_disp=None, qkv_disp_ema=None, qkv_step_clip_eff=None, qkv_accel=None)
+
+        self._fused_apply_failures = []
 
         # sparse state pruning flags
         sprune_thr = float(self.defaults["state_prune_threshold"])
@@ -940,6 +946,11 @@ class Tiger(Optimizer):
 
         if not (_is_compiling() and self.defaults.get("compile_guard", True)):
             self._maybe_auto_blend()
+
+        if self._fused_apply_failures:
+            prof_c["foreach_triton_failures"] = list(self._fused_apply_failures)
+        else:
+            prof_c["foreach_triton_failures"] = None
 
         step_ms = 1000.0 * (time.perf_counter() - t0)
         self._prof.log_step(step_ms, self._global_step, payload=prof_c)

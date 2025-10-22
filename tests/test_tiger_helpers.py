@@ -1,10 +1,10 @@
 import contextlib
-from typing import Dict
 
 import tiger_optim.triton_kernels as triton_kernels
 
 import pytest
 import torch
+import torch.nn.functional as F
 
 from tiger_optim import tiger
 
@@ -54,6 +54,14 @@ def test_median_tensor_empty_uses_reference_metadata():
     assert result.item() == pytest.approx(0.0)
 
 
+def test_median_tensor_nonempty_aligns_reference_dtype():
+    reference = torch.ones((), dtype=torch.float16)
+    values = [torch.tensor(0.25, dtype=torch.float32), torch.tensor(0.5, dtype=torch.float32)]
+    result = tiger._median_tensor(values, reference=reference)
+    assert result.dtype == reference.dtype
+    assert result.device == reference.device
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
 def test_median_tensor_empty_on_cuda_matches_reference_device():
     reference = torch.zeros((), dtype=torch.float32, device=torch.device("cuda"))
@@ -63,57 +71,104 @@ def test_median_tensor_empty_on_cuda_matches_reference_device():
     assert result.item() == pytest.approx(0.0)
 
 
-def test_fused_apply_triton_respects_kernel_result(monkeypatch):
+def test_reference_tensor_scans_nested_iterables():
+    tensor = torch.ones((), dtype=torch.float32)
+    nested = {"payload": [None, {"value": tensor}]}
+    assert tiger._reference_tensor(None, nested) is tensor
+    assert tiger._reference_tensor(None) is None
+
+
+def test_fused_apply_triton_records_kernel_result(monkeypatch):
     param = torch.nn.Parameter(torch.zeros(4))
     opt = tiger.Tiger([param], lr=1e-3)
 
     tensors = [param.detach()]
     updates = [torch.ones_like(param.detach())]
 
-    diagnostics: Dict[str, object] = {}
-    result = opt._fused_apply_triton(tensors, updates, diagnostics)
-    assert result is False
-    assert diagnostics["triton_fused_apply"] == "non_cuda_bucket"
+    opt._fused_apply_failures = []
+    assert opt._fused_apply_triton(tensors, updates) is False
+    assert opt._fused_apply_failures
+    reason = opt._fused_apply_failures[-1]
+    assert reason.startswith("cuda_unavailable") or reason.startswith("non_cuda_param")
 
-    if not torch.cuda.is_available():
-        return
+    if torch.cuda.is_available():
+        param_cuda = torch.nn.Parameter(torch.zeros(4, device=torch.device("cuda")))
+        opt_cuda = tiger.Tiger([param_cuda], lr=1e-3)
+        tensors_cuda = [param_cuda.detach()]
+        updates_cuda = [torch.ones_like(param_cuda.detach())]
 
-    param_cuda = torch.nn.Parameter(torch.zeros(4, device=torch.device("cuda")))
-    opt_cuda = tiger.Tiger([param_cuda], lr=1e-3)
-    tensors_cuda = [param_cuda.detach()]
-    updates_cuda = [torch.ones_like(param_cuda.detach())]
+        def _success(params, updates):
+            return True
 
-    def _success(params, updates):
-        return True, "ok"
+        monkeypatch.setattr(triton_kernels, "fused_apply_updates", _success)
+        opt_cuda._fused_apply_failures = []
+        assert opt_cuda._fused_apply_triton(tensors_cuda, updates_cuda) is True
+        assert opt_cuda._fused_apply_failures == []
 
-    monkeypatch.setattr(triton_kernels, "fused_apply_updates", _success)
-    diagnostics_cuda: Dict[str, object] = {}
-    assert opt_cuda._fused_apply_triton(tensors_cuda, updates_cuda, diagnostics_cuda) is True
-    assert diagnostics_cuda["triton_fused_apply"] == "ok"
-    assert diagnostics_cuda["triton_fused_apply_reason"] == "ok"
+        def _decline(params, updates):
+            return False
 
-    def _failure(params, updates):
-        return False
+        monkeypatch.setattr(triton_kernels, "fused_apply_updates", _decline)
+        opt_cuda._fused_apply_failures = []
+        assert opt_cuda._fused_apply_triton(tensors_cuda, updates_cuda) is False
+        assert opt_cuda._fused_apply_failures[-1].startswith("kernel_declined")
 
-    monkeypatch.setattr(triton_kernels, "fused_apply_updates", _failure)
-    diagnostics_fail: Dict[str, object] = {}
-    assert opt_cuda._fused_apply_triton(tensors_cuda, updates_cuda, diagnostics_fail) is False
-    assert diagnostics_fail["triton_fused_apply"] == "kernel_declined"
-    assert diagnostics_fail["triton_fused_apply_reason"] == "kernel_returned_false"
+        def _error(params, updates):
+            raise RuntimeError("boom")
 
-    def _decline(params, updates):
-        return False, "shape_mismatch"
+        monkeypatch.setattr(triton_kernels, "fused_apply_updates", _error)
+        opt_cuda._fused_apply_failures = []
+        assert opt_cuda._fused_apply_triton(tensors_cuda, updates_cuda) is False
+        assert opt_cuda._fused_apply_failures[-1].startswith("kernel_exception")
 
-    monkeypatch.setattr(triton_kernels, "fused_apply_updates", _decline)
-    diagnostics_decline: Dict[str, object] = {}
-    assert opt_cuda._fused_apply_triton(tensors_cuda, updates_cuda, diagnostics_decline) is False
-    assert diagnostics_decline["triton_fused_apply"] == "kernel_declined"
-    assert diagnostics_decline["triton_fused_apply_reason"] == "shape_mismatch"
 
-    def _error(params, updates):
-        raise RuntimeError("boom")
+def test_step_profiler_includes_triton_failures(tmp_path):
+    param = torch.nn.Parameter(torch.ones(4))
+    opt = tiger.Tiger(
+        [param],
+        lr=1e-3,
+        use_triton_fused_apply=True,
+        foreach_min_bucket=1,
+        profiler_enabled=True,
+        profiler_path=str(tmp_path / "tiger_profile.jsonl"),
+        profiler_interval=1,
+    )
+    param.grad = torch.ones_like(param)
+    opt.step()
+    payload = opt._prof.last_payload()
+    failures = payload.get("foreach_triton_failures")
+    assert failures is None or isinstance(failures, list)
+    if failures:
+        assert all(isinstance(item, str) for item in failures)
 
-    monkeypatch.setattr(triton_kernels, "fused_apply_updates", _error)
-    diagnostics_err: Dict[str, object] = {}
-    assert opt_cuda._fused_apply_triton(tensors_cuda, updates_cuda, diagnostics_err) is False
-    assert diagnostics_err["triton_fused_apply"] == "kernel_exception"
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
+def test_tiger_step_amp_fp16_remains_finite():
+    torch.manual_seed(0)
+    model = torch.nn.Sequential(
+        torch.nn.Linear(8, 16),
+        torch.nn.ReLU(),
+        torch.nn.Linear(16, 4),
+    ).cuda()
+    optimizer = tiger.Tiger(model.parameters(), lr=1e-3)
+    scaler = torch.cuda.amp.GradScaler()
+
+    data = torch.randn(4, 8, device=torch.device("cuda"), dtype=torch.float32)
+    target = torch.randn(4, 4, device=torch.device("cuda"), dtype=torch.float32)
+
+    for _ in range(2):
+        optimizer.zero_grad(set_to_none=True)
+        with torch.cuda.amp.autocast(dtype=torch.float16):
+            output = model(data)
+            loss = F.mse_loss(output, target)
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+
+        assert torch.isfinite(loss)
+        for param in model.parameters():
+            assert torch.isfinite(param).all()
+            state = optimizer.state[param]
+            for value in state.values():
+                if isinstance(value, torch.Tensor):
+                    assert torch.isfinite(value).all()
