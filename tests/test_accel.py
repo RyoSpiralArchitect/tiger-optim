@@ -362,6 +362,62 @@ def test_backend_wrapped_outputs_are_unwrapped(monkeypatch):
         accel.refresh_backend_state(reload=True, reset_metrics=True)
 
 
+def test_backend_sequences_with_multiple_entries(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+
+    class MultiSequence(Sequence):
+        def __init__(self, *values):
+            self._values = values
+
+        def __len__(self):
+            return len(self._values)
+
+        def __getitem__(self, index):
+            return self._values[index]
+
+    class NestedMapping(dict):
+        pass
+
+    class MixedBackend:
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+        @staticmethod
+        def softsign(x: torch.Tensor, tau: float):
+            inner = MultiSequence("ignored", torch.full_like(x, 0.2))
+            return MultiSequence("meta", inner)
+
+        @staticmethod
+        def rms(x: torch.Tensor):
+            return NestedMapping(metadata={"stats": ("unused", x.new_tensor(5.5))})
+
+        @staticmethod
+        def norm(x: torch.Tensor):
+            return {"outer": {"payload": ("skip", x.new_tensor(6.5))}}
+
+    backend = MixedBackend()
+    try:
+        accel.configure_backends(disabled=["julia", "go"])
+        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.refresh_backend_state(reset_metrics=True)
+
+        x = torch.randn(4, dtype=torch.float32)
+        softsign = accel.fast_softsign(x, tau=0.1)
+        assert torch.allclose(softsign, torch.full_like(x, 0.2))
+
+        rms = accel.fast_rms(x)
+        assert torch.allclose(rms, x.new_tensor(5.5))
+
+        norm = accel.fast_norm(x)
+        assert torch.allclose(norm, x.new_tensor(6.5))
+    finally:
+        accel.reset_backend_configuration()
+        accel.refresh_backend_state(reload=True, reset_metrics=True)
+
+
 def test_softsign_backend_shape_mismatch_falls_back(monkeypatch):
     accel = _reload_accel(monkeypatch)
 

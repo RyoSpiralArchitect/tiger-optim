@@ -100,15 +100,33 @@ def _unwrap_backend_tensor(value: object, *, _seen: Optional[set[int]] = None) -
                 return unwrapped
 
     if isinstance(value, Mapping):
-        for key in ("values", "value", "tensor", "result"):
+        priority_keys = ("values", "value", "tensor", "result", "payload", "data")
+        for key in priority_keys:
             if key in value:
                 unwrapped = _unwrap_backend_tensor(value[key], _seen=_seen)
                 if unwrapped is not None:
                     return unwrapped
+        for item in value.values():
+            unwrapped = _unwrap_backend_tensor(item, _seen=_seen)
+            if unwrapped is not None:
+                return unwrapped
 
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-        if len(value) == 1:
-            unwrapped = _unwrap_backend_tensor(value[0], _seen=_seen)
+        try:
+            candidates = [value[index] for index in range(min(len(value), 8))]
+        except TypeError:
+            candidates = []
+        except IndexError:
+            candidates = []
+        if not candidates:
+            iterator = iter(value)
+            for _ in range(8):
+                try:
+                    candidates.append(next(iterator))
+                except StopIteration:
+                    break
+        for candidate in candidates:
+            unwrapped = _unwrap_backend_tensor(candidate, _seen=_seen)
             if unwrapped is not None:
                 return unwrapped
 
