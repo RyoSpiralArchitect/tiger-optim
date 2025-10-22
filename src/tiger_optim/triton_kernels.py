@@ -91,6 +91,10 @@ def fused_apply_updates(params, updates):
             return False, "param_dtype_mismatch"
         if update.shape != param.shape:
             return False, "shape_mismatch"
+        if update.device != target_device:
+            return False, "update_device_mismatch"
+        if update.dtype != target_dtype:
+            return False, "update_dtype_mismatch"
 
         n = param.numel()
         if n:
@@ -98,11 +102,10 @@ def fused_apply_updates(params, updates):
                 flat_param = param.view(-1)
             except RuntimeError:
                 return False, "param_non_contiguous"
-            if update.device != target_device or update.dtype != target_dtype:
-                update_chunk = update.to(device=target_device, dtype=target_dtype)
-            else:
-                update_chunk = update
-            flat_update = update_chunk.reshape(-1).contiguous()
+            try:
+                flat_update = update.view(-1)
+            except RuntimeError:
+                return False, "update_non_contiguous"
             apply_inputs.append((flat_param, flat_update, n))
             total += n
 
