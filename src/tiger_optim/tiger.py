@@ -44,9 +44,27 @@ def _is_compiling() -> bool:
     except Exception:
         return False
 
-def _median_tensor(vals: List[torch.Tensor]) -> torch.Tensor:
+def _scalar_like(
+    reference: Optional[torch.Tensor],
+    value: float,
+    *,
+    dtype: Optional[torch.dtype] = None,
+    device: Optional[torch.device] = None,
+) -> torch.Tensor:
+    """Create a scalar tensor aligned with ``reference`` or explicit overrides."""
+
+    if reference is not None:
+        target_device = device if device is not None else reference.device
+        return reference.new_tensor(value, dtype=dtype, device=target_device)
+    target_dtype = dtype if dtype is not None else torch.get_default_dtype()
+    if device is None:
+        return torch.tensor(value, dtype=target_dtype)
+    return torch.tensor(value, dtype=target_dtype, device=device)
+
+
+def _median_tensor(vals: List[torch.Tensor], *, reference: Optional[torch.Tensor] = None) -> torch.Tensor:
     if len(vals) == 0:
-        return torch.tensor(0.0, dtype=torch.float32)
+        return _scalar_like(reference, 0.0, dtype=reference.dtype if reference is not None else torch.float32)
     t = torch.stack(vals)  # (N,)
     k = len(vals)//2
     topk = torch.topk(t, k+1, largest=False).values
@@ -291,21 +309,22 @@ class Tiger(Optimizer):
         self._pending_group_updates.setdefault(int(gi), []).append((dict(fields), str(policy)))
 
     # ---------- Bucket stats helpers ----------
-    def _bucket_global_rms(self, updates: List[torch.Tensor], source="global"):
+    def _bucket_global_rms(self, updates: List[torch.Tensor], source="global", *, reference: Optional[torch.Tensor] = None):
+        ref_tensor = reference if reference is not None else (updates[0] if updates else None)
         if not updates:
-            return torch.tensor(1.0, dtype=torch.float32)
+            return _scalar_like(ref_tensor, 1.0, dtype=torch.float32)
         ups32 = [u.to(torch.float32) for u in updates]
         if source == "global":
             ss = torch.stack([torch.sum(u*u) for u in ups32]).sum()
-            ne = torch.tensor(sum(int(u.numel()) for u in ups32), dtype=torch.float32, device=ups32[0].device)
-            rms = torch.sqrt(ss / torch.clamp(ne, min=1.0))
+            ne = _scalar_like(ups32[0], float(sum(int(u.numel()) for u in ups32)), dtype=torch.float32)
+            rms = torch.sqrt(ss / torch.clamp(ne, min=_scalar_like(ne, 1.0)))
         elif source == "median":
             rms_list = [torch.sqrt(torch.mean(u*u)) for u in ups32]
-            rms = _median_tensor(rms_list)
+            rms = _median_tensor(rms_list, reference=ref_tensor)
         else:
             rms_list = torch.stack([torch.sqrt(torch.mean(u*u)) for u in ups32])
             rms = torch.mean(rms_list)
-        return torch.clamp(rms, min=1e-12)
+        return torch.clamp(rms, min=_scalar_like(rms, 1e-12))
 
     def _bucket_stats_triton(self, updates: List[torch.Tensor], params: List[torch.Tensor]):
         try:
@@ -316,14 +335,14 @@ class Tiger(Optimizer):
             ps32  = [p.detach().to(torch.float32) for p in params]
             ussq = torch.stack([torch.sum(u*u) for u in ups32]).sum()
             pssq = torch.stack([torch.sum(p*p) for p in ps32]).sum()
-            n = torch.tensor(sum(int(u.numel()) for u in ups32), dtype=torch.float32, device=ups32[0].device if ups32 else "cpu")
+            ref_tensor = ups32[0] if ups32 else (ps32[0] if ps32 else None)
+            n = _scalar_like(ref_tensor, float(sum(int(u.numel()) for u in ups32)), dtype=torch.float32)
             return ussq, pssq, n
 
     def _fused_apply_triton(self, params: List[torch.Tensor], updates: List[torch.Tensor]):
         try:
             from .triton_kernels import fused_apply_updates
-            fused_apply_updates(params, updates)  # in-place add + stats cached in kernel (not returned)
-            return True
+            return bool(fused_apply_updates(params, updates))
         except Exception:
             return False
 
@@ -575,13 +594,13 @@ class Tiger(Optimizer):
                 if len(b_params) >= foreach_min_bucket and bucket_std:
                     if use_triton_stats:
                         ussq, pssq, n = self._bucket_stats_triton(b_updates_f32, [p.detach() for p in b_params])
-                        grms = torch.sqrt(ussq / torch.clamp(n, min=torch.tensor(1.0, device=ussq.device)))
-                        trust_est = torch.sqrt(pssq) / torch.clamp(torch.sqrt(ussq), min=torch.tensor(1e-12, device=ussq.device))
+                        grms = torch.sqrt(ussq / torch.clamp(n, min=_scalar_like(n, 1.0)))
+                        trust_est = torch.sqrt(pssq) / torch.clamp(torch.sqrt(ussq), min=_scalar_like(ussq, 1e-12))
                     else:
-                        grms = self._bucket_global_rms(b_updates_f32, source=bucket_src)
+                        grms = self._bucket_global_rms(b_updates_f32, source=bucket_src, reference=b_updates_f32[0])
                         pssq = torch.stack([torch.sum(p.detach().to(torch.float32)**2) for p in b_params]).sum()
                         ussq = torch.stack([torch.sum(u.to(torch.float32)**2) for u in b_updates_f32]).sum()
-                        trust_est = torch.sqrt(pssq) / torch.clamp(torch.sqrt(ussq), min=torch.tensor(1e-12, device=grms.device))
+                        trust_est = torch.sqrt(pssq) / torch.clamp(torch.sqrt(ussq), min=_scalar_like(ussq, 1e-12))
                     sf = (1.0 / torch.clamp(grms, min=1e-12)).to(b_updates[0].dtype)
                     for i in range(len(b_updates)): b_updates[i] = b_updates[i] * sf
                     prof_c["foreach_bucket_global_rms"] = float(grms.detach().cpu())
