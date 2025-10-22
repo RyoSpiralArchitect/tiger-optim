@@ -33,3 +33,10 @@ def test_scalar_like_overrides_reference_dtype():
     value = tiger._scalar_like(reference, 2.0, dtype=torch.float32)
     assert value.dtype == torch.float32
     assert value.device == reference.device
+
+
+def test_scalar_like_allows_device_override_with_reference():
+    reference = torch.ones((), dtype=torch.float32)
+    value = tiger._scalar_like(reference, 3.0, device=torch.device("meta"))
+    assert value.device.type == "meta"
+    assert value.dtype == reference.dtype

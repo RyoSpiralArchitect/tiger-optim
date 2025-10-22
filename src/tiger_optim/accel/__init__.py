@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 import threading
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib import import_module
@@ -77,12 +78,48 @@ def _shares_storage(left: torch.Tensor, right: torch.Tensor) -> bool:
     return False
 
 
+def _unwrap_backend_tensor(value: object, *, _seen: Optional[set[int]] = None) -> Optional[torch.Tensor]:
+    """Best-effort extraction of a tensor payload from ``value`` containers."""
+
+    if isinstance(value, torch.Tensor):
+        return value
+    if value is None:
+        return None
+    if _seen is None:
+        _seen = set()
+    obj_id = id(value)
+    if obj_id in _seen:
+        return None
+    _seen.add(obj_id)
+
+    for attr in ("values", "value"):
+        maybe = getattr(value, attr, None)
+        if maybe is not None:
+            unwrapped = _unwrap_backend_tensor(maybe, _seen=_seen)
+            if unwrapped is not None:
+                return unwrapped
+
+    if isinstance(value, Mapping):
+        for key in ("values", "value", "tensor", "result"):
+            if key in value:
+                unwrapped = _unwrap_backend_tensor(value[key], _seen=_seen)
+                if unwrapped is not None:
+                    return unwrapped
+
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        if len(value) == 1:
+            unwrapped = _unwrap_backend_tensor(value[0], _seen=_seen)
+            if unwrapped is not None:
+                return unwrapped
+
+    return None
+
+
 def _coerce_backend_value(reference: torch.Tensor, value: object) -> torch.Tensor:
     """Return ``value`` as a tensor matching ``reference``'s dtype and device."""
 
-    if isinstance(value, torch.Tensor):
-        tensor = value
-    else:
+    tensor = _unwrap_backend_tensor(value)
+    if tensor is None:
         try:
             tensor = torch.as_tensor(value, dtype=reference.dtype)
         except (TypeError, ValueError):

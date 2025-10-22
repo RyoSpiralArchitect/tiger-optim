@@ -54,7 +54,8 @@ def _scalar_like(
     """Create a scalar tensor aligned with ``reference`` or explicit overrides."""
 
     if reference is not None:
-        return reference.new_tensor(value, dtype=dtype)
+        target_device = device if device is not None else reference.device
+        return reference.new_tensor(value, dtype=dtype, device=target_device)
     target_dtype = dtype if dtype is not None else torch.get_default_dtype()
     if device is None:
         return torch.tensor(value, dtype=target_dtype)

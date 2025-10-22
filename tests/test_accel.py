@@ -1,6 +1,7 @@
 import importlib
 import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional
 
@@ -292,6 +293,70 @@ def test_accelerated_results_preserve_requires_grad(monkeypatch):
 
         norm = accel.fast_norm(x)
         assert norm.requires_grad
+    finally:
+        accel.reset_backend_configuration()
+        accel.refresh_backend_state(reload=True, reset_metrics=True)
+
+
+def test_backend_wrapped_outputs_are_unwrapped(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+
+    class SequenceWrapper(Sequence):
+        def __init__(self, payload):
+            self._payload = payload
+
+        def __len__(self):
+            return 1
+
+        def __getitem__(self, index):
+            if index != 0:
+                raise IndexError
+            return self._payload
+
+    class ValueWrapper:
+        def __init__(self, payload):
+            self.values = payload
+
+    class WrappedBackend:
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+        @staticmethod
+        def softsign(x: torch.Tensor, tau: float):
+            return SequenceWrapper(torch.full_like(x, 0.75, dtype=torch.float64))
+
+        @staticmethod
+        def rms(x: torch.Tensor):
+            return {"values": torch.tensor(6.0, dtype=torch.float64)}
+
+        @staticmethod
+        def norm(x: torch.Tensor):
+            return ValueWrapper(torch.tensor(7.0, dtype=torch.float64))
+
+    backend = WrappedBackend()
+    try:
+        accel.configure_backends(disabled=["julia", "go"])
+        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.refresh_backend_state(reset_metrics=True)
+
+        x = torch.randn(9, dtype=torch.float16)
+        softsign = accel.fast_softsign(x, tau=0.3)
+        assert softsign.dtype == x.dtype
+        assert softsign.device == x.device
+        assert torch.allclose(softsign, torch.full_like(x, 0.75))
+
+        rms = accel.fast_rms(x)
+        assert rms.dtype == x.dtype
+        assert rms.device == x.device
+        assert torch.allclose(rms, x.new_tensor(6.0))
+
+        norm = accel.fast_norm(x)
+        assert norm.dtype == x.dtype
+        assert norm.device == x.device
+        assert torch.allclose(norm, x.new_tensor(7.0))
     finally:
         accel.reset_backend_configuration()
         accel.refresh_backend_state(reload=True, reset_metrics=True)
