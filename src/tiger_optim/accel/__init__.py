@@ -28,7 +28,7 @@ from functools import lru_cache
 from importlib import import_module
 from time import perf_counter
 from types import ModuleType
-from typing import Callable, Dict, Iterator, Optional, Sequence, Tuple
+from typing import Callable, Dict, Iterator, Optional, Tuple
 
 import torch
 
