@@ -1,5 +1,7 @@
 import contextlib
 
+import tiger_optim.triton_kernels as triton_kernels
+
 import pytest
 import torch
 
@@ -58,3 +60,29 @@ def test_median_tensor_empty_on_cuda_matches_reference_device():
     assert result.device == reference.device
     assert result.dtype == reference.dtype
     assert result.item() == pytest.approx(0.0)
+
+
+def test_fused_apply_triton_respects_kernel_result(monkeypatch):
+    param = torch.nn.Parameter(torch.zeros(4))
+    opt = tiger.Tiger([param], lr=1e-3)
+
+    tensors = [param.detach()]
+    updates = [torch.ones_like(param.detach())]
+
+    def _success(params, updates):
+        return True
+
+    monkeypatch.setattr(triton_kernels, "fused_apply_updates", _success)
+    assert opt._fused_apply_triton(tensors, updates) is True
+
+    def _failure(params, updates):
+        return False
+
+    monkeypatch.setattr(triton_kernels, "fused_apply_updates", _failure)
+    assert opt._fused_apply_triton(tensors, updates) is False
+
+    def _error(params, updates):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(triton_kernels, "fused_apply_updates", _error)
+    assert opt._fused_apply_triton(tensors, updates) is False

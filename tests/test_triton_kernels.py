@@ -25,3 +25,18 @@ def test_fused_apply_updates_applies_changes_in_place():
     for original, update, param in zip(originals, updates, params):
         expected = original + update.to(device=param.device, dtype=param.dtype)
         assert torch.allclose(param, expected, atol=1e-4, rtol=1e-4)
+
+
+def test_fused_apply_updates_requires_matching_lengths():
+    params = [torch.randn(3, 3)]
+    updates = [torch.randn(3, 3), torch.randn(2)]
+
+    with pytest.raises(ValueError):
+        fused_apply_updates(params, updates)
+
+
+def test_fused_apply_updates_returns_false_on_cpu():
+    params = [torch.randn(2, 2)]
+    updates = [torch.randn(2, 2)]
+
+    assert fused_apply_updates(params, updates) is False

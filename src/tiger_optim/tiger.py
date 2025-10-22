@@ -342,8 +342,7 @@ class Tiger(Optimizer):
     def _fused_apply_triton(self, params: List[torch.Tensor], updates: List[torch.Tensor]):
         try:
             from .triton_kernels import fused_apply_updates
-            fused_apply_updates(params, updates)  # in-place add + stats cached in kernel (not returned)
-            return True
+            return bool(fused_apply_updates(params, updates))
         except Exception:
             return False
 

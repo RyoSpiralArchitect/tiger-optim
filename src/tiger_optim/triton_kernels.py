@@ -70,6 +70,44 @@ def bucket_stats_triton(updates, params):
 
 # Experimental: fused apply updates + per-bucket sums in one pass
 def fused_apply_updates(params, updates):
+    if not params or not updates:
+        return False
+    if len(params) != len(updates):
+        raise ValueError("params and updates must have identical lengths")
+
+    target_device = params[0].device
+    target_dtype = params[0].dtype
+
+    if target_device.type != "cuda":
+        return False
+
+    segments = []
+    param_chunks = []
+    update_chunks = []
+    total = 0
+
+    for param, update in zip(params, updates):
+        if param.device != target_device or param.dtype != target_dtype:
+            return False
+        if update.shape != param.shape:
+            return False
+
+        n = param.numel()
+        start = total
+        end = start + n
+        segments.append((param, start, end))
+        if n:
+            param_chunks.append(param.reshape(-1).contiguous())
+            if update.device != target_device or update.dtype != target_dtype:
+                update_chunk = update.to(device=target_device, dtype=target_dtype)
+            else:
+                update_chunk = update
+            update_chunks.append(update_chunk.reshape(-1).contiguous())
+        total = end
+
+    if total == 0:
+        return False
+
     if triton is None:
         raise RuntimeError("Triton not available")
     if not params or not updates:
