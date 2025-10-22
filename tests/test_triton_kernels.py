@@ -20,7 +20,9 @@ def test_fused_apply_updates_applies_changes_in_place():
 
     originals = [p.clone() for p in params]
 
-    assert fused_apply_updates(params, updates) is True
+    ok, reason = fused_apply_updates(params, updates)
+    assert ok is True
+    assert reason == "ok"
 
     for original, update, param in zip(originals, updates, params):
         expected = original + update.to(device=param.device, dtype=param.dtype)
@@ -39,4 +41,12 @@ def test_fused_apply_updates_returns_false_on_cpu():
     params = [torch.randn(2, 2)]
     updates = [torch.randn(2, 2)]
 
-    assert fused_apply_updates(params, updates) is False
+    ok, reason = fused_apply_updates(params, updates)
+    assert ok is False
+    assert reason == "non_cuda_bucket"
+
+
+def test_fused_apply_updates_handles_empty_inputs():
+    ok, reason = fused_apply_updates([], [])
+    assert ok is False
+    assert reason == "empty"
