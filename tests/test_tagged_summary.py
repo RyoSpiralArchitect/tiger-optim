@@ -53,3 +53,32 @@ def test_summarize_param_groups_includes_share_column(demo_param_groups):
 def test_collect_param_group_stats_empty_handles_gracefully():
     assert collect_param_group_stats([]) == []
     assert summarize_param_groups([], include_share=True) == "(no parameter groups)"
+
+
+def _extract_summary_tags(summary: str) -> list[str]:
+    tags: list[str] = []
+    for line in summary.splitlines()[2:]:
+        if line.startswith("Total params"):
+            break
+        columns = line.split()
+        if columns:
+            tags.append(columns[1])
+    return tags
+
+
+def test_summarize_param_groups_sort_by_lr_scale_descending(demo_param_groups):
+    summary = summarize_param_groups(demo_param_groups, sort_by="lr_scale")
+    tags = _extract_summary_tags(summary)
+    assert tags[0] == "mlp"
+
+
+def test_summarize_param_groups_sort_by_lr_scale_ascending(demo_param_groups):
+    summary = summarize_param_groups(demo_param_groups, sort_by="lr_scale", descending=False)
+    tags = _extract_summary_tags(summary)
+    assert tags[-1] == "mlp"
+
+
+def test_summarize_param_groups_unknown_sort_falls_back_to_index(demo_param_groups):
+    summary = summarize_param_groups(demo_param_groups, sort_by="unknown")
+    tags = _extract_summary_tags(summary)
+    assert tags == ["mlp", "norm", "bias"]

@@ -185,7 +185,8 @@ def collect_param_group_stats(param_groups: Iterable[dict]) -> List[ParamGroupSu
 
 def summarize_param_groups(param_groups: Iterable[dict], *, precision: int = 4,
                            sort_by: str = "tag",
-                           include_share: bool = False) -> str:
+                           include_share: bool = False,
+                           descending: Optional[bool] = None) -> str:
     """Return a human-friendly table describing tagged parameter groups.
 
     The function operates purely on the optimizer param group dictionaries and
@@ -195,9 +196,15 @@ def summarize_param_groups(param_groups: Iterable[dict], *, precision: int = 4,
     Args:
         param_groups: Iterable of parameter group dictionaries.
         precision: Number of decimal places for floating point columns.
-        sort_by: Sort order – ``"tag"`` (default), ``"index"`` or ``"n_params"``.
+        sort_by: Sort order – ``"tag"`` (default), ``"index"``, ``"n_params"`` and
+            additional numeric columns such as ``"tensors"``, ``"lr"``,
+            ``"weight_decay"``/``"wd"``, ``"lr_scale"`` and ``"share"``.
         include_share: When ``True`` append a column with the percentage of
             parameters captured by each group.
+        descending: When ``True`` force a descending sort, ``False`` forces
+            ascending order. When ``None`` the function applies a sensible
+            default (descending for numeric metrics such as ``"n_params"``,
+            ``"lr"``, etc.).
 
     Returns:
         A multi-line string with a compact summary table.
@@ -209,12 +216,54 @@ def summarize_param_groups(param_groups: Iterable[dict], *, precision: int = 4,
     total_params = sum(row.n_params for row in rows)
 
     key = str(sort_by).lower()
+    valid_keys = {
+        "tag",
+        "index",
+        "idx",
+        "n_params",
+        "params",
+        "tensors",
+        "lr",
+        "weight_decay",
+        "wd",
+        "lr_scale",
+        "share",
+    }
+    if key not in valid_keys:
+        key = "index"
+
+    default_desc = {
+        "n_params": True,
+        "params": True,
+        "tensors": True,
+        "lr": True,
+        "weight_decay": True,
+        "wd": True,
+        "lr_scale": True,
+        "share": True,
+    }
+    if descending is None:
+        descending = default_desc.get(key, False)
+    descending = bool(descending)
+
+    rows.sort(key=lambda r: r.idx)
     if key == "tag":
-        rows.sort(key=lambda r: (r.tag, r.idx))
-    elif key == "n_params":
-        rows.sort(key=lambda r: (-r.n_params, r.idx))
-    else:
-        rows.sort(key=lambda r: r.idx)
+        rows.sort(key=lambda r: r.tag, reverse=descending)
+    elif key in {"index", "idx"}:
+        if descending:
+            rows.sort(key=lambda r: r.idx, reverse=True)
+    elif key in {"n_params", "params"}:
+        rows.sort(key=lambda r: r.n_params, reverse=descending)
+    elif key == "tensors":
+        rows.sort(key=lambda r: r.n_tensors, reverse=descending)
+    elif key in {"weight_decay", "wd"}:
+        rows.sort(key=lambda r: r.weight_decay, reverse=descending)
+    elif key == "lr":
+        rows.sort(key=lambda r: r.lr, reverse=descending)
+    elif key == "lr_scale":
+        rows.sort(key=lambda r: r.lr_scale, reverse=descending)
+    elif key == "share":
+        rows.sort(key=lambda r: r.param_ratio, reverse=descending)
 
     def fmt_float(val: float) -> str:
         if abs(val) >= 1e4 or (0 < abs(val) < 1e-3):
