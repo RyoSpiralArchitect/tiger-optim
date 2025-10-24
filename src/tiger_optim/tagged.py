@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Tuple, Optional
+from typing import Any, Dict, Iterable, List, Tuple, Optional, Callable, Sequence
 
 import torch
 import torch.nn as nn
@@ -184,8 +184,9 @@ def collect_param_group_stats(param_groups: Iterable[dict]) -> List[ParamGroupSu
 
 
 def summarize_param_groups(param_groups: Iterable[dict], *, precision: int = 4,
-                           sort_by: str = "tag",
-                           include_share: bool = False) -> str:
+                           sort_by: Any = "tag",
+                           include_share: bool = False,
+                           descending: Optional[Any] = None) -> str:
     """Return a human-friendly table describing tagged parameter groups.
 
     The function operates purely on the optimizer param group dictionaries and
@@ -195,9 +196,19 @@ def summarize_param_groups(param_groups: Iterable[dict], *, precision: int = 4,
     Args:
         param_groups: Iterable of parameter group dictionaries.
         precision: Number of decimal places for floating point columns.
-        sort_by: Sort order – ``"tag"`` (default), ``"index"`` or ``"n_params"``.
+        sort_by: Sort order – accepts either a single key or a sequence of keys
+            among ``"tag"`` (default), ``"index"``, ``"n_params"`` and additional
+            numeric columns such as ``"tensors"``, ``"lr"``, ``"weight_decay"``/
+            ``"wd"``, ``"lr_scale"`` and ``"share"``. Later keys are applied as
+            tie-breakers using a stable sort.
         include_share: When ``True`` append a column with the percentage of
             parameters captured by each group.
+        descending: When ``True`` force a descending sort, ``False`` forces
+            ascending order. A sequence can be supplied to mirror ``sort_by`` and
+            control the direction per key. ``None`` applies a sensible default
+            (descending for numeric metrics such as ``"n_params"``, ``"lr"``,
+            etc.). ``None`` values inside a sequence fall back to the default of
+            the corresponding key.
 
     Returns:
         A multi-line string with a compact summary table.
@@ -208,13 +219,61 @@ def summarize_param_groups(param_groups: Iterable[dict], *, precision: int = 4,
 
     total_params = sum(row.n_params for row in rows)
 
-    key = str(sort_by).lower()
-    if key == "tag":
-        rows.sort(key=lambda r: (r.tag, r.idx))
-    elif key == "n_params":
-        rows.sort(key=lambda r: (-r.n_params, r.idx))
+    aliases = {
+        "idx": "index",
+        "params": "n_params",
+        "wd": "weight_decay",
+    }
+
+    sort_options: Dict[str, Tuple[Callable[[ParamGroupSummary], Any], bool]] = {
+        "tag": (lambda r: r.tag, False),
+        "index": (lambda r: r.idx, False),
+        "n_params": (lambda r: r.n_params, True),
+        "tensors": (lambda r: r.n_tensors, True),
+        "lr": (lambda r: r.lr, True),
+        "weight_decay": (lambda r: r.weight_decay, True),
+        "lr_scale": (lambda r: r.lr_scale, True),
+        "share": (lambda r: r.param_ratio, True),
+    }
+
+    if isinstance(sort_by, str) or not isinstance(sort_by, Sequence):
+        keys = [str(sort_by)]
     else:
-        rows.sort(key=lambda r: r.idx)
+        keys = [str(item) for item in sort_by]
+
+    keys = [aliases.get(key.lower(), key.lower()) for key in keys if key]
+    if not keys:
+        keys = ["index"]
+
+    instructions: List[Tuple[Callable[[ParamGroupSummary], Any], bool]] = []
+    for key in keys:
+        instructions.append(sort_options.get(key, sort_options["index"]))
+
+    default_orders = [default for _, default in instructions]
+
+    desc_modes: List[bool]
+    if descending is None:
+        desc_modes = default_orders
+    elif isinstance(descending, bool) or descending in (0, 1):
+        desc_modes = [bool(descending)] * len(instructions)
+    elif isinstance(descending, Sequence) and not isinstance(descending, (str, bytes)):
+        desc_modes = []
+        desc_seq = list(descending)
+        for idx, default in enumerate(default_orders):
+            if idx < len(desc_seq):
+                value = desc_seq[idx]
+                if value is None:
+                    desc_modes.append(default)
+                else:
+                    desc_modes.append(bool(value))
+            else:
+                desc_modes.append(default)
+    else:
+        desc_modes = [bool(descending)] * len(instructions)
+
+    rows.sort(key=lambda r: r.idx)
+    for (sort_key, _), reverse in reversed(list(zip(instructions, desc_modes))):
+        rows.sort(key=sort_key, reverse=reverse)
 
     def fmt_float(val: float) -> str:
         if abs(val) >= 1e4 or (0 < abs(val) < 1e-3):
