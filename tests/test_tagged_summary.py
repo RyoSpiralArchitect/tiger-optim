@@ -53,3 +53,74 @@ def test_summarize_param_groups_includes_share_column(demo_param_groups):
 def test_collect_param_group_stats_empty_handles_gracefully():
     assert collect_param_group_stats([]) == []
     assert summarize_param_groups([], include_share=True) == "(no parameter groups)"
+
+
+def _extract_summary_tags(summary: str) -> list[str]:
+    tags: list[str] = []
+    for line in summary.splitlines()[2:]:
+        if line.startswith("Total params"):
+            break
+        columns = line.split()
+        if columns:
+            tags.append(columns[1])
+    return tags
+
+
+def _extract_summary_column(summary: str, header: str) -> list[str]:
+    lines = summary.splitlines()
+    headers = lines[0].split()
+    try:
+        index = headers.index(header)
+    except ValueError as exc:  # pragma: no cover - defensive guard for debugging
+        raise AssertionError(f"Column {header!r} not found in summary header: {headers}") from exc
+
+    values: list[str] = []
+    for line in lines[2:]:
+        if line.startswith("Total params"):
+            break
+        columns = line.split()
+        if columns:
+            values.append(columns[index])
+    return values
+
+
+def test_summarize_param_groups_sort_by_lr_scale_descending(demo_param_groups):
+    summary = summarize_param_groups(demo_param_groups, sort_by="lr_scale")
+    tags = _extract_summary_tags(summary)
+    assert tags[0] == "mlp"
+
+
+def test_summarize_param_groups_sort_by_lr_scale_ascending(demo_param_groups):
+    summary = summarize_param_groups(demo_param_groups, sort_by="lr_scale", descending=False)
+    tags = _extract_summary_tags(summary)
+    assert tags[-1] == "mlp"
+
+
+def test_summarize_param_groups_unknown_sort_falls_back_to_index(demo_param_groups):
+    summary = summarize_param_groups(demo_param_groups, sort_by="unknown")
+    tags = _extract_summary_tags(summary)
+    assert tags == ["mlp", "norm", "bias"]
+
+
+def test_summarize_param_groups_tag_descending_order(demo_param_groups):
+    summary = summarize_param_groups(demo_param_groups, sort_by="tag", descending=True)
+    tags = _extract_summary_tags(summary)
+    assert tags == ["norm", "mlp", "bias"]
+
+
+def test_summarize_param_groups_params_alias_descends(demo_param_groups):
+    summary = summarize_param_groups(demo_param_groups, sort_by="params")
+    tags = _extract_summary_tags(summary)
+    assert tags[0] == "mlp"
+
+
+def test_summarize_param_groups_weight_decay_alias(demo_param_groups):
+    summary = summarize_param_groups(demo_param_groups, sort_by="wd", descending=False)
+    tags = _extract_summary_tags(summary)
+    assert tags[-1] == "mlp"
+
+
+def test_summarize_param_groups_share_defaults_descending(demo_param_groups):
+    summary = summarize_param_groups(demo_param_groups, include_share=True, sort_by="share")
+    shares = [float(value.rstrip("%")) for value in _extract_summary_column(summary, "share")]
+    assert shares == sorted(shares, reverse=True)

@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Tuple, Optional
+from typing import Any, Dict, Iterable, List, Tuple, Optional, Callable
 
 import torch
 import torch.nn as nn
@@ -185,7 +185,8 @@ def collect_param_group_stats(param_groups: Iterable[dict]) -> List[ParamGroupSu
 
 def summarize_param_groups(param_groups: Iterable[dict], *, precision: int = 4,
                            sort_by: str = "tag",
-                           include_share: bool = False) -> str:
+                           include_share: bool = False,
+                           descending: Optional[bool] = None) -> str:
     """Return a human-friendly table describing tagged parameter groups.
 
     The function operates purely on the optimizer param group dictionaries and
@@ -195,9 +196,15 @@ def summarize_param_groups(param_groups: Iterable[dict], *, precision: int = 4,
     Args:
         param_groups: Iterable of parameter group dictionaries.
         precision: Number of decimal places for floating point columns.
-        sort_by: Sort order – ``"tag"`` (default), ``"index"`` or ``"n_params"``.
+        sort_by: Sort order – ``"tag"`` (default), ``"index"``, ``"n_params"`` and
+            additional numeric columns such as ``"tensors"``, ``"lr"``,
+            ``"weight_decay"``/``"wd"``, ``"lr_scale"`` and ``"share"``.
         include_share: When ``True`` append a column with the percentage of
             parameters captured by each group.
+        descending: When ``True`` force a descending sort, ``False`` forces
+            ascending order. When ``None`` the function applies a sensible
+            default (descending for numeric metrics such as ``"n_params"``,
+            ``"lr"``, etc.).
 
     Returns:
         A multi-line string with a compact summary table.
@@ -209,12 +216,32 @@ def summarize_param_groups(param_groups: Iterable[dict], *, precision: int = 4,
     total_params = sum(row.n_params for row in rows)
 
     key = str(sort_by).lower()
-    if key == "tag":
-        rows.sort(key=lambda r: (r.tag, r.idx))
-    elif key == "n_params":
-        rows.sort(key=lambda r: (-r.n_params, r.idx))
-    else:
-        rows.sort(key=lambda r: r.idx)
+    aliases = {
+        "idx": "index",
+        "params": "n_params",
+        "wd": "weight_decay",
+    }
+    key = aliases.get(key, key)
+
+    sort_options: Dict[str, Tuple[Callable[[ParamGroupSummary], Any], bool]] = {
+        "tag": (lambda r: r.tag, False),
+        "index": (lambda r: r.idx, False),
+        "n_params": (lambda r: r.n_params, True),
+        "tensors": (lambda r: r.n_tensors, True),
+        "lr": (lambda r: r.lr, True),
+        "weight_decay": (lambda r: r.weight_decay, True),
+        "lr_scale": (lambda r: r.lr_scale, True),
+        "share": (lambda r: r.param_ratio, True),
+    }
+
+    sort_key, default_desc = sort_options.get(key, sort_options["index"])
+
+    if descending is None:
+        descending = default_desc
+    descending = bool(descending)
+
+    rows.sort(key=lambda r: r.idx)
+    rows.sort(key=sort_key, reverse=descending)
 
     def fmt_float(val: float) -> str:
         if abs(val) >= 1e4 or (0 < abs(val) < 1e-3):
