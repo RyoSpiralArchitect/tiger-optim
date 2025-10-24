@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Tuple, Optional
+from typing import Any, Dict, Iterable, List, Tuple, Optional, Callable
 
 import torch
 import torch.nn as nn
@@ -216,54 +216,32 @@ def summarize_param_groups(param_groups: Iterable[dict], *, precision: int = 4,
     total_params = sum(row.n_params for row in rows)
 
     key = str(sort_by).lower()
-    valid_keys = {
-        "tag",
-        "index",
-        "idx",
-        "n_params",
-        "params",
-        "tensors",
-        "lr",
-        "weight_decay",
-        "wd",
-        "lr_scale",
-        "share",
+    aliases = {
+        "idx": "index",
+        "params": "n_params",
+        "wd": "weight_decay",
     }
-    if key not in valid_keys:
-        key = "index"
+    key = aliases.get(key, key)
 
-    default_desc = {
-        "n_params": True,
-        "params": True,
-        "tensors": True,
-        "lr": True,
-        "weight_decay": True,
-        "wd": True,
-        "lr_scale": True,
-        "share": True,
+    sort_options: Dict[str, Tuple[Callable[[ParamGroupSummary], Any], bool]] = {
+        "tag": (lambda r: r.tag, False),
+        "index": (lambda r: r.idx, False),
+        "n_params": (lambda r: r.n_params, True),
+        "tensors": (lambda r: r.n_tensors, True),
+        "lr": (lambda r: r.lr, True),
+        "weight_decay": (lambda r: r.weight_decay, True),
+        "lr_scale": (lambda r: r.lr_scale, True),
+        "share": (lambda r: r.param_ratio, True),
     }
+
+    sort_key, default_desc = sort_options.get(key, sort_options["index"])
+
     if descending is None:
-        descending = default_desc.get(key, False)
+        descending = default_desc
     descending = bool(descending)
 
     rows.sort(key=lambda r: r.idx)
-    if key == "tag":
-        rows.sort(key=lambda r: r.tag, reverse=descending)
-    elif key in {"index", "idx"}:
-        if descending:
-            rows.sort(key=lambda r: r.idx, reverse=True)
-    elif key in {"n_params", "params"}:
-        rows.sort(key=lambda r: r.n_params, reverse=descending)
-    elif key == "tensors":
-        rows.sort(key=lambda r: r.n_tensors, reverse=descending)
-    elif key in {"weight_decay", "wd"}:
-        rows.sort(key=lambda r: r.weight_decay, reverse=descending)
-    elif key == "lr":
-        rows.sort(key=lambda r: r.lr, reverse=descending)
-    elif key == "lr_scale":
-        rows.sort(key=lambda r: r.lr_scale, reverse=descending)
-    elif key == "share":
-        rows.sort(key=lambda r: r.param_ratio, reverse=descending)
+    rows.sort(key=sort_key, reverse=descending)
 
     def fmt_float(val: float) -> str:
         if abs(val) >= 1e4 or (0 < abs(val) < 1e-3):
