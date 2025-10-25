@@ -76,8 +76,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_configs_are_populated() {
-        let stats = TemplateStats::new();
-        assert!(!stats.configs().is_empty());
+    fn configs_accessor_preserves_contents() {
+        let stats = TemplateStats::from_configs([
+            TileConfig::new("a", 4, 4),
+            TileConfig::new("b", 8, 8),
+        ]);
+
+        assert_eq!(stats.configs().len(), 2);
+        assert_eq!(stats.configs()[0].name, "a");
+        assert_eq!(stats.configs()[1].width, 8);
+
+        let owned = stats.clone().into_configs();
+        assert_eq!(owned.len(), 2);
     }
 }
