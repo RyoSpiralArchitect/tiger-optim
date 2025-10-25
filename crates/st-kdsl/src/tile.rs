@@ -1,74 +1,75 @@
-//! Tile template statistics and configuration helpers.
-//!
-//! This module intentionally mirrors the layout from the original project so
-//! that we can build it without destructively editing the data tables.  The
-//! compile error reported by the user was caused by a stray identifier named
-//! `configs` at the end of the `impl TemplateStats` block.  That identifier
-//! used to be the tail expression of a helper function, but it was accidentally
-//! moved outside of the function body during a previous refactor.  The Rust
-//! parser therefore expected an item (for example a macro invocation or a path
-//! like `configs::foo`) and failed when it reached the closing brace for the
-//! `impl` block.
-//!
-//! The fix below re-introduces the helper as a regular method so that the
-//! identifier lives inside the `impl` body again.  No data tables were touched;
-//! we merely expose a safe accessor that keeps the original behaviour intact.
+//! Tile template bookkeeping utilities used by the Tiger kernel DSL.
 
-use std::borrow::Cow;
+use std::fmt;
 
-/// Metadata describing a single tiling configuration.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TileConfig<'a> {
-    /// Identifier of the configuration (for example, a kernel name).
-    pub name: Cow<'a, str>,
-    /// Width of the tile in logical elements.
-    pub width: usize,
-    /// Height of the tile in logical elements.
-    pub height: usize,
+/// Describes a single tile configuration that can be emitted by the DSL.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TemplateConfig {
+    pub tile_m: u32,
+    pub tile_n: u32,
+    pub tile_k: u32,
+    pub stages: u32,
+    pub warps: u32,
 }
 
-impl<'a> TileConfig<'a> {
-    /// Build a configuration from owned components.
-    #[inline]
-    pub fn new<N: Into<Cow<'a, str>>>(name: N, width: usize, height: usize) -> Self {
+impl TemplateConfig {
+    /// Creates a new tile configuration instance.
+    pub const fn new(tile_m: u32, tile_n: u32, tile_k: u32, stages: u32, warps: u32) -> Self {
         Self {
-            name: name.into(),
-            width,
-            height,
+            tile_m,
+            tile_n,
+            tile_k,
+            stages,
+            warps,
         }
     }
 }
 
-/// Collection statistics for all known templates.
-#[derive(Debug, Default, Clone)]
-pub struct TemplateStats<'a> {
-    configs: Vec<TileConfig<'a>>,
+impl fmt::Display for TemplateConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}x{}x{} ({} stages / {} warps)",
+            self.tile_m, self.tile_n, self.tile_k, self.stages, self.warps
+        )
+    }
 }
 
-impl<'a> TemplateStats<'a> {
-    /// Construct statistics from a list of tile configurations.
-    #[inline]
-    pub fn from_configs<I>(configs: I) -> Self
-    where
-        I: IntoIterator<Item = TileConfig<'a>>,
-    {
+/// Pre-computed statistics for frequently used tile templates.
+#[derive(Debug, Clone, Copy)]
+pub struct TemplateStats {
+    configs: &'static [TemplateConfig],
+}
+
+impl Default for TemplateStats {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TemplateStats {
+    /// Constructs the statistics container with the built-in configuration set.
+    pub const fn new() -> Self {
         Self {
-            configs: configs.into_iter().collect(),
+            configs: DEFAULT_CONFIGS,
         }
     }
 
-    /// Borrow the underlying configuration vector without moving it out of the struct.
-    #[inline]
-    pub fn configs(&self) -> &[TileConfig<'a>] {
-        &self.configs
-    }
-
-    /// Consume the statistics and return the owned configuration list.
-    #[inline]
-    pub fn into_configs(self) -> Vec<TileConfig<'a>> {
+    /// Returns a shared view of the known template configurations.
+    pub fn configs(&self) -> &'static [TemplateConfig] {
         self.configs
     }
 }
+
+const DEFAULT_CONFIGS: &[TemplateConfig] = &[
+    // These presets are intentionally conservative so they remain valid across a
+    // wide range of GPU architectures. They are mirrored from the Python
+    // implementation used by the optimizer's Triton kernels.
+    TemplateConfig::new(16, 16, 32, 2, 4),
+    TemplateConfig::new(32, 32, 32, 3, 4),
+    TemplateConfig::new(64, 32, 32, 4, 8),
+    TemplateConfig::new(64, 64, 32, 5, 8),
+];
 
 #[cfg(test)]
 mod tests {

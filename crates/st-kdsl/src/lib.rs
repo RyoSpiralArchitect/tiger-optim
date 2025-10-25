@@ -1,5 +1,5 @@
-//! Kernel DSL runtime support crate.
+//! Kernel tile description structures for the Tiger optimizer DSL.
 
 pub mod tile;
 
-pub use tile::{TemplateStats, TileConfig};
+pub use tile::{TemplateConfig, TemplateStats};
