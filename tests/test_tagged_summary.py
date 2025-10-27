@@ -82,6 +82,32 @@ def test_aggregate_param_group_stats_basic(demo_param_groups):
     assert mlp_group.min_lr_scale == mlp_group.max_lr_scale == mlp_group.avg_lr_scale
 
 
+def test_aggregate_param_group_stats_accepts_precomputed_summaries(demo_param_groups):
+    summaries = collect_param_group_stats(demo_param_groups)
+    direct = aggregate_param_group_stats(demo_param_groups)
+    from_summaries = aggregate_param_group_stats(summaries)
+
+    assert direct == from_summaries
+
+
+def test_aggregate_param_group_stats_rejects_mixed_input(demo_param_groups):
+    summaries = collect_param_group_stats(demo_param_groups)
+
+    with pytest.raises(TypeError) as exc:
+        aggregate_param_group_stats([demo_param_groups[0], summaries[0]])
+
+    assert "mixed input" in str(exc.value)
+
+
+def test_aggregate_param_group_stats_rejects_unknown_items():
+    with pytest.raises(TypeError) as exc:
+        aggregate_param_group_stats([object()])
+
+    message = str(exc.value)
+    assert "mapping-like" in message
+    assert "object" in message
+
+
 def test_aggregate_param_group_stats_empty_returns_empty():
     assert aggregate_param_group_stats([]) == []
 
@@ -120,22 +146,6 @@ def test_aggregate_param_group_stats_zero_param_groups_fallback_to_simple_averag
     assert agg.avg_lr_scale == pytest.approx(1.0)
     assert agg.total_params == 0
     assert agg.param_ratio == pytest.approx(0.0)
-
-
-def test_aggregate_param_group_stats_accepts_precomputed_summaries(demo_param_groups):
-    summaries = collect_param_group_stats(demo_param_groups)
-    aggregates_from_dicts = aggregate_param_group_stats(demo_param_groups)
-    aggregates_from_summaries = aggregate_param_group_stats(summaries)
-
-    assert aggregates_from_summaries == aggregates_from_dicts
-
-
-def test_aggregate_param_group_stats_rejects_mixed_inputs(demo_param_groups):
-    summaries = collect_param_group_stats(demo_param_groups)
-    mixed = [summaries[0], {"params": [], "block_tag": "other", "lr": 0.01}]
-
-    with pytest.raises(TypeError):
-        aggregate_param_group_stats(mixed)
 
 
 def _extract_summary_tags(summary: str) -> list[str]:

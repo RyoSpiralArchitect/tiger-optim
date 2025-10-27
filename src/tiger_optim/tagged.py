@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Tuple, Optional, Callable, Union
 
@@ -211,39 +212,58 @@ def collect_param_group_stats(param_groups: Iterable[dict]) -> List[ParamGroupSu
     return summaries
 
 
-def aggregate_param_group_stats(param_groups: Iterable[dict | ParamGroupSummary]) -> List[ParamTagAggregate]:
+def aggregate_param_group_stats(
+    param_groups: Iterable[Union[dict, ParamGroupSummary]]
+) -> List[ParamTagAggregate]:
     """Aggregate :class:`ParamGroupSummary` entries by their ``block_tag`` value.
 
     Parameters
     ----------
     param_groups:
-        Iterable of parameter group dictionaries or pre-collected
-        :class:`ParamGroupSummary` objects. Dictionaries are typically produced
-        by :func:`build_tagged_param_groups` or read from
-        ``optimizer.param_groups``.
+        Iterable of parameter group dictionaries or precomputed
+        :class:`ParamGroupSummary` instances. Passing summaries avoids a second
+        call to :func:`collect_param_group_stats` when the caller already has
+        them available.
 
     Returns
     -------
     list[ParamTagAggregate]
         Aggregated statistics ordered by the first occurrence of each tag.
+
+    Raises
+    ------
+    TypeError
+        If the iterable mixes parameter group dictionaries with
+        :class:`ParamGroupSummary` entries or if any item is neither a summary
+        nor a mapping-like parameter group dictionary.
     """
 
-    items = list(param_groups)
-    if not items:
+    staged = list(param_groups)
+    if not staged:
         return []
 
-    summaries: List[ParamGroupSummary]
-    if all(isinstance(item, ParamGroupSummary) for item in items):
-        summaries = list(items)  # already normalized
-    elif any(isinstance(item, ParamGroupSummary) for item in items):
-        raise TypeError(
-            "aggregate_param_group_stats expected only ParamGroupSummary instances "
-            "or only param group dictionaries, mixing both is not supported."
-        )
+    summary_mask = [isinstance(item, ParamGroupSummary) for item in staged]
+    if any(summary_mask):
+        if not all(summary_mask):
+            offending = {type(item).__name__ for item, is_summary in zip(staged, summary_mask) if not is_summary}
+            raise TypeError(
+                "aggregate_param_group_stats expected either parameter group dictionaries or "
+                "ParamGroupSummary instances; mixed input types encountered: "
+                f"{', '.join(sorted(offending)) or 'unknown'}"
+            )
+        summaries = list(staged)
     else:
-        summaries = collect_param_group_stats(items)
-        if not summaries:
-            return []
+        if not all(isinstance(item, Mapping) for item in staged):
+            offending = {type(item).__name__ for item in staged if not isinstance(item, Mapping)}
+            raise TypeError(
+                "aggregate_param_group_stats expected mapping-like parameter group dictionaries; "
+                "received incompatible entries of type(s): "
+                f"{', '.join(sorted(offending)) or 'unknown'}"
+            )
+        summaries = collect_param_group_stats(staged)
+
+    if not summaries:
+        return []
 
     totals: Dict[str, dict] = {}
     order: List[str] = []
