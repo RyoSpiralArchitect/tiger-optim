@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Tuple, Optional, Callable
+from typing import Any, Dict, Iterable, List, Tuple, Optional, Callable, Union
 
 import torch
 import torch.nn as nn
