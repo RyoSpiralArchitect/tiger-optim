@@ -18,6 +18,8 @@
 from .tiger import Tiger
 from .tagged import (
     ParamGroupSummary,
+    ParamTagAggregate,
+    aggregate_param_group_stats,
     build_tagged_param_groups,
     collect_param_group_stats,
     summarize_param_groups,
@@ -35,6 +37,8 @@ from .accel import (
 __all__ = [
     "Tiger",
     "ParamGroupSummary",
+    "ParamTagAggregate",
+    "aggregate_param_group_stats",
     "build_tagged_param_groups",
     "collect_param_group_stats",
     "summarize_param_groups",
