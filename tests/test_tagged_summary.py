@@ -4,6 +4,8 @@ import torch.nn as nn
 
 from tiger_optim import (
     ParamGroupSummary,
+    ParamTagAggregate,
+    aggregate_param_group_stats,
     build_tagged_param_groups,
     collect_param_group_stats,
     summarize_param_groups,
@@ -53,6 +55,32 @@ def test_summarize_param_groups_includes_share_column(demo_param_groups):
 def test_collect_param_group_stats_empty_handles_gracefully():
     assert collect_param_group_stats([]) == []
     assert summarize_param_groups([], include_share=True) == "(no parameter groups)"
+
+
+def test_aggregate_param_group_stats_basic(demo_param_groups):
+    aggregates = aggregate_param_group_stats(demo_param_groups)
+    assert all(isinstance(item, ParamTagAggregate) for item in aggregates)
+
+    mapping = {item.tag: item for item in aggregates}
+    assert set(mapping) == {group["block_tag"] for group in demo_param_groups}
+
+    total_params = sum(item.total_params for item in aggregates)
+    expected = sum(
+        int(p.numel()) for group in demo_param_groups for p in group["params"] if isinstance(p, torch.Tensor)
+    )
+    assert total_params == expected
+    assert sum(item.param_ratio for item in aggregates) == pytest.approx(1.0)
+
+    mlp_group = mapping["mlp"]
+    assert mlp_group.groups == 1
+    assert mlp_group.total_tensors > 0
+    assert mlp_group.avg_lr > 0
+    assert mlp_group.avg_weight_decay >= 0
+    assert mlp_group.avg_lr_scale >= 0
+
+
+def test_aggregate_param_group_stats_empty_returns_empty():
+    assert aggregate_param_group_stats([]) == []
 
 
 def _extract_summary_tags(summary: str) -> list[str]:
