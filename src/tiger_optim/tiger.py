@@ -125,42 +125,56 @@ def _reference_tensor(
 
 
 def _spectral_dispersion(x: torch.Tensor, low_band: float, high_band: float) -> Tuple[float, float, float]:
-    """Estimate spectral energy distribution between low/high bands and phase variance."""
+    """Estimate mean spectral energy for low/high bands and the phase spread."""
 
-    if x is None or x.numel() <= 1:
+    if x is None:
         return 0.0, 0.0, 0.0
 
-    y = x.to(torch.float32).reshape(-1)
+    y = x.reshape(-1).detach()
     if y.numel() <= 1:
         return 0.0, 0.0, 0.0
 
+    if not y.is_floating_point() or y.dtype != torch.float32:
+        y = y.to(torch.float32)
+
+    # remove mean so DC energy does not dominate the dispersion metric
+    y = y - y.mean()
+
     spec = torch.fft.rfft(y)
     power = spec.abs().pow(2)
-    n = power.numel()
-    if n <= 1:
+    if power.numel() == 0:
+        return 0.0, 0.0, 0.0
+
+    # drop the DC component when slicing the spectrum
+    side = power[1:] if power.numel() > 1 else power
+    if side.numel() == 0:
         val = float(power.mean().item()) if power.numel() else 0.0
         return val, val, 0.0
 
-    # skip DC for dispersion (start from index 1)
-    n_eff = max(1, n - 1)
+    n_eff = side.numel()
+    # ensure the requested bands are inside (0, 1]
+    low_band = float(max(0.0, min(1.0, low_band)))
+    high_band = float(max(0.0, min(1.0, high_band)))
     low_len = max(1, min(n_eff, int(math.ceil(low_band * n_eff))))
     high_len = max(1, min(n_eff, int(math.ceil(high_band * n_eff))))
 
-    low_slice = power[1:1 + low_len] if n > 1 else power
-    high_slice = power[-high_len:]
-
-    if low_slice.numel() == 0:
-        low_slice = power
-    if high_slice.numel() == 0:
-        high_slice = power
+    low_slice = side[:low_len]
+    high_slice = side[-high_len:]
 
     low_energy = float(low_slice.mean().item()) if low_slice.numel() else 0.0
     high_energy = float(high_slice.mean().item()) if high_slice.numel() else 0.0
 
-    phase = torch.angle(spec[1:]) if spec.numel() > 1 else torch.empty(0, device=spec.device, dtype=spec.dtype)
-    phase_var = float(torch.var(phase, unbiased=False).item()) if phase.numel() else 0.0
+    if spec.numel() > 1:
+        phase = torch.angle(spec[1:])
+        # resultant length indicates phase coherence (1 -> aligned, 0 -> dispersed)
+        phase_vector = torch.polar(torch.ones_like(phase), phase)
+        phase_coherence = torch.abs(torch.mean(phase_vector))
+        # convert to spread in [0, 1]
+        phase_spread = float((1.0 - phase_coherence.clamp(0.0, 1.0)).item())
+    else:
+        phase_spread = 0.0
 
-    return low_energy, high_energy, phase_var
+    return low_energy, high_energy, phase_spread
 
 class _Profiler:
     def __init__(self, enabled=False, path="benchmarks/profiles/tiger.jsonl", interval=10, ema_decay=0.9):
@@ -1042,7 +1056,7 @@ class Tiger(Optimizer):
                         freq_gain = float(self.defaults.get("qkv_gamma_spectral_gain", 0.0))
                         clip_lo, clip_hi = self.defaults.get("qkv_gamma_spectral_clip", (0.5, 1.5))
                         if freq_gain != 0.0:
-                            freq_factor = math.exp(-freq_gain * freq_disp_mean)
+                            freq_factor = math.exp(freq_gain * freq_disp_mean)
                             freq_factor = max(float(clip_lo), min(float(clip_hi), freq_factor))
                             gamma_eff *= freq_factor
                     # step-clip shrink by positive acceleration
