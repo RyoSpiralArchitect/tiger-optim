@@ -77,10 +77,32 @@ def test_aggregate_param_group_stats_basic(demo_param_groups):
     assert mlp_group.avg_lr > 0
     assert mlp_group.avg_weight_decay >= 0
     assert mlp_group.avg_lr_scale >= 0
+    assert mlp_group.min_lr == mlp_group.max_lr == mlp_group.avg_lr
+    assert mlp_group.min_weight_decay == mlp_group.max_weight_decay == mlp_group.avg_weight_decay
+    assert mlp_group.min_lr_scale == mlp_group.max_lr_scale == mlp_group.avg_lr_scale
 
 
 def test_aggregate_param_group_stats_empty_returns_empty():
     assert aggregate_param_group_stats([]) == []
+
+
+def test_aggregate_param_group_stats_tracks_extrema():
+    base = dict(params=[torch.zeros(1)], block_tag="shared", lr_scale=1.0)
+    groups = [
+        {**base, "lr": 0.1, "weight_decay": 0.0},
+        {**base, "lr": 0.2, "weight_decay": 0.01},
+        {**base, "lr": 0.05, "weight_decay": 0.001},
+    ]
+
+    aggregates = aggregate_param_group_stats(groups)
+    assert len(aggregates) == 1
+
+    agg = aggregates[0]
+    assert agg.min_lr == pytest.approx(0.05)
+    assert agg.max_lr == pytest.approx(0.2)
+    assert agg.min_weight_decay == pytest.approx(0.0)
+    assert agg.max_weight_decay == pytest.approx(0.01)
+    assert agg.min_lr_scale == agg.max_lr_scale == pytest.approx(1.0)
 
 
 def _extract_summary_tags(summary: str) -> list[str]:
