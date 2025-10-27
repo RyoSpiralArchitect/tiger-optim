@@ -28,8 +28,10 @@ import torch.nn as nn
 
 __all__ = [
     "ParamGroupSummary",
+    "ParamTagAggregate",
     "build_tagged_param_groups",
     "collect_param_group_stats",
+    "aggregate_param_group_stats",
     "summarize_param_groups",
 ]
 
@@ -138,6 +140,20 @@ class ParamGroupSummary:
     param_ratio: float
 
 
+@dataclass(frozen=True)
+class ParamTagAggregate:
+    """Aggregate statistics for parameter groups sharing the same ``block_tag``."""
+
+    tag: str
+    groups: int
+    total_tensors: int
+    total_params: int
+    param_ratio: float
+    avg_lr: float
+    avg_weight_decay: float
+    avg_lr_scale: float
+
+
 def collect_param_group_stats(param_groups: Iterable[dict]) -> List[ParamGroupSummary]:
     """Return structured statistics for each parameter group.
 
@@ -181,6 +197,78 @@ def collect_param_group_stats(param_groups: Iterable[dict]) -> List[ParamGroupSu
         )
 
     return summaries
+
+
+def aggregate_param_group_stats(param_groups: Iterable[dict]) -> List[ParamTagAggregate]:
+    """Aggregate :class:`ParamGroupSummary` entries by their ``block_tag`` value.
+
+    Parameters
+    ----------
+    param_groups:
+        Iterable of parameter group dictionaries, typically produced by
+        :func:`build_tagged_param_groups` or read from ``optimizer.param_groups``.
+
+    Returns
+    -------
+    list[ParamTagAggregate]
+        Aggregated statistics ordered by the first occurrence of each tag.
+    """
+
+    summaries = collect_param_group_stats(param_groups)
+    if not summaries:
+        return []
+
+    totals: Dict[str, dict] = {}
+    order: List[str] = []
+    overall_params = sum(summary.n_params for summary in summaries)
+
+    for summary in summaries:
+        tag = summary.tag
+        if tag not in totals:
+            totals[tag] = {
+                "groups": 0,
+                "total_tensors": 0,
+                "total_params": 0,
+                "weighted_lr": 0.0,
+                "weighted_wd": 0.0,
+                "weighted_lr_scale": 0.0,
+            }
+            order.append(tag)
+
+        bucket = totals[tag]
+        bucket["groups"] += 1
+        bucket["total_tensors"] += summary.n_tensors
+        bucket["total_params"] += summary.n_params
+        weight = float(summary.n_params)
+        bucket["weighted_lr"] += summary.lr * weight
+        bucket["weighted_wd"] += summary.weight_decay * weight
+        bucket["weighted_lr_scale"] += summary.lr_scale * weight
+
+    aggregates: List[ParamTagAggregate] = []
+    denom = float(overall_params)
+
+    for tag in order:
+        bucket = totals[tag]
+        total_params = bucket["total_params"]
+        weight = float(total_params)
+        ratio = (weight / denom) if denom else 0.0
+        avg_lr = bucket["weighted_lr"] / weight if weight else 0.0
+        avg_wd = bucket["weighted_wd"] / weight if weight else 0.0
+        avg_lr_scale = bucket["weighted_lr_scale"] / weight if weight else 0.0
+        aggregates.append(
+            ParamTagAggregate(
+                tag=tag,
+                groups=int(bucket["groups"]),
+                total_tensors=int(bucket["total_tensors"]),
+                total_params=int(total_params),
+                param_ratio=ratio,
+                avg_lr=avg_lr,
+                avg_weight_decay=avg_wd,
+                avg_lr_scale=avg_lr_scale,
+            )
+        )
+
+    return aggregates
 
 
 def summarize_param_groups(param_groups: Iterable[dict], *, precision: int = 4,
