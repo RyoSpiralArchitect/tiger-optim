@@ -221,9 +221,9 @@ def aggregate_param_group_stats(
     ----------
     param_groups:
         Iterable of parameter group dictionaries or precomputed
-        :class:`ParamGroupSummary` instances. Passing summaries avoids a second
-        call to :func:`collect_param_group_stats` when the caller already has
-        them available.
+        :class:`ParamGroupSummary` instances. Entries can be freely mixed. Passing
+        summaries avoids a second call to :func:`collect_param_group_stats` when
+        the caller already has them available.
 
     Returns
     -------
@@ -242,25 +242,36 @@ def aggregate_param_group_stats(
     if not staged:
         return []
 
-    summary_mask = [isinstance(item, ParamGroupSummary) for item in staged]
-    if any(summary_mask):
-        if not all(summary_mask):
-            offending = {type(item).__name__ for item, is_summary in zip(staged, summary_mask) if not is_summary}
+    summary_inputs: List[ParamGroupSummary] = []
+    dict_inputs: List[dict] = []
+    dict_positions: List[int] = []
+
+    for idx, item in enumerate(staged):
+        if isinstance(item, ParamGroupSummary):
+            summary_inputs.append(item)
+        elif isinstance(item, dict):
+            dict_inputs.append(item)
+            dict_positions.append(idx)
+        else:
             raise TypeError(
-                "aggregate_param_group_stats expected either parameter group dictionaries or "
-                "ParamGroupSummary instances; mixed input types encountered: "
-                f"{', '.join(sorted(offending)) or 'unknown'}"
+                "aggregate_param_group_stats expected dictionaries or ParamGroupSummary entries,"
+                f" got {type(item)!r}"
             )
-        summaries = list(staged)
+
+    if dict_inputs:
+        collected = collect_param_group_stats(dict_inputs)
+        if len(collected) != len(dict_inputs):
+            raise RuntimeError("collect_param_group_stats returned an unexpected number of summaries")
+        position_map = {pos: replace(summary, idx=pos) for pos, summary in zip(dict_positions, collected)}
+        summary_iter = iter(summary_inputs)
+        summaries: List[ParamGroupSummary] = []
+        for idx, item in enumerate(staged):
+            if isinstance(item, ParamGroupSummary):
+                summaries.append(next(summary_iter))
+            else:
+                summaries.append(position_map[idx])
     else:
-        if not all(isinstance(item, Mapping) for item in staged):
-            offending = {type(item).__name__ for item in staged if not isinstance(item, Mapping)}
-            raise TypeError(
-                "aggregate_param_group_stats expected mapping-like parameter group dictionaries; "
-                "received incompatible entries of type(s): "
-                f"{', '.join(sorted(offending)) or 'unknown'}"
-            )
-        summaries = collect_param_group_stats(staged)
+        summaries = summary_inputs
 
     if not summaries:
         return []
