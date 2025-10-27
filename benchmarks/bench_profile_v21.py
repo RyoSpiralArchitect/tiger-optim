@@ -51,7 +51,7 @@ def main():
                 use_foreach_update=True, update_buffer_dtype="bf16", bucket_standardize=True, bucket_standardize_source="global", bucket_scalarless=True,
                 qkv_lr_autoadapt=True, qkv_w_rms=0.7, qkv_w_trust=0.3, qkv_lr_gain=0.02, qkv_gain_shrink_gamma=1.2,
                 qkv_disp_ema_beta=0.8, qkv_gamma_rate=0.6, qkv_lr_step_clip=0.08, qkv_clip_shrink_k=0.6, qkv_clip_min=0.02, qkv_clip_max=0.2,
-                profiler_enabled=True, profiler_path="bench/profiles/v21.jsonl", profiler_interval=5)
+                profiler_enabled=True, profiler_path="benchmarks/profiles/v21.jsonl", profiler_interval=5)
 
     loss_fn = torch.nn.MSELoss()
 
@@ -66,11 +66,11 @@ def main():
         metrics.append(opt.get_last_metrics())
 
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    out = os.path.join("bench","results"); os.makedirs(out, exist_ok=True)
+    out = os.path.join("benchmarks", "results"); os.makedirs(out, exist_ok=True)
     p = os.path.join(out, f"profile_v21-{dev.type}-{ts}.json")
     with open(p,"w") as f: json.dump({"ms_median": statistics.median(ms), "device": dev.type, "last_metrics": metrics[-1] if metrics else {}}, f, indent=2)
     print("Saved", p)
-    print("JSONL:", "bench/profiles/v21.jsonl")
+    print("JSONL:", "benchmarks/profiles/v21.jsonl")
 
 if __name__ == "__main__":
     main()

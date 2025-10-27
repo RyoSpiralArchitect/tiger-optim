@@ -124,7 +124,7 @@ def _reference_tensor(
     return None
 
 class _Profiler:
-    def __init__(self, enabled=False, path="bench/profiles/tiger.jsonl", interval=10, ema_decay=0.9):
+    def __init__(self, enabled=False, path="benchmarks/profiles/tiger.jsonl", interval=10, ema_decay=0.9):
         self.enabled = bool(enabled)
         self.path = path
         self.interval = max(1, int(interval))
@@ -259,7 +259,7 @@ class Tiger(Optimizer):
                  # compile staged reflect
                  compile_guard=True, reflect_interval=50,
                  # profiler
-                 profiler_enabled=False, profiler_path="bench/profiles/tiger.jsonl", profiler_interval=10, profiler_ema_decay=0.9):
+                 profiler_enabled=False, profiler_path="benchmarks/profiles/tiger.jsonl", profiler_interval=10, profiler_ema_decay=0.9):
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay,
                         factored=factored, precond_alpha=precond_alpha,
                         sign_mode=sign_mode, sign_tau=sign_tau, sign_blend=sign_blend,

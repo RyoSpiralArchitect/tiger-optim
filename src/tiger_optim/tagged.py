@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Dict, Iterable, List, Tuple, Optional, Callable, Union
 
 import torch
@@ -254,9 +254,15 @@ def aggregate_param_group_stats(
             dict_positions.append(idx)
         else:
             raise TypeError(
-                "aggregate_param_group_stats expected dictionaries or ParamGroupSummary entries,"
+                "aggregate_param_group_stats expected mapping-like dictionaries or ParamGroupSummary entries,"
                 f" got {type(item)!r}"
             )
+
+    if summary_inputs and dict_inputs:
+        raise TypeError(
+            "aggregate_param_group_stats received mixed input (dict + ParamGroupSummary); "
+            "provide either dictionaries or summaries, not both"
+        )
 
     if dict_inputs:
         collected = collect_param_group_stats(dict_inputs)
