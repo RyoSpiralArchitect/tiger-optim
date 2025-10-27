@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Tuple, Optional, Callable
+from typing import Any, Dict, Iterable, List, Tuple, Optional, Callable, Union
 
 import torch
 import torch.nn as nn
@@ -211,14 +211,25 @@ def collect_param_group_stats(param_groups: Iterable[dict]) -> List[ParamGroupSu
     return summaries
 
 
-def aggregate_param_group_stats(param_groups: Iterable[dict]) -> List[ParamTagAggregate]:
+ParamGroupLike = Union[ParamGroupSummary, Dict[str, Any]]
+
+
+def aggregate_param_group_stats(param_groups: Iterable[ParamGroupLike]) -> List[ParamTagAggregate]:
     """Aggregate :class:`ParamGroupSummary` entries by their ``block_tag`` value.
+
+    The iterable can provide raw optimizer param group dictionaries, precomputed
+    :class:`ParamGroupSummary` instances, or any mix of the two. This keeps the
+    helper convenient in interactive settings where the summaries might already
+    be available while still supporting the simpler ``optimizer.param_groups``
+    input.
 
     Parameters
     ----------
     param_groups:
-        Iterable of parameter group dictionaries, typically produced by
-        :func:`build_tagged_param_groups` or read from ``optimizer.param_groups``.
+        Iterable of parameter group dictionaries or :class:`ParamGroupSummary`
+        entries, typically produced by :func:`build_tagged_param_groups`, read
+        from ``optimizer.param_groups`` or generated via
+        :func:`collect_param_group_stats`.
 
     Returns
     -------
@@ -226,7 +237,20 @@ def aggregate_param_group_stats(param_groups: Iterable[dict]) -> List[ParamTagAg
         Aggregated statistics ordered by the first occurrence of each tag.
     """
 
-    summaries = collect_param_group_stats(param_groups)
+    items = list(param_groups)
+    if not items:
+        return []
+
+    raw_groups = [item for item in items if not isinstance(item, ParamGroupSummary)]
+    synthesized = iter(collect_param_group_stats(raw_groups)) if raw_groups else iter(())
+
+    summaries: List[ParamGroupSummary] = []
+    for item in items:
+        if isinstance(item, ParamGroupSummary):
+            summaries.append(item)
+        else:
+            summaries.append(next(synthesized))
+
     if not summaries:
         return []
 
