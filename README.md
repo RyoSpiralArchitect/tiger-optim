@@ -88,29 +88,24 @@ opt.step()
 
 ---
 
-## Acceleration toolchain (Rust, Julia & Go)
+## Acceleration toolchain (Pure Python core + optional Julia)
 
-Tiger v2.3.0 sharpens the optional CPU accelerators for the softsign, RMS and
-vector-norm primitives that dominate small-model training on AdamW-style loops.
+Tiger v2.3.0 keeps the optimizer entirely in Python while still offering an
+opt-in Julia bridge for the CPU-centric primitives (softsign, RMS and
+vector-norm) that dominate small-model training loops. When Julia ≥1.9 and the
+`juliacall` Python bridge are present Tiger dispatches to an optimized Julia
+loop; otherwise it gracefully falls back to the reference PyTorch kernels.
 
-- **Rust (`bench/rust_accel`)** — a lightweight `cdylib` compiled via `cargo`
-  provides SIMD-friendly kernels that PyTorch can call through `ctypes`.
-- **Julia (`juliacall`)** — if you have Julia ≥1.9 and the `juliacall` Python
-  bridge installed, Tiger dispatches the same primitives to an optimized Julia
-  loop.
-- **Go (`bench/go_accel`)** — when `go build` is available we compile a
-  `c-shared` module that delivers the same kernels with zero-copy slices.
-
-The runtime now profiles each backend invocation and automatically reorders the
-priority list to favour the fastest working implementation. Backends that keep
-raising errors (or return `None`) are temporarily suppressed so your training
-loop never stalls on a flaky native module.
+The runtime still profiles every backend invocation and automatically reorders
+the priority list to favour the fastest healthy implementation. Backends that
+raise errors (or return `None`) are temporarily suppressed so your training loop
+never stalls on a flaky native module.
 
 Runtime selection is automatic. You can inspect the availability at runtime:
 
 ```python
 from tiger_optim import available_backends, current_backend_priority
-print(available_backends())  # e.g. {"rust": True, "julia": False, "go": False}
+print(available_backends())  # e.g. {"julia": False}
 print(current_backend_priority())  # runtime ordering after scoring
 ```
 
@@ -129,8 +124,8 @@ from tiger_optim import (
     reset_backend_configuration,
 )
 
-# Prefer Julia over Rust for the current process, but keep Rust as a fallback
-configure_backends(preferred=["julia", "rust"])
+# Prefer Julia for the current process (falls back to eager PyTorch otherwise)
+configure_backends(preferred=["julia"])
 
 # Disable all native accelerators (forces the PyTorch eager path)
 configure_backends(disabled=["all"])
@@ -146,21 +141,14 @@ print(backend_diagnostics())
 Prefer environment variables? Set them before import:
 
 ```bash
-export TIGER_ACCEL_DISABLE=all          # disable all accelerators
-export TIGER_ACCEL_PREFER=julia,rust    # Julia first, Rust fallback
+export TIGER_ACCEL_DISABLE=all       # disable all accelerators
+export TIGER_ACCEL_PREFER=julia     # prefer Julia when available
 ```
 
 Both signals are lazily cached, so changes made at runtime can be picked up via
 `refresh_backend_state()`.
 
-To pre-build the Rust or Go libraries:
-
-```bash
-cargo build --release --manifest-path bench/rust_accel/Cargo.toml
-go build -buildmode=c-shared -o bench/go_accel/build/libtiger_go_accel.so ./bench/go_accel
-```
-
-If neither accelerator is available Tiger falls back to the stock PyTorch
+If no accelerator is available Tiger falls back to the stock PyTorch
 implementations, so you can opt-in incrementally.
 
 ---
@@ -177,9 +165,9 @@ implementations, so you can opt-in incrementally.
 | CUDA (Win, GTX 1650 / CUDA 11.1) | Tiger v2.1 (full) | **14.8–15.0 ms** |
 
 <p align="center">
-  <img src="bench/plots/median_step_time.png" width="60%" alt="AdamW vs Tiger — Median Step Time">
+  <img src="benchmarks/plots/median_step_time.png" width="60%" alt="AdamW vs Tiger — Median Step Time">
   <br/>
-  <img src="bench/plots/loss_curves.png" width="60%" alt="Loss Curves">
+  <img src="benchmarks/plots/loss_curves.png" width="60%" alt="Loss Curves">
 </p>
 
 > Notes:  
@@ -205,12 +193,12 @@ We’d love **fresh results on modern GPUs** (Ampere/Ada/Hopper; CUDA 11.8+/12.x
 **How to contribute**
 1. Run:
    ```bash
-   python bench/bench_compare_optim.py --device cuda --steps 200 --warmup 50
-   python bench/plot_bench.py --out-dir bench/plots
+   python benchmarks/bench_compare_optim.py --device cuda --steps 200 --warmup 50
+   python benchmarks/plot_bench.py --out-dir benchmarks/plots
    ```
 2. Collect and attach:
-   - `bench/results/compare-*.json` (AdamW + Tiger)
-   - `bench/plots/median_step_time.png`, `bench/plots/loss_curves.png`
+   - `benchmarks/results/compare-*.json` (AdamW + Tiger)
+   - `benchmarks/plots/median_step_time.png`, `benchmarks/plots/loss_curves.png`
    - Environment info:
      ```
      nvidia-smi

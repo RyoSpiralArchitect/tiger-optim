@@ -62,14 +62,14 @@ def test_configure_backends_runtime_disable(monkeypatch):
 def test_available_backends_shape(monkeypatch):
     accel = _reload_accel(monkeypatch, TIGER_ACCEL_DISABLE="all")
     status = accel.available_backends()
-    assert set(status.keys()) == {"rust", "julia", "go"}
+    assert set(status.keys()) == {"julia"}
     assert all(isinstance(flag, bool) for flag in status.values())
 
 
 def test_backend_failure_suppression(monkeypatch):
     accel = _reload_accel(monkeypatch)
 
-    accel.configure_backends(preferred=["rust"], disabled=["julia", "go"])
+    accel.configure_backends(preferred=["julia"])
 
     class FailingBackend:
         def __init__(self) -> None:
@@ -85,7 +85,7 @@ def test_backend_failure_suppression(monkeypatch):
 
     failing = FailingBackend()
     try:
-        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", failing)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "julia", failing)
         accel.refresh_backend_state(reset_metrics=True)
 
         x = torch.randn(8)
@@ -93,8 +93,8 @@ def test_backend_failure_suppression(monkeypatch):
             accel.fast_rms(x)
 
         diagnostics = accel.backend_diagnostics()
-        assert diagnostics["rust"]["failures"] >= 3
-        assert diagnostics["rust"]["suppressed"] is True
+        assert diagnostics["julia"]["failures"] >= 3
+        assert diagnostics["julia"]["suppressed"] is True
 
         expected = x.pow(2).mean().sqrt()
         actual = accel.fast_rms(x)
@@ -105,7 +105,6 @@ def test_backend_failure_suppression(monkeypatch):
 
 def test_backend_priority_reorders_by_latency(monkeypatch):
     accel = _reload_accel(monkeypatch)
-    accel.configure_backends(disabled=["go"])
 
     class FakeBackend:
         def __init__(self, delay: float) -> None:
@@ -126,8 +125,9 @@ def test_backend_priority_reorders_by_latency(monkeypatch):
     slow = FakeBackend(delay=0.01)
     fast = FakeBackend(delay=0.0)
     try:
-        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", slow)
-        monkeypatch.setitem(accel._BACKEND_MODULES, "julia", fast)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "julia", slow)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "mock", fast)
+        accel.configure_backends(preferred=["mock", "julia"])
         accel.refresh_backend_state(reset_metrics=True)
 
         x = torch.randn(128)
@@ -135,10 +135,10 @@ def test_backend_priority_reorders_by_latency(monkeypatch):
             accel.fast_norm(x)
 
         order = accel.current_backend_priority()
-        assert order and order[0] == "julia"
+        assert order and order[0] == "mock"
 
         diagnostics = accel.backend_diagnostics()
-        assert diagnostics["rust"]["successes"] > 0
+        assert diagnostics["mock"]["successes"] > 0
         assert diagnostics["julia"]["successes"] > 0
     finally:
         accel.reset_backend_configuration()
@@ -166,10 +166,9 @@ def test_tensor_backend_results_are_normalized(monkeypatch):
 
     backend = TensorBackend()
     try:
-        accel.configure_backends(disabled=["julia", "go"])
-        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "mock", backend)
         monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
-        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.configure_backends(preferred=["mock"])
         accel.refresh_backend_state(reset_metrics=True)
 
         x = torch.randn(7, dtype=torch.float16)
@@ -219,10 +218,9 @@ def test_fast_paths_skip_accel_when_requires_grad(monkeypatch):
 
     backend = TrackingBackend()
     try:
-        accel.configure_backends(disabled=["julia", "go"])
-        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "mock", backend)
         monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
-        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.configure_backends(preferred=["mock"])
         accel.refresh_backend_state(reset_metrics=True)
 
         x = torch.randn(5, requires_grad=True)
@@ -276,10 +274,9 @@ def test_accelerated_results_preserve_requires_grad(monkeypatch):
 
     backend = GradBackend()
     try:
-        accel.configure_backends(disabled=["julia", "go"])
-        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "mock", backend)
         monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
-        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.configure_backends(preferred=["mock"])
         accel.refresh_backend_state(reset_metrics=True)
 
         x = torch.randn(6, dtype=torch.float32)
@@ -336,10 +333,9 @@ def test_backend_wrapped_outputs_are_unwrapped(monkeypatch):
 
     backend = WrappedBackend()
     try:
-        accel.configure_backends(disabled=["julia", "go"])
-        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "mock", backend)
         monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
-        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.configure_backends(preferred=["mock"])
         accel.refresh_backend_state(reset_metrics=True)
 
         x = torch.randn(9, dtype=torch.float16)
@@ -398,10 +394,9 @@ def test_backend_sequences_with_multiple_entries(monkeypatch):
 
     backend = MixedBackend()
     try:
-        accel.configure_backends(disabled=["julia", "go"])
-        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "mock", backend)
         monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
-        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.configure_backends(preferred=["mock"])
         accel.refresh_backend_state(reset_metrics=True)
 
         x = torch.randn(4, dtype=torch.float32)
@@ -432,10 +427,9 @@ def test_softsign_backend_shape_mismatch_falls_back(monkeypatch):
 
     backend = BadSoftsignBackend()
     try:
-        accel.configure_backends(disabled=["julia", "go"])
-        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "mock", backend)
         monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
-        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.configure_backends(preferred=["mock"])
         accel.refresh_backend_state(reset_metrics=True)
 
         x = torch.randn(6)
@@ -446,7 +440,7 @@ def test_softsign_backend_shape_mismatch_falls_back(monkeypatch):
         assert torch.allclose(actual, expected)
 
         diagnostics = accel.backend_diagnostics()
-        assert diagnostics["rust"]["failures"] >= 1
+        assert diagnostics["mock"]["failures"] >= 1
     finally:
         accel.reset_backend_configuration()
         accel.refresh_backend_state(reload=True, reset_metrics=True)
@@ -470,10 +464,9 @@ def test_scalar_backends_validate_shape(monkeypatch):
 
     backend = BadScalarBackend()
     try:
-        accel.configure_backends(disabled=["julia", "go"])
-        monkeypatch.setitem(accel._BACKEND_MODULES, "rust", backend)
+        monkeypatch.setitem(accel._BACKEND_MODULES, "mock", backend)
         monkeypatch.setitem(accel._BACKEND_MODULES, "julia", None)
-        monkeypatch.setitem(accel._BACKEND_MODULES, "go", None)
+        accel.configure_backends(preferred=["mock"])
         accel.refresh_backend_state(reset_metrics=True)
 
         x = torch.randn(10)
@@ -487,7 +480,7 @@ def test_scalar_backends_validate_shape(monkeypatch):
         assert torch.allclose(actual_norm, expected_norm)
 
         diagnostics = accel.backend_diagnostics()
-        assert diagnostics["rust"]["failures"] >= 2
+        assert diagnostics["mock"]["failures"] >= 2
     finally:
         accel.reset_backend_configuration()
         accel.refresh_backend_state(reload=True, reset_metrics=True)

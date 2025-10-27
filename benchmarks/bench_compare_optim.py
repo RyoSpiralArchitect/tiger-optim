@@ -92,7 +92,7 @@ def run(mode: str, device_str: str, steps=100, warmup=20, seed=0, batch=16, T=32
                    loss_last=losses[-1], loss_min=min(losses), loss_mean=sum(losses)/len(losses))
 
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    out_dir = os.path.join("bench","results"); os.makedirs(out_dir, exist_ok=True)
+    out_dir = os.path.join("benchmarks", "results"); os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"compare-{mode}-{dev.type}-{ts}.json")
     with open(out_path, "w") as f: json.dump(dict(summary=summary, series=dict(ms=ms, loss=losses)), f, indent=2)
     print(json.dumps(summary, indent=2))

@@ -54,8 +54,8 @@ def line_loss(paths, out_png, max_points=200):
 
 def main():
     ap = argparse.ArgumentParser("Plot bench results")
-    ap.add_argument("--pattern", default="bench/results/compare-*.json")
-    ap.add_argument("--out-dir", default="bench/plots")
+    ap.add_argument("--pattern", default="benchmarks/results/compare-*.json")
+    ap.add_argument("--out-dir", default="benchmarks/plots")
     args = ap.parse_args()
     os.makedirs(args.out_dir, exist_ok=True)
     rows = load_summaries(args.pattern)
