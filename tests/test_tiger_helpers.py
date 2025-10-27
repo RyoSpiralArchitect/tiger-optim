@@ -230,3 +230,46 @@ def test_lora_cross_density_bridge_updates_trust_clip():
     metrics = optimizer.get_last_metrics()
     assert "lora_bridge_global" in metrics
     assert metrics["lora_bridge_global"] == pytest.approx(cross_state["global_density"])
+
+
+def test_lora_cross_sync_aligns_lora_ema():
+    p_a = torch.nn.Parameter(torch.zeros(4))
+    p_b = torch.nn.Parameter(torch.zeros(4))
+
+    optimizer = tiger.Tiger(
+        [
+            {"params": [p_a], "block_tag": "lora_a", "sign_blend": 1.0},
+            {"params": [p_b], "block_tag": "lora_b", "sign_blend": 1.0},
+        ],
+        lr=1e-3,
+        betas=(0.0, 0.0),
+        weight_decay=0.0,
+        factored=False,
+        precond_alpha=0.0,
+        sign_mode="sign",
+        sign_blend=1.0,
+        use_foreach=False,
+        use_foreach_update=False,
+        lora_interval=1,
+        lora_density_adapt=True,
+        lora_density_k=0.25,
+        lora_density_beta=0.0,
+        lora_cross_adapt=True,
+        lora_cross_beta=0.0,
+        lora_cross_sync=0.5,
+        lora_cross_gain=0.0,
+        lora_bridge=False,
+    )
+
+    p_a.grad = torch.tensor([1.0, 1.0, 1.0, 1.0])
+    p_b.grad = torch.tensor([1.0, 0.0, 0.0, 0.0])
+
+    optimizer.step()
+
+    state_a = optimizer._lora_pid[0]
+    state_b = optimizer._lora_pid[1]
+    cross_state = optimizer._lora_cross_state
+
+    assert cross_state["global_density"] == pytest.approx(0.625, rel=1e-4, abs=1e-4)
+    assert state_a["ema"] == pytest.approx(0.8125, rel=1e-4, abs=1e-4)
+    assert state_b["ema"] == pytest.approx(0.4375, rel=1e-4, abs=1e-4)

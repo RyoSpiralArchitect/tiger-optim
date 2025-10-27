@@ -389,7 +389,7 @@ class Tiger(Optimizer):
         self._trust_ema: Dict[int, float] = {}
         # LoRA PID state per group id
         self._lora_pid: Dict[int, Dict[str, float]] = {}  # plus ki_eff/kd_eff for recovery
-        self._lora_cross_state: Dict[str, object] = {"global_density": None, "tag_density": {}, "bridge_ema": {}}
+        self._lora_cross_state: Dict[str, object] = {"global_density": None, "tag_density": {}}
         self._lora_bridge: Dict[int, Dict[str, float]] = {}
         # QKV LR EMA per group & dispersion EMA (and previous for accel)
         self._qkv_lr_ema: Dict[int, Dict[str, float]] = {}
@@ -651,6 +651,7 @@ class Tiger(Optimizer):
         cross_attn_tags = tuple(self.defaults.get("lora_cross_attn_tags", ())) if cross_enabled else tuple()
         cross_ffn_tags = tuple(self.defaults.get("lora_cross_ffn_tags", ())) if cross_enabled else tuple()
         cross_tag_set = set(cross_attn_tags) | set(cross_ffn_tags)
+        pending_lora_blocks: List[Tuple[int, str, Dict[str, float], float]] = []
 
         for gi, group in enumerate(self.param_groups):
             lr = float(group["lr"]); (b1,b2) = group["betas"]; eps = float(group["eps"])
@@ -920,18 +921,7 @@ class Tiger(Optimizer):
                 st["ema"] = beta*st["ema"] + (1.0-beta)*dense_obs
 
                 if cross_enabled:
-                    prev_global = cross_state.get("global_density")
-                    if prev_global is None:
-                        prev_global = st["ema"]
-                    new_global = cross_beta*prev_global + (1.0 - cross_beta)*st["ema"]
-                    cross_state["global_density"] = new_global
-                    tag_map = cross_state.setdefault("tag_density", {})
-                    prev_tag = tag_map.get(tag)
-                    if prev_tag is None:
-                        prev_tag = st["ema"]
-                    tag_map[tag] = cross_beta*prev_tag + (1.0 - cross_beta)*st["ema"]
-                    if cross_sync > 0.0:
-                        st["ema"] = (1.0 - cross_sync)*st["ema"] + cross_sync*new_global
+                    pending_lora_blocks.append((gi, tag, st, st["ema"]))
 
                 # volatility
                 vol = abs(st["ema"] - st["last_ema"])
@@ -1027,11 +1017,7 @@ class Tiger(Optimizer):
                 self._last_metrics.update({"lora_dense_ema": st["ema"], "lora_vol_ema": st["vol_ema"], "lora_flip_ema_sb": st["flip_ema_sb"], "lora_flip_ema_agc": st["flip_ema_agc"],
                                            "lora_sb": new_sb, "lora_agc": new_agc, "lora_ki_eff": ki_eff, "lora_kd_eff": kd_eff})
                 if cross_enabled:
-                    self._last_metrics.update({
-                        "lora_global_density": cross_state.get("global_density", st["ema"]),
-                        "lora_attn_density": float(sum(cross_state.get("tag_density", {}).get(t, 0.0) for t in cross_attn_tags)/max(1, len(cross_attn_tags))) if cross_attn_tags else 0.0,
-                        "lora_ffn_density": float(sum(cross_state.get("tag_density", {}).get(t, 0.0) for t in cross_ffn_tags)/max(1, len(cross_ffn_tags))) if cross_ffn_tags else 0.0,
-                    })
+                    pending_lora_blocks[-1] = (gi, tag, st, st["ema"])
 
             # QKV two-objective with gamma auto-scale + step-clip via acceleration
             if tag == "attn_qkv" and qkv_lr is not None and bool(self.defaults["qkv_lr_autoadapt"]) and (self._global_step % int(self.defaults["qkv_lr_interval"]) == 0):
@@ -1126,6 +1112,30 @@ class Tiger(Optimizer):
                 if prev is None:
                     prev = obs
                 tag_map[tag] = cross_beta*prev + (1.0 - cross_beta)*obs
+
+        if cross_enabled:
+            tag_map = cross_state.setdefault("tag_density", {})
+            if pending_lora_blocks:
+                mean_density = sum(item[3] for item in pending_lora_blocks) / len(pending_lora_blocks)
+                prev_global = cross_state.get("global_density")
+                new_global = mean_density if prev_global is None else cross_beta*prev_global + (1.0 - cross_beta)*mean_density
+                cross_state["global_density"] = new_global
+                for (_, tag, st, ema_val) in pending_lora_blocks:
+                    prev_tag = tag_map.get(tag, ema_val)
+                    tag_map[tag] = cross_beta*prev_tag + (1.0 - cross_beta)*ema_val
+                if cross_sync > 0.0 and cross_state["global_density"] is not None:
+                    global_density = float(cross_state["global_density"])
+                    for (gi, tag, st, _) in pending_lora_blocks:
+                        st["ema"] = (1.0 - cross_sync) * st["ema"] + cross_sync * global_density
+                        self._lora_pid[gi] = st
+            global_density_val = cross_state.get("global_density")
+            if global_density_val is not None or tag_map:
+                attn_avg = sum(tag_map.get(t, 0.0) for t in cross_attn_tags) / max(1, len(cross_attn_tags)) if cross_attn_tags else 0.0
+                ffn_avg = sum(tag_map.get(t, 0.0) for t in cross_ffn_tags) / max(1, len(cross_ffn_tags)) if cross_ffn_tags else 0.0
+                if global_density_val is not None:
+                    self._last_metrics["lora_global_density"] = float(global_density_val)
+                self._last_metrics["lora_attn_density"] = float(attn_avg)
+                self._last_metrics["lora_ffn_density"] = float(ffn_avg)
 
         if cross_enabled and bool(self.defaults.get("lora_bridge", False)):
             global_density = cross_state.get("global_density", None)
