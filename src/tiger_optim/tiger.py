@@ -123,6 +123,59 @@ def _reference_tensor(
             return found
     return None
 
+
+def _spectral_dispersion(x: torch.Tensor, low_band: float, high_band: float) -> Tuple[float, float, float]:
+    """Estimate mean spectral energy for low/high bands and the phase spread."""
+
+    if x is None:
+        return 0.0, 0.0, 0.0
+
+    y = x.reshape(-1).detach()
+    if y.numel() <= 1:
+        return 0.0, 0.0, 0.0
+
+    if not y.is_floating_point() or y.dtype != torch.float32:
+        y = y.to(torch.float32)
+
+    # remove mean so DC energy does not dominate the dispersion metric
+    y = y - y.mean()
+
+    spec = torch.fft.rfft(y)
+    power = spec.abs().pow(2)
+    if power.numel() == 0:
+        return 0.0, 0.0, 0.0
+
+    # drop the DC component when slicing the spectrum
+    side = power[1:] if power.numel() > 1 else power
+    if side.numel() == 0:
+        val = float(power.mean().item()) if power.numel() else 0.0
+        return val, val, 0.0
+
+    n_eff = side.numel()
+    # ensure the requested bands are inside (0, 1]
+    low_band = float(max(0.0, min(1.0, low_band)))
+    high_band = float(max(0.0, min(1.0, high_band)))
+    low_len = max(1, min(n_eff, int(math.ceil(low_band * n_eff))))
+    high_len = max(1, min(n_eff, int(math.ceil(high_band * n_eff))))
+
+    low_slice = side[:low_len]
+    high_slice = side[-high_len:]
+
+    low_energy = float(low_slice.mean().item()) if low_slice.numel() else 0.0
+    high_energy = float(high_slice.mean().item()) if high_slice.numel() else 0.0
+
+    if spec.numel() > 1:
+        phase = torch.angle(spec[1:])
+        # resultant length indicates phase coherence (1 -> aligned, 0 -> dispersed)
+        phase_vector = torch.polar(torch.ones_like(phase), phase)
+        phase_coherence = torch.abs(torch.mean(phase_vector))
+        # convert to spread in [0, 1]
+        phase_spread = float((1.0 - phase_coherence.clamp(0.0, 1.0)).item())
+    else:
+        phase_spread = 0.0
+
+    return low_energy, high_energy, phase_spread
+
 class _Profiler:
     def __init__(self, enabled=False, path="benchmarks/profiles/tiger.jsonl", interval=10, ema_decay=0.9):
         self.enabled = bool(enabled)
@@ -259,6 +312,10 @@ class Tiger(Optimizer):
                  qkv_gain_shrink_gamma=1.2, qkv_lr_step_clip=0.08,
                  qkv_disp_ema_beta=0.8, qkv_gamma_rate=0.6, qkv_gamma_min=0.2, qkv_gamma_max=5.0,
                  qkv_clip_shrink_k=0.6, qkv_clip_min=0.02, qkv_clip_max=0.2,
+                 qkv_spectral_adapt=True, qkv_spectral_low_band=0.2, qkv_spectral_high_band=0.25,
+                 qkv_spectral_beta=0.7, qkv_spectral_eps=1e-9,
+                 qkv_gamma_spectral_gain=0.75, qkv_gamma_spectral_clip=(0.5, 1.5),
+                 qkv_phase_boost_gain=0.4, qkv_phase_target=0.6, qkv_phase_boost_clip=(0.6, 1.6),
                  # compile staged reflect
                  compile_guard=True, reflect_interval=50,
                  # profiler
@@ -307,6 +364,12 @@ class Tiger(Optimizer):
                         qkv_gain_shrink_gamma=float(qkv_gain_shrink_gamma), qkv_lr_step_clip=float(qkv_lr_step_clip),
                         qkv_disp_ema_beta=float(qkv_disp_ema_beta), qkv_gamma_rate=float(qkv_gamma_rate), qkv_gamma_min=float(qkv_gamma_min), qkv_gamma_max=float(qkv_gamma_max),
                         qkv_clip_shrink_k=float(qkv_clip_shrink_k), qkv_clip_min=float(qkv_clip_min), qkv_clip_max=float(qkv_clip_max),
+                        qkv_spectral_adapt=bool(qkv_spectral_adapt), qkv_spectral_low_band=float(qkv_spectral_low_band),
+                        qkv_spectral_high_band=float(qkv_spectral_high_band), qkv_spectral_beta=float(qkv_spectral_beta),
+                        qkv_spectral_eps=float(qkv_spectral_eps),
+                        qkv_gamma_spectral_gain=float(qkv_gamma_spectral_gain), qkv_gamma_spectral_clip=tuple(qkv_gamma_spectral_clip),
+                        qkv_phase_boost_gain=float(qkv_phase_boost_gain), qkv_phase_target=float(qkv_phase_target),
+                        qkv_phase_boost_clip=tuple(qkv_phase_boost_clip),
                         # compile reflect
                         compile_guard=compile_guard, reflect_interval=int(reflect_interval))
         super().__init__(params, defaults)
@@ -332,6 +395,7 @@ class Tiger(Optimizer):
         self._qkv_lr_ema: Dict[int, Dict[str, float]] = {}
         self._qkv_disp_ema: Dict[int, float] = {}
         self._qkv_disp_ema_prev: Dict[int, float] = {}
+        self._qkv_spec_ema: Dict[int, Dict[str, Dict[str, float]]] = {}
         self._fused_apply_failures: List[str] = []
 
     # ---------- Public API ----------
@@ -553,7 +617,9 @@ class Tiger(Optimizer):
                       agc_clips=0, nonfinite_skips=0, pruned_params=0, pruned_elems=0,
                       foreach_triton_failures=None,
                       qkv_q_r=None, qkv_k_r=None, qkv_v_r=None, qkv_q_rms=None, qkv_k_rms=None, qkv_v_rms=None,
-                      qkv_gamma_eff=None, qkv_disp=None, qkv_disp_ema=None, qkv_step_clip_eff=None, qkv_accel=None)
+                      qkv_q_freq=None, qkv_k_freq=None, qkv_v_freq=None,
+                      qkv_gamma_eff=None, qkv_disp=None, qkv_disp_ema=None, qkv_step_clip_eff=None, qkv_accel=None,
+                      qkv_freq_disp=None, qkv_freq_factor=None, qkv_phase_boost=None)
 
         self._fused_apply_failures = []
 
@@ -605,6 +671,12 @@ class Tiger(Optimizer):
             bucket_scalarless = bool(group.get("bucket_scalarless", self.defaults["bucket_scalarless"]))
             use_triton_stats = bool(group.get("use_triton_bucket_stats", self.defaults["use_triton_bucket_stats"]))
             use_triton_fused = bool(group.get("use_triton_fused_apply", self.defaults["use_triton_fused_apply"]))
+            spec_enabled = bool(self.defaults.get("qkv_spectral_adapt", False))
+            spec_low_band = float(self.defaults.get("qkv_spectral_low_band", 0.2))
+            spec_high_band = float(self.defaults.get("qkv_spectral_high_band", 0.25))
+            spec_beta = float(self.defaults.get("qkv_spectral_beta", 0.7))
+            spec_eps = float(self.defaults.get("qkv_spectral_eps", 1e-9))
+            spec_state = self._qkv_spec_ema.setdefault(gi, {}) if spec_enabled else None
 
             # schedule override for sign_blend
             if sblendT and sblendT>0:
@@ -751,7 +823,26 @@ class Tiger(Optimizer):
                             eff_lr = base_lr
                             if qkv_lr is not None and i < len(keys):
                                 eff_lr = lr * float(qkv_lr.get(keys[i], lr_scale))
-                            k = keys[i]; last_qkv[k] = dict(tr=float(tr), rms=float(_rms(dc)))
+                            freq_disp = 0.0; low_ema = 0.0; high_ema = 0.0; phase_ema = 0.0
+                            if spec_enabled and i < len(keys) and spec_state is not None:
+                                label = keys[i]
+                                low_raw, high_raw, phase_raw = _spectral_dispersion(dc, spec_low_band, spec_high_band)
+                                prev = spec_state.get(label)
+                                if prev is None:
+                                    low_ema = low_raw
+                                    high_ema = high_raw
+                                    phase_ema = phase_raw
+                                else:
+                                    low_ema = spec_beta*prev.get("low", low_raw) + (1.0 - spec_beta)*low_raw
+                                    high_ema = spec_beta*prev.get("high", high_raw) + (1.0 - spec_beta)*high_raw
+                                    phase_ema = spec_beta*prev.get("phase", phase_raw) + (1.0 - spec_beta)*phase_raw
+                                spec_state[label] = {"low": float(low_ema), "high": float(high_ema), "phase": float(phase_ema)}
+                                denom = low_ema + spec_eps
+                                freq_disp = math.log((high_ema + spec_eps) / denom) if denom > 0.0 else 0.0
+                            k = keys[i]
+                            last_qkv[k] = dict(tr=float(tr), rms=float(_rms(dc)),
+                                               freq_low=float(low_ema), freq_high=float(high_ema),
+                                               freq_phase=float(phase_ema), freq_disp=float(freq_disp))
                             pc.add_(dc.to(pc.dtype), alpha=-(eff_lr * tr * clip_scale_param))
                     else:
                         parts = blk_chunks
@@ -810,10 +901,13 @@ class Tiger(Optimizer):
             # write QKV stats
             if last_qkv["q"] is not None:
                 prof_c["qkv_q_r"] = last_qkv["q"]["tr"]; prof_c["qkv_q_rms"] = last_qkv["q"]["rms"]
+                prof_c["qkv_q_freq"] = last_qkv["q"].get("freq_disp")
             if last_qkv["k"] is not None:
                 prof_c["qkv_k_r"] = last_qkv["k"]["tr"]; prof_c["qkv_k_rms"] = last_qkv["k"]["rms"]
+                prof_c["qkv_k_freq"] = last_qkv["k"].get("freq_disp")
             if last_qkv["v"] is not None:
                 prof_c["qkv_v_r"] = last_qkv["v"]["tr"]; prof_c["qkv_v_rms"] = last_qkv["v"]["rms"]
+                prof_c["qkv_v_freq"] = last_qkv["v"].get("freq_disp")
 
             # LoRA EMA + PID + inertia + minima + recovery
             if tag in ("lora_a","lora_b") and bool(self.defaults["lora_density_adapt"]) and (lora_count > 0) and (self._global_step % int(self.defaults["lora_interval"]) == 0):
@@ -952,6 +1046,10 @@ class Tiger(Optimizer):
 
                     rms = [max(1e-12, float(last_qkv[k]["rms"])) for k in ("q","k","v")]
                     trs = [max(1e-12, float(last_qkv[k]["tr"])) for k in ("q","k","v")]
+                    freq_disp_vals = [float(last_qkv[k].get("freq_disp", 0.0)) for k in ("q","k","v")]
+                    freq_low_vals = [float(last_qkv[k].get("freq_low", 0.0)) for k in ("q","k","v")]
+                    freq_high_vals = [float(last_qkv[k].get("freq_high", 0.0)) for k in ("q","k","v")]
+                    phase_vals = [float(last_qkv[k].get("freq_phase", 0.0)) for k in ("q","k","v")]
 
                     disp_r = math.log(max(rms)/min(rms)); disp_t = math.log(max(trs)/min(trs))
                     disp = math.sqrt(wr*disp_r*disp_r + wt*disp_t*disp_t)
@@ -966,9 +1064,27 @@ class Tiger(Optimizer):
                     # gamma auto-scale
                     gamma_eff = gamma0 * (1.0 + rate * (trend / max(1e-6, disp)))
                     gamma_eff = max(gmin, min(gmax, gamma_eff))
+                    freq_disp_mean = sum(freq_disp_vals)/len(freq_disp_vals)
+                    freq_factor = 1.0
+                    if bool(self.defaults.get("qkv_spectral_adapt", False)):
+                        freq_gain = float(self.defaults.get("qkv_gamma_spectral_gain", 0.0))
+                        clip_lo, clip_hi = self.defaults.get("qkv_gamma_spectral_clip", (0.5, 1.5))
+                        if freq_gain != 0.0:
+                            freq_factor = math.exp(freq_gain * freq_disp_mean)
+                            freq_factor = max(float(clip_lo), min(float(clip_hi), freq_factor))
+                            gamma_eff *= freq_factor
                     # step-clip shrink by positive acceleration
                     step_clip_eff = base_clip / (1.0 + k_shrink * max(0.0, accel))
-                    step_clip_eff = max(cmin, min(cmax, step_clip_eff))
+                    phase_mean = sum(phase_vals)/len(phase_vals) if phase_vals else 0.0
+                    phase_boost = 1.0
+                    if bool(self.defaults.get("qkv_spectral_adapt", False)):
+                        phase_gain = float(self.defaults.get("qkv_phase_boost_gain", 0.0))
+                        phase_target = float(self.defaults.get("qkv_phase_target", 0.0))
+                        clip_lo, clip_hi = self.defaults.get("qkv_phase_boost_clip", (0.6, 1.6))
+                        if phase_gain != 0.0:
+                            phase_boost = 1.0 + phase_gain * (phase_mean - phase_target)
+                            phase_boost = max(float(clip_lo), min(float(clip_hi), phase_boost))
+                    step_clip_eff = max(cmin, min(cmax, step_clip_eff * phase_boost))
 
                     med_r = sorted(rms)[1]; med_t = sorted(trs)[1]
                     def adj(cur_r, cur_t):
@@ -993,7 +1109,13 @@ class Tiger(Optimizer):
                         self.stage_group_update(gi, {"qkv_lr_scales": new_map}, policy="replace")
                     self._last_metrics.update({"qkv_lr_q": sc_q, "qkv_lr_k": sc_k, "qkv_lr_v": sc_v,
                                                "qkv_gamma_eff": gamma_eff, "qkv_disp": disp, "qkv_disp_ema": disp_ema,
-                                               "qkv_step_clip_eff": step_clip_eff, "qkv_accel": accel})
+                                               "qkv_step_clip_eff": step_clip_eff, "qkv_accel": accel,
+                                               "qkv_freq_disp": freq_disp_mean, "qkv_freq_factor": freq_factor,
+                                               "qkv_phase_boost": phase_boost,
+                                               "qkv_freq_low": sum(freq_low_vals)/len(freq_low_vals) if freq_low_vals else 0.0,
+                                               "qkv_freq_high": sum(freq_high_vals)/len(freq_high_vals) if freq_high_vals else 0.0,
+                                               "qkv_phase_mean": phase_mean})
+                    prof_c.update(qkv_freq_disp=freq_disp_mean, qkv_freq_factor=freq_factor, qkv_phase_boost=phase_boost)
 
             # end group loop
 
