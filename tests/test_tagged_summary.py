@@ -122,6 +122,22 @@ def test_aggregate_param_group_stats_zero_param_groups_fallback_to_simple_averag
     assert agg.param_ratio == pytest.approx(0.0)
 
 
+def test_aggregate_param_group_stats_accepts_precomputed_summaries(demo_param_groups):
+    summaries = collect_param_group_stats(demo_param_groups)
+    aggregates_from_dicts = aggregate_param_group_stats(demo_param_groups)
+    aggregates_from_summaries = aggregate_param_group_stats(summaries)
+
+    assert aggregates_from_summaries == aggregates_from_dicts
+
+
+def test_aggregate_param_group_stats_rejects_mixed_inputs(demo_param_groups):
+    summaries = collect_param_group_stats(demo_param_groups)
+    mixed = [summaries[0], {"params": [], "block_tag": "other", "lr": 0.01}]
+
+    with pytest.raises(TypeError):
+        aggregate_param_group_stats(mixed)
+
+
 def _extract_summary_tags(summary: str) -> list[str]:
     tags: list[str] = []
     for line in summary.splitlines()[2:]:

@@ -211,14 +211,16 @@ def collect_param_group_stats(param_groups: Iterable[dict]) -> List[ParamGroupSu
     return summaries
 
 
-def aggregate_param_group_stats(param_groups: Iterable[dict]) -> List[ParamTagAggregate]:
+def aggregate_param_group_stats(param_groups: Iterable[dict | ParamGroupSummary]) -> List[ParamTagAggregate]:
     """Aggregate :class:`ParamGroupSummary` entries by their ``block_tag`` value.
 
     Parameters
     ----------
     param_groups:
-        Iterable of parameter group dictionaries, typically produced by
-        :func:`build_tagged_param_groups` or read from ``optimizer.param_groups``.
+        Iterable of parameter group dictionaries or pre-collected
+        :class:`ParamGroupSummary` objects. Dictionaries are typically produced
+        by :func:`build_tagged_param_groups` or read from
+        ``optimizer.param_groups``.
 
     Returns
     -------
@@ -226,9 +228,22 @@ def aggregate_param_group_stats(param_groups: Iterable[dict]) -> List[ParamTagAg
         Aggregated statistics ordered by the first occurrence of each tag.
     """
 
-    summaries = collect_param_group_stats(param_groups)
-    if not summaries:
+    items = list(param_groups)
+    if not items:
         return []
+
+    summaries: List[ParamGroupSummary]
+    if all(isinstance(item, ParamGroupSummary) for item in items):
+        summaries = list(items)  # already normalized
+    elif any(isinstance(item, ParamGroupSummary) for item in items):
+        raise TypeError(
+            "aggregate_param_group_stats expected only ParamGroupSummary instances "
+            "or only param group dictionaries, mixing both is not supported."
+        )
+    else:
+        summaries = collect_param_group_stats(items)
+        if not summaries:
+            return []
 
     totals: Dict[str, dict] = {}
     order: List[str] = []
