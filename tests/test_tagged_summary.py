@@ -86,23 +86,40 @@ def test_aggregate_param_group_stats_empty_returns_empty():
     assert aggregate_param_group_stats([]) == []
 
 
-def test_aggregate_param_group_stats_accepts_summaries(demo_param_groups):
-    summaries = collect_param_group_stats(demo_param_groups)
-    via_groups = aggregate_param_group_stats(demo_param_groups)
-    via_summaries = aggregate_param_group_stats(summaries)
-    assert via_summaries == via_groups
+def test_aggregate_param_group_stats_tracks_extrema():
+    base = dict(params=[torch.zeros(1)], block_tag="shared", lr_scale=1.0)
+    groups = [
+        {**base, "lr": 0.1, "weight_decay": 0.0},
+        {**base, "lr": 0.2, "weight_decay": 0.01},
+        {**base, "lr": 0.05, "weight_decay": 0.001},
+    ]
+
+    aggregates = aggregate_param_group_stats(groups)
+    assert len(aggregates) == 1
+
+    agg = aggregates[0]
+    assert agg.min_lr == pytest.approx(0.05)
+    assert agg.max_lr == pytest.approx(0.2)
+    assert agg.min_weight_decay == pytest.approx(0.0)
+    assert agg.max_weight_decay == pytest.approx(0.01)
+    assert agg.min_lr_scale == agg.max_lr_scale == pytest.approx(1.0)
 
 
-def test_aggregate_param_group_stats_handles_mixed_iterables(demo_param_groups):
-    summaries = collect_param_group_stats(demo_param_groups)
-    assert summaries, "demo fixture should yield at least one summary"
+def test_aggregate_param_group_stats_zero_param_groups_fallback_to_simple_average():
+    groups = [
+        {"params": [], "block_tag": "empty", "lr": 0.1, "weight_decay": 0.02, "lr_scale": 0.5},
+        {"params": [], "block_tag": "empty", "lr": 0.2, "weight_decay": 0.04, "lr_scale": 1.5},
+    ]
 
-    dict_index = min(1, len(demo_param_groups) - 1)
-    mixed = [summaries[0], demo_param_groups[dict_index]]
-    if len(summaries) > 1:
-        mixed.append(summaries[-1])
+    aggregates = aggregate_param_group_stats(groups)
+    assert len(aggregates) == 1
 
-    assert aggregate_param_group_stats(mixed) == aggregate_param_group_stats(demo_param_groups)
+    agg = aggregates[0]
+    assert agg.avg_lr == pytest.approx(0.15)
+    assert agg.avg_weight_decay == pytest.approx(0.03)
+    assert agg.avg_lr_scale == pytest.approx(1.0)
+    assert agg.total_params == 0
+    assert agg.param_ratio == pytest.approx(0.0)
 
 
 def _extract_summary_tags(summary: str) -> list[str]:

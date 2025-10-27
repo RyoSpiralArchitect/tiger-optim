@@ -211,25 +211,14 @@ def collect_param_group_stats(param_groups: Iterable[dict]) -> List[ParamGroupSu
     return summaries
 
 
-ParamGroupLike = Union[ParamGroupSummary, Dict[str, Any]]
-
-
-def aggregate_param_group_stats(param_groups: Iterable[ParamGroupLike]) -> List[ParamTagAggregate]:
+def aggregate_param_group_stats(param_groups: Iterable[dict]) -> List[ParamTagAggregate]:
     """Aggregate :class:`ParamGroupSummary` entries by their ``block_tag`` value.
-
-    The iterable can provide raw optimizer param group dictionaries, precomputed
-    :class:`ParamGroupSummary` instances, or any mix of the two. This keeps the
-    helper convenient in interactive settings where the summaries might already
-    be available while still supporting the simpler ``optimizer.param_groups``
-    input.
 
     Parameters
     ----------
     param_groups:
-        Iterable of parameter group dictionaries or :class:`ParamGroupSummary`
-        entries, typically produced by :func:`build_tagged_param_groups`, read
-        from ``optimizer.param_groups`` or generated via
-        :func:`collect_param_group_stats`.
+        Iterable of parameter group dictionaries, typically produced by
+        :func:`build_tagged_param_groups` or read from ``optimizer.param_groups``.
 
     Returns
     -------
@@ -237,20 +226,7 @@ def aggregate_param_group_stats(param_groups: Iterable[ParamGroupLike]) -> List[
         Aggregated statistics ordered by the first occurrence of each tag.
     """
 
-    items = list(param_groups)
-    if not items:
-        return []
-
-    raw_groups = [item for item in items if not isinstance(item, ParamGroupSummary)]
-    synthesized = iter(collect_param_group_stats(raw_groups)) if raw_groups else iter(())
-
-    summaries: List[ParamGroupSummary] = []
-    for item in items:
-        if isinstance(item, ParamGroupSummary):
-            summaries.append(item)
-        else:
-            summaries.append(next(synthesized))
-
+    summaries = collect_param_group_stats(param_groups)
     if not summaries:
         return []
 
@@ -268,6 +244,9 @@ def aggregate_param_group_stats(param_groups: Iterable[ParamGroupLike]) -> List[
                 "weighted_lr": 0.0,
                 "weighted_wd": 0.0,
                 "weighted_lr_scale": 0.0,
+                "sum_lr": 0.0,
+                "sum_wd": 0.0,
+                "sum_lr_scale": 0.0,
                 "min_lr": float("inf"),
                 "max_lr": float("-inf"),
                 "min_wd": float("inf"),
@@ -285,6 +264,9 @@ def aggregate_param_group_stats(param_groups: Iterable[ParamGroupLike]) -> List[
         bucket["weighted_lr"] += summary.lr * weight
         bucket["weighted_wd"] += summary.weight_decay * weight
         bucket["weighted_lr_scale"] += summary.lr_scale * weight
+        bucket["sum_lr"] += summary.lr
+        bucket["sum_wd"] += summary.weight_decay
+        bucket["sum_lr_scale"] += summary.lr_scale
         bucket["min_lr"] = min(bucket["min_lr"], summary.lr)
         bucket["max_lr"] = max(bucket["max_lr"], summary.lr)
         bucket["min_wd"] = min(bucket["min_wd"], summary.weight_decay)
@@ -300,9 +282,15 @@ def aggregate_param_group_stats(param_groups: Iterable[ParamGroupLike]) -> List[
         total_params = bucket["total_params"]
         weight = float(total_params)
         ratio = (weight / denom) if denom else 0.0
-        avg_lr = bucket["weighted_lr"] / weight if weight else 0.0
-        avg_wd = bucket["weighted_wd"] / weight if weight else 0.0
-        avg_lr_scale = bucket["weighted_lr_scale"] / weight if weight else 0.0
+        if weight:
+            avg_lr = bucket["weighted_lr"] / weight
+            avg_wd = bucket["weighted_wd"] / weight
+            avg_lr_scale = bucket["weighted_lr_scale"] / weight
+        else:
+            groups = float(bucket["groups"])
+            avg_lr = bucket["sum_lr"] / groups if groups else 0.0
+            avg_wd = bucket["sum_wd"] / groups if groups else 0.0
+            avg_lr_scale = bucket["sum_lr_scale"] / groups if groups else 0.0
         aggregates.append(
             ParamTagAggregate(
                 tag=tag,
