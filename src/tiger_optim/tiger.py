@@ -250,6 +250,9 @@ class Tiger(Optimizer):
                  lora_dwell_decay=0.9, lora_dwell_gain=0.05, lora_errflip_damp_sb=0.5, lora_errflip_damp_agc=0.5,
                  lora_pid_mode="auto", lora_inertia_beta=0.9, lora_inertia_strength=1.5, lora_flip_ema_beta=0.8,
                  lora_ki_min=0.01, lora_kd_min=0.005, lora_recover_rate=0.15,
+                 lora_cross_adapt=True, lora_cross_beta=0.6, lora_cross_sync=0.25,
+                 lora_cross_gain=0.1, lora_cross_attn_tags=("attn_qkv",), lora_cross_ffn_tags=("ffn_up","ffn_down"),
+                 lora_bridge=True, lora_bridge_gain=0.25, lora_bridge_bounds=(0.6, 1.4), lora_bridge_beta=0.8,
                  # QKV two-objective + gamma auto-scale + step-clip acceleration shrink
                  qkv_lr_autoadapt=True, qkv_w_rms=0.7, qkv_w_trust=0.3,
                  qkv_lr_gain=0.02, qkv_lr_bounds=(0.7, 1.3), qkv_lr_interval=25, qkv_lr_ema_beta=0.8,
@@ -293,6 +296,11 @@ class Tiger(Optimizer):
                         lora_errflip_damp_sb=float(lora_errflip_damp_sb), lora_errflip_damp_agc=float(lora_errflip_damp_agc),
                         lora_pid_mode=str(lora_pid_mode), lora_inertia_beta=float(lora_inertia_beta), lora_inertia_strength=float(lora_inertia_strength), lora_flip_ema_beta=float(lora_flip_ema_beta),
                         lora_ki_min=float(lora_ki_min), lora_kd_min=float(lora_kd_min), lora_recover_rate=float(lora_recover_rate),
+                        lora_cross_adapt=bool(lora_cross_adapt), lora_cross_beta=float(lora_cross_beta),
+                        lora_cross_sync=float(lora_cross_sync), lora_cross_gain=float(lora_cross_gain),
+                        lora_cross_attn_tags=tuple(lora_cross_attn_tags), lora_cross_ffn_tags=tuple(lora_cross_ffn_tags),
+                        lora_bridge=bool(lora_bridge), lora_bridge_gain=float(lora_bridge_gain),
+                        lora_bridge_bounds=tuple(lora_bridge_bounds), lora_bridge_beta=float(lora_bridge_beta),
                         # QKV 2obj + gamma auto-scale + step-clip accel shrink
                         qkv_lr_autoadapt=qkv_lr_autoadapt, qkv_w_rms=float(qkv_w_rms), qkv_w_trust=float(qkv_w_trust),
                         qkv_lr_gain=float(qkv_lr_gain), qkv_lr_bounds=tuple(qkv_lr_bounds), qkv_lr_interval=int(qkv_lr_interval), qkv_lr_ema_beta=float(qkv_lr_ema_beta),
@@ -318,6 +326,8 @@ class Tiger(Optimizer):
         self._trust_ema: Dict[int, float] = {}
         # LoRA PID state per group id
         self._lora_pid: Dict[int, Dict[str, float]] = {}  # plus ki_eff/kd_eff for recovery
+        self._lora_cross_state: Dict[str, object] = {"global_density": None, "tag_density": {}, "bridge_ema": {}}
+        self._lora_bridge: Dict[int, Dict[str, float]] = {}
         # QKV LR EMA per group & dispersion EMA (and previous for accel)
         self._qkv_lr_ema: Dict[int, Dict[str, float]] = {}
         self._qkv_disp_ema: Dict[int, float] = {}
@@ -567,6 +577,14 @@ class Tiger(Optimizer):
         # ---------- Main pass ----------
         up_s2 = 0.0; up_n = 0
         dn_s2 = 0.0; dn_n = 0
+        cross_enabled = bool(self.defaults.get("lora_cross_adapt", False))
+        cross_state = self._lora_cross_state
+        cross_beta = float(self.defaults.get("lora_cross_beta", 0.0)) if cross_enabled else 0.0
+        cross_sync = float(self.defaults.get("lora_cross_sync", 0.0)) if cross_enabled else 0.0
+        cross_gain = float(self.defaults.get("lora_cross_gain", 0.0)) if cross_enabled else 0.0
+        cross_attn_tags = tuple(self.defaults.get("lora_cross_attn_tags", ())) if cross_enabled else tuple()
+        cross_ffn_tags = tuple(self.defaults.get("lora_cross_ffn_tags", ())) if cross_enabled else tuple()
+        cross_tag_set = set(cross_attn_tags) | set(cross_ffn_tags)
 
         for gi, group in enumerate(self.param_groups):
             lr = float(group["lr"]); (b1,b2) = group["betas"]; eps = float(group["eps"])
@@ -606,6 +624,7 @@ class Tiger(Optimizer):
 
             # QKV slice logging (last seen in this group)
             last_qkv = {"q":None,"k":None,"v":None}
+            cross_density_sum = 0.0; cross_density_count = 0
 
             for p in group["params"]:
                 if p.grad is None: continue
@@ -682,18 +701,26 @@ class Tiger(Optimizer):
                 elif tag=="ffn_down":
                     dn_s2 += float((d.float()*d.float()).sum().item()); dn_n += d.numel()
 
+                d_rms = float(_rms(d))
+
                 if tag in ("lora_a","lora_b") and bool(self.defaults["lora_density_adapt"]):
-                    thr = float(self.defaults["lora_density_k"]) * float(_rms(d))
+                    thr = float(self.defaults["lora_density_k"]) * d_rms
                     if thr > 0.0:
                         dense = float((d.abs() > thr).float().mean().item())
                         lora_dense_sum += dense; lora_count += 1
+
+                if cross_enabled and tag in cross_tag_set:
+                    thr_cross = float(self.defaults["lora_density_k"]) * d_rms
+                    if thr_cross > 0.0:
+                        dense_cross = float((d.abs() > thr_cross).float().mean().item())
+                        cross_density_sum += dense_cross; cross_density_count += 1
 
                 base_lr = lr * lr_scale
 
                 # RMS clip (param)
                 clip_scale_param = 1.0
                 if rms_thr and rms_gran == "param":
-                    rr = float(_rms(d))
+                    rr = d_rms
                     clip_scale_param = min(1.0, rms_thr/rr) if rr>0 else 1.0
 
                 # trust
@@ -798,6 +825,20 @@ class Tiger(Optimizer):
                 beta = float(self.defaults["lora_density_beta"])
                 st["ema"] = beta*st["ema"] + (1.0-beta)*dense_obs
 
+                if cross_enabled:
+                    prev_global = cross_state.get("global_density")
+                    if prev_global is None:
+                        prev_global = st["ema"]
+                    new_global = cross_beta*prev_global + (1.0 - cross_beta)*st["ema"]
+                    cross_state["global_density"] = new_global
+                    tag_map = cross_state.setdefault("tag_density", {})
+                    prev_tag = tag_map.get(tag)
+                    if prev_tag is None:
+                        prev_tag = st["ema"]
+                    tag_map[tag] = cross_beta*prev_tag + (1.0 - cross_beta)*st["ema"]
+                    if cross_sync > 0.0:
+                        st["ema"] = (1.0 - cross_sync)*st["ema"] + cross_sync*new_global
+
                 # volatility
                 vol = abs(st["ema"] - st["last_ema"])
                 st["vol_ema"] = float(self.defaults["lora_inertia_beta"]) * st["vol_ema"] + (1.0 - float(self.defaults["lora_inertia_beta"])) * vol
@@ -807,6 +848,17 @@ class Tiger(Optimizer):
                 sb_lo, sb_hi = self.defaults["lora_sb_bounds"]; agc_lo, agc_hi = self.defaults["lora_agc_bounds"]
                 sb_tgt = max(sb_lo, min(sb_hi, sb_lo + (sb_hi - sb_lo)*st["ema"]))
                 agc_tgt = max(agc_lo, min(agc_hi, agc_hi - (agc_hi - agc_lo)*st["ema"]))
+
+                if cross_enabled and cross_gain != 0.0:
+                    tag_map = cross_state.get("tag_density", {})
+                    attn_vals = [tag_map[t] for t in cross_attn_tags if t in tag_map]
+                    ffn_vals = [tag_map[t] for t in cross_ffn_tags if t in tag_map]
+                    if attn_vals and ffn_vals:
+                        attn_mean = sum(attn_vals)/len(attn_vals)
+                        ffn_mean = sum(ffn_vals)/len(ffn_vals)
+                        cross_signal = attn_mean - ffn_mean
+                        sb_tgt = max(sb_lo, min(sb_hi, sb_tgt + cross_gain * cross_signal))
+                        agc_tgt = max(agc_lo, min(agc_hi, agc_tgt - cross_gain * cross_signal))
 
                 # inertia / flip handling for Ki/Kd
                 mode = str(self.defaults["lora_pid_mode"]).lower(); strength = float(self.defaults["lora_inertia_strength"])
@@ -880,6 +932,12 @@ class Tiger(Optimizer):
                     self.stage_group_update(gi, {"sign_blend": new_sb, "agc_clip": new_agc}, policy="replace")
                 self._last_metrics.update({"lora_dense_ema": st["ema"], "lora_vol_ema": st["vol_ema"], "lora_flip_ema_sb": st["flip_ema_sb"], "lora_flip_ema_agc": st["flip_ema_agc"],
                                            "lora_sb": new_sb, "lora_agc": new_agc, "lora_ki_eff": ki_eff, "lora_kd_eff": kd_eff})
+                if cross_enabled:
+                    self._last_metrics.update({
+                        "lora_global_density": cross_state.get("global_density", st["ema"]),
+                        "lora_attn_density": float(sum(cross_state.get("tag_density", {}).get(t, 0.0) for t in cross_attn_tags)/max(1, len(cross_attn_tags))) if cross_attn_tags else 0.0,
+                        "lora_ffn_density": float(sum(cross_state.get("tag_density", {}).get(t, 0.0) for t in cross_ffn_tags)/max(1, len(cross_ffn_tags))) if cross_ffn_tags else 0.0,
+                    })
 
             # QKV two-objective with gamma auto-scale + step-clip via acceleration
             if tag == "attn_qkv" and qkv_lr is not None and bool(self.defaults["qkv_lr_autoadapt"]) and (self._global_step % int(self.defaults["qkv_lr_interval"]) == 0):
@@ -938,6 +996,49 @@ class Tiger(Optimizer):
                                                "qkv_step_clip_eff": step_clip_eff, "qkv_accel": accel})
 
             # end group loop
+
+            if cross_enabled and cross_density_count > 0:
+                obs = cross_density_sum / max(1, cross_density_count)
+                tag_map = cross_state.setdefault("tag_density", {})
+                prev = tag_map.get(tag)
+                if prev is None:
+                    prev = obs
+                tag_map[tag] = cross_beta*prev + (1.0 - cross_beta)*obs
+
+        if cross_enabled and bool(self.defaults.get("lora_bridge", False)):
+            global_density = cross_state.get("global_density", None)
+            if global_density is not None:
+                bridge_gain = float(self.defaults.get("lora_bridge_gain", 0.0))
+                bridge_beta = float(self.defaults.get("lora_bridge_beta", 0.0))
+                b_lo, b_hi = self.defaults.get("lora_bridge_bounds", (0.5, 1.5))
+                apply_dict_mut = not (_is_compiling() and self.defaults.get("compile_guard", True))
+                tag_map = cross_state.get("tag_density", {})
+                target_tags = set(cross_attn_tags) | set(cross_ffn_tags)
+                if bridge_gain != 0.0 and target_tags:
+                    for gi, group in enumerate(self.param_groups):
+                        tag = group.get("block_tag", "default")
+                        if tag not in target_tags:
+                            continue
+                        density_val = tag_map.get(tag)
+                        if density_val is None:
+                            continue
+                        bridge_state = self._lora_bridge.setdefault(gi, {
+                            "base": float(group.get("trust_clip", self.defaults.get("trust_clip", 10.0))),
+                            "ema": 1.0,
+                        })
+                        base = bridge_state["base"]
+                        target_scale = math.exp(bridge_gain * (density_val - global_density))
+                        target_scale = min(b_hi, max(b_lo, target_scale))
+                        new_scale = bridge_beta*bridge_state["ema"] + (1.0 - bridge_beta)*target_scale
+                        bridge_state["ema"] = new_scale
+                        new_trust = base * new_scale
+                        if apply_dict_mut:
+                            group["trust_clip"] = new_trust
+                        else:
+                            self.stage_group_update(gi, {"trust_clip": new_trust}, policy="replace")
+                    self._last_metrics.update({
+                        "lora_bridge_global": float(global_density),
+                    })
 
         # Auto FFN Asym & sign blend
         d = self.defaults
