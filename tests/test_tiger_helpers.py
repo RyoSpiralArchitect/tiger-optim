@@ -172,3 +172,104 @@ def test_tiger_step_amp_fp16_remains_finite():
             for value in state.values():
                 if isinstance(value, torch.Tensor):
                     assert torch.isfinite(value).all()
+
+
+def test_lora_cross_density_bridge_updates_trust_clip():
+    p_lora = torch.nn.Parameter(torch.zeros(4))
+    p_attn = torch.nn.Parameter(torch.zeros(4))
+    p_ffn = torch.nn.Parameter(torch.zeros(4))
+
+    optimizer = tiger.Tiger(
+        [
+            {"params": [p_lora], "block_tag": "lora_a"},
+            {"params": [p_attn], "block_tag": "attn_qkv"},
+            {"params": [p_ffn], "block_tag": "ffn_up"},
+        ],
+        lr=1e-3,
+        betas=(0.0, 0.0),
+        weight_decay=0.0,
+        factored=False,
+        precond_alpha=0.0,
+        sign_mode="sign",
+        sign_blend=1.0,
+        use_foreach=False,
+        use_foreach_update=False,
+        lora_interval=1,
+        lora_density_adapt=True,
+        lora_cross_adapt=True,
+        lora_cross_beta=0.2,
+        lora_cross_sync=0.5,
+        lora_cross_gain=0.1,
+        lora_bridge=True,
+        lora_bridge_gain=0.5,
+        lora_bridge_bounds=(0.8, 1.2),
+        lora_bridge_beta=0.0,
+    )
+
+    p_lora.grad = torch.tensor([0.4, 0.02, 0.0, 0.0])
+    p_attn.grad = torch.tensor([0.3, 0.3, 0.3, 0.3])
+    p_ffn.grad = torch.tensor([0.01, 0.0, 0.0, 0.0])
+
+    optimizer.step()
+
+    cross_state = optimizer._lora_cross_state
+    assert cross_state["global_density"] is not None
+    tag_map = cross_state.get("tag_density", {})
+    assert "attn_qkv" in tag_map and "ffn_up" in tag_map
+
+    lora_state = optimizer._lora_pid.get(0)
+    assert lora_state is not None
+    assert lora_state["ema"] == pytest.approx(cross_state["global_density"], rel=0.5)
+
+    default_trust = optimizer.defaults["trust_clip"]
+    attn_trust = optimizer.param_groups[1]["trust_clip"]
+    ffn_trust = optimizer.param_groups[2]["trust_clip"]
+    assert attn_trust != pytest.approx(default_trust)
+    assert attn_trust != pytest.approx(ffn_trust)
+
+    metrics = optimizer.get_last_metrics()
+    assert "lora_bridge_global" in metrics
+    assert metrics["lora_bridge_global"] == pytest.approx(cross_state["global_density"])
+
+
+def test_lora_cross_sync_aligns_lora_ema():
+    p_a = torch.nn.Parameter(torch.zeros(4))
+    p_b = torch.nn.Parameter(torch.zeros(4))
+
+    optimizer = tiger.Tiger(
+        [
+            {"params": [p_a], "block_tag": "lora_a", "sign_blend": 1.0},
+            {"params": [p_b], "block_tag": "lora_b", "sign_blend": 1.0},
+        ],
+        lr=1e-3,
+        betas=(0.0, 0.0),
+        weight_decay=0.0,
+        factored=False,
+        precond_alpha=0.0,
+        sign_mode="sign",
+        sign_blend=1.0,
+        use_foreach=False,
+        use_foreach_update=False,
+        lora_interval=1,
+        lora_density_adapt=True,
+        lora_density_k=0.25,
+        lora_density_beta=0.0,
+        lora_cross_adapt=True,
+        lora_cross_beta=0.0,
+        lora_cross_sync=0.5,
+        lora_cross_gain=0.0,
+        lora_bridge=False,
+    )
+
+    p_a.grad = torch.tensor([1.0, 1.0, 1.0, 1.0])
+    p_b.grad = torch.tensor([1.0, 0.0, 0.0, 0.0])
+
+    optimizer.step()
+
+    state_a = optimizer._lora_pid[0]
+    state_b = optimizer._lora_pid[1]
+    cross_state = optimizer._lora_cross_state
+
+    assert cross_state["global_density"] == pytest.approx(0.625, rel=1e-4, abs=1e-4)
+    assert state_a["ema"] == pytest.approx(0.8125, rel=1e-4, abs=1e-4)
+    assert state_b["ema"] == pytest.approx(0.4375, rel=1e-4, abs=1e-4)
