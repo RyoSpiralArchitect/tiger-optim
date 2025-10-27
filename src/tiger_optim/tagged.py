@@ -20,7 +20,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Tuple, Optional, Callable, Union
 
 import torch
@@ -228,6 +229,13 @@ def aggregate_param_group_stats(
     -------
     list[ParamTagAggregate]
         Aggregated statistics ordered by the first occurrence of each tag.
+
+    Raises
+    ------
+    TypeError
+        If the iterable mixes parameter group dictionaries with
+        :class:`ParamGroupSummary` entries or if any item is neither a summary
+        nor a mapping-like parameter group dictionary.
     """
 
     staged = list(param_groups)

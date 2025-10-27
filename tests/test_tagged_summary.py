@@ -90,16 +90,22 @@ def test_aggregate_param_group_stats_accepts_precomputed_summaries(demo_param_gr
     assert direct == from_summaries
 
 
-def test_aggregate_param_group_stats_accepts_mixed_inputs(demo_param_groups):
-    param_groups = list(demo_param_groups)
-    baseline = aggregate_param_group_stats(param_groups)
-    summaries = collect_param_group_stats(param_groups)
+def test_aggregate_param_group_stats_rejects_mixed_input(demo_param_groups):
+    summaries = collect_param_group_stats(demo_param_groups)
 
-    mixed: list[object] = []
-    for idx, (group, summary) in enumerate(zip(param_groups, summaries)):
-        mixed.append(summary if idx % 2 == 0 else group)
+    with pytest.raises(TypeError) as exc:
+        aggregate_param_group_stats([demo_param_groups[0], summaries[0]])
 
-    assert aggregate_param_group_stats(mixed) == baseline
+    assert "mixed input" in str(exc.value)
+
+
+def test_aggregate_param_group_stats_rejects_unknown_items():
+    with pytest.raises(TypeError) as exc:
+        aggregate_param_group_stats([object()])
+
+    message = str(exc.value)
+    assert "mapping-like" in message
+    assert "object" in message
 
 
 def test_aggregate_param_group_stats_empty_returns_empty():
