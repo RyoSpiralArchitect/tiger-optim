@@ -77,6 +77,9 @@ def test_aggregate_param_group_stats_basic(demo_param_groups):
     assert mlp_group.avg_lr > 0
     assert mlp_group.avg_weight_decay >= 0
     assert mlp_group.avg_lr_scale >= 0
+    assert mlp_group.min_lr == mlp_group.max_lr == mlp_group.avg_lr
+    assert mlp_group.min_weight_decay == mlp_group.max_weight_decay == mlp_group.avg_weight_decay
+    assert mlp_group.min_lr_scale == mlp_group.max_lr_scale == mlp_group.avg_lr_scale
 
 
 def test_aggregate_param_group_stats_empty_returns_empty():

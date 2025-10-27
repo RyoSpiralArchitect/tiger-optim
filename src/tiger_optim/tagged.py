@@ -142,7 +142,13 @@ class ParamGroupSummary:
 
 @dataclass(frozen=True)
 class ParamTagAggregate:
-    """Aggregate statistics for parameter groups sharing the same ``block_tag``."""
+    """Aggregate statistics for parameter groups sharing the same ``block_tag``.
+
+    Beyond weighted averages, the aggregate also exposes the minimum and maximum
+    values observed across the contributing parameter groups. These extrema are
+    useful for spotting outliers when a tag mixes multiple learning rates or
+    weight decay configurations.
+    """
 
     tag: str
     groups: int
@@ -152,6 +158,12 @@ class ParamTagAggregate:
     avg_lr: float
     avg_weight_decay: float
     avg_lr_scale: float
+    min_lr: float
+    max_lr: float
+    min_weight_decay: float
+    max_weight_decay: float
+    min_lr_scale: float
+    max_lr_scale: float
 
 
 def collect_param_group_stats(param_groups: Iterable[dict]) -> List[ParamGroupSummary]:
@@ -256,6 +268,12 @@ def aggregate_param_group_stats(param_groups: Iterable[ParamGroupLike]) -> List[
                 "weighted_lr": 0.0,
                 "weighted_wd": 0.0,
                 "weighted_lr_scale": 0.0,
+                "min_lr": float("inf"),
+                "max_lr": float("-inf"),
+                "min_wd": float("inf"),
+                "max_wd": float("-inf"),
+                "min_lr_scale": float("inf"),
+                "max_lr_scale": float("-inf"),
             }
             order.append(tag)
 
@@ -267,6 +285,12 @@ def aggregate_param_group_stats(param_groups: Iterable[ParamGroupLike]) -> List[
         bucket["weighted_lr"] += summary.lr * weight
         bucket["weighted_wd"] += summary.weight_decay * weight
         bucket["weighted_lr_scale"] += summary.lr_scale * weight
+        bucket["min_lr"] = min(bucket["min_lr"], summary.lr)
+        bucket["max_lr"] = max(bucket["max_lr"], summary.lr)
+        bucket["min_wd"] = min(bucket["min_wd"], summary.weight_decay)
+        bucket["max_wd"] = max(bucket["max_wd"], summary.weight_decay)
+        bucket["min_lr_scale"] = min(bucket["min_lr_scale"], summary.lr_scale)
+        bucket["max_lr_scale"] = max(bucket["max_lr_scale"], summary.lr_scale)
 
     aggregates: List[ParamTagAggregate] = []
     denom = float(overall_params)
@@ -289,6 +313,12 @@ def aggregate_param_group_stats(param_groups: Iterable[ParamGroupLike]) -> List[
                 avg_lr=avg_lr,
                 avg_weight_decay=avg_wd,
                 avg_lr_scale=avg_lr_scale,
+                min_lr=0.0 if bucket["min_lr"] == float("inf") else float(bucket["min_lr"]),
+                max_lr=0.0 if bucket["max_lr"] == float("-inf") else float(bucket["max_lr"]),
+                min_weight_decay=0.0 if bucket["min_wd"] == float("inf") else float(bucket["min_wd"]),
+                max_weight_decay=0.0 if bucket["max_wd"] == float("-inf") else float(bucket["max_wd"]),
+                min_lr_scale=0.0 if bucket["min_lr_scale"] == float("inf") else float(bucket["min_lr_scale"]),
+                max_lr_scale=0.0 if bucket["max_lr_scale"] == float("-inf") else float(bucket["max_lr_scale"]),
             )
         )
 
