@@ -24,6 +24,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any, Dict, Iterable, List, Tuple, Optional, Callable, Union
 
+import math
+
 import torch
 import torch.nn as nn
 
@@ -148,7 +150,11 @@ class ParamTagAggregate:
     Beyond weighted averages, the aggregate also exposes the minimum and maximum
     values observed across the contributing parameter groups. These extrema are
     useful for spotting outliers when a tag mixes multiple learning rates or
-    weight decay configurations.
+    weight decay configurations. Tiger 2.4 also tracks the **dispersion** of
+    learning rate, weight decay and learning-rate scaling factors so callers can
+    quickly flag heterogeneity inside a tag. The dispersion metrics are expressed
+    as standard deviations using the same weighting scheme as the averages
+    (parameter-count weighted when available, otherwise simple averaging).
     """
 
     tag: str
@@ -159,6 +165,9 @@ class ParamTagAggregate:
     avg_lr: float
     avg_weight_decay: float
     avg_lr_scale: float
+    lr_std: float
+    weight_decay_std: float
+    lr_scale_std: float
     min_lr: float
     max_lr: float
     min_weight_decay: float
@@ -296,9 +305,15 @@ def aggregate_param_group_stats(
                 "weighted_lr": 0.0,
                 "weighted_wd": 0.0,
                 "weighted_lr_scale": 0.0,
+                "weighted_lr_sq": 0.0,
+                "weighted_wd_sq": 0.0,
+                "weighted_lr_scale_sq": 0.0,
                 "sum_lr": 0.0,
                 "sum_wd": 0.0,
                 "sum_lr_scale": 0.0,
+                "sum_lr_sq": 0.0,
+                "sum_wd_sq": 0.0,
+                "sum_lr_scale_sq": 0.0,
                 "min_lr": float("inf"),
                 "max_lr": float("-inf"),
                 "min_wd": float("inf"),
@@ -316,9 +331,15 @@ def aggregate_param_group_stats(
         bucket["weighted_lr"] += summary.lr * weight
         bucket["weighted_wd"] += summary.weight_decay * weight
         bucket["weighted_lr_scale"] += summary.lr_scale * weight
+        bucket["weighted_lr_sq"] += (summary.lr ** 2) * weight
+        bucket["weighted_wd_sq"] += (summary.weight_decay ** 2) * weight
+        bucket["weighted_lr_scale_sq"] += (summary.lr_scale ** 2) * weight
         bucket["sum_lr"] += summary.lr
         bucket["sum_wd"] += summary.weight_decay
         bucket["sum_lr_scale"] += summary.lr_scale
+        bucket["sum_lr_sq"] += summary.lr ** 2
+        bucket["sum_wd_sq"] += summary.weight_decay ** 2
+        bucket["sum_lr_scale_sq"] += summary.lr_scale ** 2
         bucket["min_lr"] = min(bucket["min_lr"], summary.lr)
         bucket["max_lr"] = max(bucket["max_lr"], summary.lr)
         bucket["min_wd"] = min(bucket["min_wd"], summary.weight_decay)
@@ -338,11 +359,17 @@ def aggregate_param_group_stats(
             avg_lr = bucket["weighted_lr"] / weight
             avg_wd = bucket["weighted_wd"] / weight
             avg_lr_scale = bucket["weighted_lr_scale"] / weight
+            lr_var = max(0.0, (bucket["weighted_lr_sq"] / weight) - (avg_lr ** 2))
+            wd_var = max(0.0, (bucket["weighted_wd_sq"] / weight) - (avg_wd ** 2))
+            lr_scale_var = max(0.0, (bucket["weighted_lr_scale_sq"] / weight) - (avg_lr_scale ** 2))
         else:
             groups = float(bucket["groups"])
             avg_lr = bucket["sum_lr"] / groups if groups else 0.0
             avg_wd = bucket["sum_wd"] / groups if groups else 0.0
             avg_lr_scale = bucket["sum_lr_scale"] / groups if groups else 0.0
+            lr_var = max(0.0, (bucket["sum_lr_sq"] / groups) - (avg_lr ** 2)) if groups else 0.0
+            wd_var = max(0.0, (bucket["sum_wd_sq"] / groups) - (avg_wd ** 2)) if groups else 0.0
+            lr_scale_var = max(0.0, (bucket["sum_lr_scale_sq"] / groups) - (avg_lr_scale ** 2)) if groups else 0.0
         aggregates.append(
             ParamTagAggregate(
                 tag=tag,
@@ -353,6 +380,9 @@ def aggregate_param_group_stats(
                 avg_lr=avg_lr,
                 avg_weight_decay=avg_wd,
                 avg_lr_scale=avg_lr_scale,
+                lr_std=math.sqrt(lr_var),
+                weight_decay_std=math.sqrt(wd_var),
+                lr_scale_std=math.sqrt(lr_scale_var),
                 min_lr=0.0 if bucket["min_lr"] == float("inf") else float(bucket["min_lr"]),
                 max_lr=0.0 if bucket["max_lr"] == float("-inf") else float(bucket["max_lr"]),
                 min_weight_decay=0.0 if bucket["min_wd"] == float("inf") else float(bucket["min_wd"]),
