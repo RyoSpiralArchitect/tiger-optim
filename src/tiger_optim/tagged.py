@@ -176,6 +176,47 @@ class ParamTagAggregate:
     max_lr_scale: float
 
 
+@dataclass
+class _MomentStats:
+    """Accumulate weighted statistics with a robust fallback path.
+
+    The accumulator keeps both weighted and unweighted running sums. When at
+    least one strictly positive weight has been observed, the weighted mean and
+    population variance are returned. Otherwise the computations fall back to a
+    simple average across the unweighted sums. The implementation deliberately
+    uses :func:`math.fsum` to mitigate catastrophic cancellation when large
+    parameter groups contribute to the same aggregate.
+    """
+
+    weighted_total: float = 0.0
+    weighted_sq_total: float = 0.0
+    weight_total: float = 0.0
+    sum_total: float = 0.0
+    sum_sq_total: float = 0.0
+    count: int = 0
+
+    def add(self, value: float, weight: float) -> None:
+        v = float(value)
+        w = float(weight)
+        self.weight_total = math.fsum((self.weight_total, w))
+        self.weighted_total = math.fsum((self.weighted_total, v * w))
+        self.weighted_sq_total = math.fsum((self.weighted_sq_total, (v * v) * w))
+        self.sum_total = math.fsum((self.sum_total, v))
+        self.sum_sq_total = math.fsum((self.sum_sq_total, v * v))
+        self.count += 1
+
+    def mean_and_std(self) -> Tuple[float, float]:
+        if self.weight_total > 0.0:
+            mean = self.weighted_total / self.weight_total
+            variance = max(0.0, (self.weighted_sq_total / self.weight_total) - (mean * mean))
+        elif self.count:
+            mean = self.sum_total / self.count
+            variance = max(0.0, (self.sum_sq_total / self.count) - (mean * mean))
+        else:
+            return 0.0, 0.0
+        return mean, math.sqrt(variance)
+
+
 def collect_param_group_stats(param_groups: Iterable[dict]) -> List[ParamGroupSummary]:
     """Return structured statistics for each parameter group.
 
@@ -302,18 +343,9 @@ def aggregate_param_group_stats(
                 "groups": 0,
                 "total_tensors": 0,
                 "total_params": 0,
-                "weighted_lr": 0.0,
-                "weighted_wd": 0.0,
-                "weighted_lr_scale": 0.0,
-                "weighted_lr_sq": 0.0,
-                "weighted_wd_sq": 0.0,
-                "weighted_lr_scale_sq": 0.0,
-                "sum_lr": 0.0,
-                "sum_wd": 0.0,
-                "sum_lr_scale": 0.0,
-                "sum_lr_sq": 0.0,
-                "sum_wd_sq": 0.0,
-                "sum_lr_scale_sq": 0.0,
+                "lr_stats": _MomentStats(),
+                "wd_stats": _MomentStats(),
+                "lr_scale_stats": _MomentStats(),
                 "min_lr": float("inf"),
                 "max_lr": float("-inf"),
                 "min_wd": float("inf"),
@@ -328,18 +360,9 @@ def aggregate_param_group_stats(
         bucket["total_tensors"] += summary.n_tensors
         bucket["total_params"] += summary.n_params
         weight = float(summary.n_params)
-        bucket["weighted_lr"] += summary.lr * weight
-        bucket["weighted_wd"] += summary.weight_decay * weight
-        bucket["weighted_lr_scale"] += summary.lr_scale * weight
-        bucket["weighted_lr_sq"] += (summary.lr ** 2) * weight
-        bucket["weighted_wd_sq"] += (summary.weight_decay ** 2) * weight
-        bucket["weighted_lr_scale_sq"] += (summary.lr_scale ** 2) * weight
-        bucket["sum_lr"] += summary.lr
-        bucket["sum_wd"] += summary.weight_decay
-        bucket["sum_lr_scale"] += summary.lr_scale
-        bucket["sum_lr_sq"] += summary.lr ** 2
-        bucket["sum_wd_sq"] += summary.weight_decay ** 2
-        bucket["sum_lr_scale_sq"] += summary.lr_scale ** 2
+        bucket["lr_stats"].add(summary.lr, weight)
+        bucket["wd_stats"].add(summary.weight_decay, weight)
+        bucket["lr_scale_stats"].add(summary.lr_scale, weight)
         bucket["min_lr"] = min(bucket["min_lr"], summary.lr)
         bucket["max_lr"] = max(bucket["max_lr"], summary.lr)
         bucket["min_wd"] = min(bucket["min_wd"], summary.weight_decay)
@@ -355,21 +378,12 @@ def aggregate_param_group_stats(
         total_params = bucket["total_params"]
         weight = float(total_params)
         ratio = (weight / denom) if denom else 0.0
-        if weight:
-            avg_lr = bucket["weighted_lr"] / weight
-            avg_wd = bucket["weighted_wd"] / weight
-            avg_lr_scale = bucket["weighted_lr_scale"] / weight
-            lr_var = max(0.0, (bucket["weighted_lr_sq"] / weight) - (avg_lr ** 2))
-            wd_var = max(0.0, (bucket["weighted_wd_sq"] / weight) - (avg_wd ** 2))
-            lr_scale_var = max(0.0, (bucket["weighted_lr_scale_sq"] / weight) - (avg_lr_scale ** 2))
-        else:
-            groups = float(bucket["groups"])
-            avg_lr = bucket["sum_lr"] / groups if groups else 0.0
-            avg_wd = bucket["sum_wd"] / groups if groups else 0.0
-            avg_lr_scale = bucket["sum_lr_scale"] / groups if groups else 0.0
-            lr_var = max(0.0, (bucket["sum_lr_sq"] / groups) - (avg_lr ** 2)) if groups else 0.0
-            wd_var = max(0.0, (bucket["sum_wd_sq"] / groups) - (avg_wd ** 2)) if groups else 0.0
-            lr_scale_var = max(0.0, (bucket["sum_lr_scale_sq"] / groups) - (avg_lr_scale ** 2)) if groups else 0.0
+        lr_stats = bucket["lr_stats"]
+        wd_stats = bucket["wd_stats"]
+        lr_scale_stats = bucket["lr_scale_stats"]
+        avg_lr, lr_std = lr_stats.mean_and_std()
+        avg_wd, wd_std = wd_stats.mean_and_std()
+        avg_lr_scale, lr_scale_std = lr_scale_stats.mean_and_std()
         aggregates.append(
             ParamTagAggregate(
                 tag=tag,
@@ -380,9 +394,9 @@ def aggregate_param_group_stats(
                 avg_lr=avg_lr,
                 avg_weight_decay=avg_wd,
                 avg_lr_scale=avg_lr_scale,
-                lr_std=math.sqrt(lr_var),
-                weight_decay_std=math.sqrt(wd_var),
-                lr_scale_std=math.sqrt(lr_scale_var),
+                lr_std=lr_std,
+                weight_decay_std=wd_std,
+                lr_scale_std=lr_scale_std,
                 min_lr=0.0 if bucket["min_lr"] == float("inf") else float(bucket["min_lr"]),
                 max_lr=0.0 if bucket["max_lr"] == float("-inf") else float(bucket["max_lr"]),
                 min_weight_decay=0.0 if bucket["min_wd"] == float("inf") else float(bucket["min_wd"]),
