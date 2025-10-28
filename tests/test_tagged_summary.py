@@ -1,3 +1,5 @@
+import math
+
 import pytest
 import torch
 import torch.nn as nn
@@ -77,6 +79,9 @@ def test_aggregate_param_group_stats_basic(demo_param_groups):
     assert mlp_group.avg_lr > 0
     assert mlp_group.avg_weight_decay >= 0
     assert mlp_group.avg_lr_scale >= 0
+    assert mlp_group.lr_std == pytest.approx(0.0)
+    assert mlp_group.weight_decay_std == pytest.approx(0.0)
+    assert mlp_group.lr_scale_std == pytest.approx(0.0)
     assert mlp_group.min_lr == mlp_group.max_lr == mlp_group.avg_lr
     assert mlp_group.min_weight_decay == mlp_group.max_weight_decay == mlp_group.avg_weight_decay
     assert mlp_group.min_lr_scale == mlp_group.max_lr_scale == mlp_group.avg_lr_scale
@@ -129,6 +134,9 @@ def test_aggregate_param_group_stats_tracks_extrema():
     assert agg.min_weight_decay == pytest.approx(0.0)
     assert agg.max_weight_decay == pytest.approx(0.01)
     assert agg.min_lr_scale == agg.max_lr_scale == pytest.approx(1.0)
+    assert agg.lr_std == pytest.approx(0.06236095644623236)
+    assert agg.weight_decay_std == pytest.approx(0.004496912521077348)
+    assert agg.lr_scale_std == pytest.approx(0.0)
 
 
 def test_aggregate_param_group_stats_zero_param_groups_fallback_to_simple_average():
@@ -146,6 +154,35 @@ def test_aggregate_param_group_stats_zero_param_groups_fallback_to_simple_averag
     assert agg.avg_lr_scale == pytest.approx(1.0)
     assert agg.total_params == 0
     assert agg.param_ratio == pytest.approx(0.0)
+    assert agg.lr_std == pytest.approx(0.05)
+    assert agg.weight_decay_std == pytest.approx(0.01)
+    assert agg.lr_scale_std == pytest.approx(0.5)
+
+
+def test_aggregate_param_group_stats_weighted_dispersion_respects_param_counts():
+    heavy = torch.zeros(10)
+    light = torch.zeros(1)
+    groups = [
+        {"params": [heavy], "block_tag": "weighted", "lr": 0.1, "weight_decay": 0.02, "lr_scale": 0.5},
+        {"params": [light], "block_tag": "weighted", "lr": 0.4, "weight_decay": 0.05, "lr_scale": 0.5},
+    ]
+
+    aggregates = aggregate_param_group_stats(groups)
+    assert len(aggregates) == 1
+
+    agg = aggregates[0]
+    total = heavy.numel() + light.numel()
+    expected_lr = ((0.1 * heavy.numel()) + (0.4 * light.numel())) / total
+    expected_lr_sq = ((0.1 ** 2) * heavy.numel() + (0.4 ** 2) * light.numel()) / total
+    expected_lr_std = math.sqrt(max(0.0, expected_lr_sq - expected_lr ** 2))
+    expected_wd = ((0.02 * heavy.numel()) + (0.05 * light.numel())) / total
+    expected_wd_sq = ((0.02 ** 2) * heavy.numel() + (0.05 ** 2) * light.numel()) / total
+    expected_wd_std = math.sqrt(max(0.0, expected_wd_sq - expected_wd ** 2))
+
+    assert agg.avg_lr == pytest.approx(expected_lr)
+    assert agg.lr_std == pytest.approx(expected_lr_std)
+    assert agg.avg_weight_decay == pytest.approx(expected_wd)
+    assert agg.weight_decay_std == pytest.approx(expected_wd_std)
 
 
 def _extract_summary_tags(summary: str) -> list[str]:
