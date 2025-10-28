@@ -77,6 +77,9 @@ def test_aggregate_param_group_stats_basic(demo_param_groups):
     assert mlp_group.avg_lr > 0
     assert mlp_group.avg_weight_decay >= 0
     assert mlp_group.avg_lr_scale >= 0
+    assert mlp_group.lr_std == pytest.approx(0.0)
+    assert mlp_group.weight_decay_std == pytest.approx(0.0)
+    assert mlp_group.lr_scale_std == pytest.approx(0.0)
     assert mlp_group.min_lr == mlp_group.max_lr == mlp_group.avg_lr
     assert mlp_group.min_weight_decay == mlp_group.max_weight_decay == mlp_group.avg_weight_decay
     assert mlp_group.min_lr_scale == mlp_group.max_lr_scale == mlp_group.avg_lr_scale
@@ -129,6 +132,9 @@ def test_aggregate_param_group_stats_tracks_extrema():
     assert agg.min_weight_decay == pytest.approx(0.0)
     assert agg.max_weight_decay == pytest.approx(0.01)
     assert agg.min_lr_scale == agg.max_lr_scale == pytest.approx(1.0)
+    assert agg.lr_std == pytest.approx(0.06236095644623236)
+    assert agg.weight_decay_std == pytest.approx(0.004496912521077348)
+    assert agg.lr_scale_std == pytest.approx(0.0)
 
 
 def test_aggregate_param_group_stats_zero_param_groups_fallback_to_simple_average():
@@ -146,6 +152,9 @@ def test_aggregate_param_group_stats_zero_param_groups_fallback_to_simple_averag
     assert agg.avg_lr_scale == pytest.approx(1.0)
     assert agg.total_params == 0
     assert agg.param_ratio == pytest.approx(0.0)
+    assert agg.lr_std == pytest.approx(0.05)
+    assert agg.weight_decay_std == pytest.approx(0.01)
+    assert agg.lr_scale_std == pytest.approx(0.5)
 
 
 def _extract_summary_tags(summary: str) -> list[str]:
