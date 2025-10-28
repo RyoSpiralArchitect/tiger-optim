@@ -223,6 +223,47 @@ class _MomentStats:
         return mean, math.sqrt(variance)
 
 
+@dataclass
+class _MomentStats:
+    """Accumulate weighted statistics with a robust fallback path.
+
+    The accumulator keeps both weighted and unweighted running sums. When at
+    least one strictly positive weight has been observed, the weighted mean and
+    population variance are returned. Otherwise the computations fall back to a
+    simple average across the unweighted sums. The implementation deliberately
+    uses :func:`math.fsum` to mitigate catastrophic cancellation when large
+    parameter groups contribute to the same aggregate.
+    """
+
+    weighted_total: float = 0.0
+    weighted_sq_total: float = 0.0
+    weight_total: float = 0.0
+    sum_total: float = 0.0
+    sum_sq_total: float = 0.0
+    count: int = 0
+
+    def add(self, value: float, weight: float) -> None:
+        v = float(value)
+        w = float(weight)
+        self.weight_total = math.fsum((self.weight_total, w))
+        self.weighted_total = math.fsum((self.weighted_total, v * w))
+        self.weighted_sq_total = math.fsum((self.weighted_sq_total, (v * v) * w))
+        self.sum_total = math.fsum((self.sum_total, v))
+        self.sum_sq_total = math.fsum((self.sum_sq_total, v * v))
+        self.count += 1
+
+    def mean_and_std(self) -> Tuple[float, float]:
+        if self.weight_total > 0.0:
+            mean = self.weighted_total / self.weight_total
+            variance = max(0.0, (self.weighted_sq_total / self.weight_total) - (mean * mean))
+        elif self.count:
+            mean = self.sum_total / self.count
+            variance = max(0.0, (self.sum_sq_total / self.count) - (mean * mean))
+        else:
+            return 0.0, 0.0
+        return mean, math.sqrt(variance)
+
+
 def collect_param_group_stats(param_groups: Iterable[dict]) -> List[ParamGroupSummary]:
     """Return structured statistics for each parameter group.
 
