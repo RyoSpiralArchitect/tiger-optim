@@ -42,6 +42,40 @@ def _norm(x):
 
 def _softsign(x, tau):
     return fast_softsign(x, tau)
+
+
+def _nan_to_num_(tensor: torch.Tensor, *, nan: float = 0.0,
+                 posinf: Optional[float] = None,
+                 neginf: Optional[float] = None) -> torch.Tensor:
+    """In-place ``nan_to_num`` that guards for non-floating tensors."""
+
+    if torch.is_floating_point(tensor):
+        finfo = torch.finfo(tensor.dtype)
+        hi = finfo.max if posinf is None else posinf
+        lo = finfo.min if neginf is None else neginf
+        torch.nan_to_num_(tensor, nan=nan, posinf=hi, neginf=lo)
+    return tensor
+
+
+def _clamp_finite(x, *, lo: Optional[float] = None, hi: Optional[float] = None):
+    """Clamp while ensuring a finite value is returned."""
+
+    if isinstance(x, torch.Tensor):
+        if torch.is_floating_point(x):
+            _nan_to_num_(x)
+            if lo is not None or hi is not None:
+                x.clamp_(min=lo if lo is not None else -math.inf,
+                         max=hi if hi is not None else math.inf)
+        return x
+
+    # scalar path
+    if not math.isfinite(float(x)):
+        x = float(0.0)
+    if lo is not None and x < lo:
+        x = float(lo)
+    if hi is not None and x > hi:
+        x = float(hi)
+    return x
 def _to_dtype(x: torch.Tensor, dtype: torch.dtype): return x if x.dtype == dtype else x.to(dtype)
 def _is_compiling() -> bool:
     try:
@@ -636,6 +670,7 @@ class Tiger(Optimizer):
                 # m update
                 m32 = _to_dtype(m, torch.float32); g32 = _to_dtype(g, torch.float32)
                 m32.mul_(b1).add_(g32, alpha=1.0-b1)
+                _nan_to_num_(m32)
                 if do_prune and float(self.defaults["state_prune_threshold"]) > 0.0:
                     thr = float(self.defaults["state_prune_threshold"])
                     m32.masked_fill_(m32.abs() < thr, 0.0)
@@ -647,20 +682,32 @@ class Tiger(Optimizer):
                     vr32 = _to_dtype(vr, torch.float32); vc32 = _to_dtype(vc, torch.float32)
                     vr32.mul_(b2).add_(g2.mean(dim=1), alpha=1.0-b2)
                     vc32.mul_(b2).add_(g2.mean(dim=0), alpha=1.0-b2)
+                    _nan_to_num_(vr32)
+                    _nan_to_num_(vc32)
+                    vr32.clamp_(min=1e-30)
+                    vc32.clamp_(min=1e-30)
                     vr.copy_(vr32.to(vr.dtype)); vc.copy_(vc32.to(vc.dtype))
-                    vhat = torch.outer(vr32.clamp_min(1e-30), vc32.clamp_min(1e-30)) / vr32.mean().clamp_min(1e-30)
+                    vhat = torch.outer(vr32, vc32) / vr32.mean().clamp_min(1e-30)
                     vhat = vhat.view_as(p)
+                    _nan_to_num_(vhat)
+                    vhat.clamp_(min=1e-30)
                 else:
                     if "v" not in st: st["v"] = torch.zeros_like(p, dtype=dt)
                     v = st["v"]
                     v32 = _to_dtype(v, torch.float32)
                     v32.mul_(b2).addcmul_(g32, g32, value=1.0-b2)
+                    _nan_to_num_(v32)
+                    v32.clamp_(min=0.0)
                     if do_prune and float(self.defaults["state_prune_threshold"]) > 0.0:
                         thr = float(self.defaults["state_prune_threshold"])
                         v32.masked_fill_(v32.abs() < thr, 0.0)
                     v.copy_(v32.to(v.dtype)); vhat = v32
 
+                if isinstance(vhat, torch.Tensor):
+                    _nan_to_num_(vhat)
+                    vhat.clamp_(min=1e-30)
                 P = (vhat.sqrt().add_(eps)).pow(-float(alpha)) if alpha>0 else 1.0
+                P = _clamp_finite(P, lo=1e-8, hi=1e8)
 
                 # Direction
                 if group["sign_mode"] == "softsign":
@@ -669,6 +716,13 @@ class Tiger(Optimizer):
                     d_sign = torch.sign(m32) * P
                 d_mag = (m32 / (_rms(m32)+eps)) * P
                 d = (1.0 - sblend) * d_sign + sblend * d_mag
+                if isinstance(d, torch.Tensor):
+                    _nan_to_num_(d)
+                    if not torch.isfinite(d).all():
+                        prof_c["nonfinite_skips"] += 1
+                        if bool(self.defaults["skip_if_nonfinite"]):
+                            continue
+                        d = torch.where(torch.isfinite(d), d, torch.zeros_like(d))
 
                 # AGC
                 if agc_clip and agc_clip > 0.0:
