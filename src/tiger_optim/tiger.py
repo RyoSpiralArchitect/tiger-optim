@@ -452,8 +452,8 @@ def _merge_policy(old, new, policy: str):
         return old
     return new
 
-def _apply_field_spec(old_val, spec):
-    """Support: ('op', payload) or a pipeline list [(op,payload), ...]."""
+def _apply_field_spec(old_val, spec, default_policy="replace"):
+    """Apply an explicit field operation or the staged update's policy."""
     # pipeline
     if isinstance(spec, (list, tuple)) and spec and isinstance(spec[0], (list, tuple)) and len(spec[0])==2:
         val = old_val
@@ -463,7 +463,7 @@ def _apply_field_spec(old_val, spec):
     # single op
     if isinstance(spec, (tuple, list)) and len(spec)==2 and str(spec[0]) in {"add","mul","clip","replace","set","merge","pow","exp","logit-clip"}:
         return _merge_policy(old_val, spec[1], str(spec[0]))
-    return spec
+    return _merge_policy(old_val, spec, default_policy)
 
 class Tiger(Optimizer):
     """Tiger v2.1.0
@@ -735,7 +735,7 @@ class Tiger(Optimizer):
                     g = self.param_groups[gi]
                     for fields, policy in items:
                         for key, val in fields.items():
-                            g[key] = _apply_field_spec(g.get(key), val)
+                            g[key] = _apply_field_spec(g.get(key), val, policy)
                             applied += 1
                 del self._pending_group_updates[gi]
         self._last_reflect = self._global_step
