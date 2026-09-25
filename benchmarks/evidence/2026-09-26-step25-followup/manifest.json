@@ -1,0 +1,41 @@
+{
+  "all_optimizer_sources_stable": true,
+  "base_commit": "98d01260eebe57de9b388f7d21b5625e969e276f",
+  "optimizer_run_order": [
+    "tiger-step25-full-r1.json",
+    "tiger-step25-no_spectral-r1.json",
+    "tiger-step25-full-r2.json",
+    "tiger-step25-no_spectral-r2.json",
+    "tiger-step25-full-r3.json",
+    "tiger-step25-cpu_offload-r1.json",
+    "tiger-step25-full-r4.json",
+    "tiger-step25-cpu_offload-r2.json"
+  ],
+  "optimizer_source_sha256": {
+    "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+    "src/tiger_optim/accel/__init__.py": "e94689fb383a4e342795b0db111ffbb08e520ddeb3a2997ebcff4f63a1526ef5",
+    "src/tiger_optim/accel/torch_backend.py": "85087acab0a5b06dc11d57f99c7509d91d0d6854a83837f4b49624ad12ae169b",
+    "src/tiger_optim/tiger.py": "3836c2121d5bd94b9a70ac2e5299d4f7e9e76578425ed2a6d17c2012bed8269b"
+  },
+  "raw_files": 12,
+  "raw_sha256": {
+    "tiger-step25-cpu_offload-r1.json": "f0d0f2e02633f0578b6e4df56cb6f8ed6c844332230b60c56742539e2631c1d0",
+    "tiger-step25-cpu_offload-r2.json": "a8f7473301bcfe94a674cdca5d8c2349622c0fd99cebc5f9233efb6849ffc210",
+    "tiger-step25-device-cpu.json": "77b7d10d4c7e4d0d962b9ce78445377e314ad53cd40249c86be163ea3f1f28fa",
+    "tiger-step25-device-mps.json": "7c30afc54a5ccd846a14363f99183cac96ce558f307b6c17546c75ceec4a4cca",
+    "tiger-step25-full-r1.json": "3be8191527a688bb1ec213ba38468786cdd09d1c58bf3cfdf8305d9ea7d9bbd9",
+    "tiger-step25-full-r2.json": "137066ac98a7fa27895f9322b47beb9803eabc53930952b4ce3535e7a20f5520",
+    "tiger-step25-full-r3.json": "bf6e78f9ab4d97aa81963e75dab65f7c314184d005e6fc65341eeb2d95a0c242",
+    "tiger-step25-full-r4.json": "1e5a77e853fd45d7f59b381d330b75e4ffaf1eff66d3b6a4e28d526effdbf3f7",
+    "tiger-step25-no_spectral-r1.json": "f75a2033f17eaba318f0b18c093ac52c1d632f920ea75a0c60a74027cf2a9858",
+    "tiger-step25-no_spectral-r2.json": "5ab63c3f904ffb6b43a1cb45802405b30ca918abf04755c3b1befc5ae2a0a7bf",
+    "tiger-step25-reduction-mean.json": "8f3b5214bcba01f12fc227603e12efc0161b1c04ec9395c277910ceefa05ff05",
+    "tiger-step25-reduction-sum.json": "cf274e491cb73df91dad87fce6a4fb85422651d5abadcb28c5997a59662fee25"
+  },
+  "schema": 1,
+  "scripts_sha256": {
+    "cpu_offload_ablation.py": "c824eaf6e162934a23e3b17c5c8b469e4766a7afc972f44365a65fd644e573ea",
+    "reduction_probe.py": "531c7c4c89104213d96b25952ad259559875f9d9c173c39d9ca7ddc49e2a2ef0",
+    "spectral_device_probe.py": "78334aa17c1a7e1cb279c8bb89af1b144af1339bf80a49d3c76b195cb4c25593"
+  }
+}
