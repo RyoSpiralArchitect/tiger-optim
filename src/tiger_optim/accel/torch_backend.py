@@ -61,9 +61,12 @@ def _scaled_l2(x: torch.Tensor, *, rms: bool = False) -> torch.Tensor:
             length = length / math.sqrt(x.numel())
         return length.to(x.dtype)
     magnitude = x.abs()
-    scale = magnitude.amax()
+    # Keep the guard one-dimensional on MPS. A scalar comparison or boolean
+    # conjunction on that backend can read the value back to the host.
+    scale = magnitude.amax().reshape(1)
+    finite_scale = torch.nan_to_num(scale, nan=0.0, posinf=0.0, neginf=0.0)
     safe_scale = torch.where(
-        torch.isfinite(scale) & (scale > 0), scale, torch.ones_like(scale)
+        finite_scale > torch.zeros_like(scale), scale, torch.ones_like(scale)
     )
     work_dtype = (
         torch.float32
@@ -74,7 +77,7 @@ def _scaled_l2(x: torch.Tensor, *, rms: bool = False) -> torch.Tensor:
     length = torch.linalg.vector_norm(normalized)
     if rms:
         length = length / math.sqrt(x.numel())
-    return (safe_scale.to(work_dtype) * length).to(magnitude.dtype)
+    return (safe_scale.to(work_dtype) * length).reshape(()).to(magnitude.dtype)
 
 
 def rms(x: torch.Tensor) -> torch.Tensor:
