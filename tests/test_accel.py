@@ -62,7 +62,7 @@ def test_configure_backends_runtime_disable(monkeypatch):
 def test_available_backends_shape(monkeypatch):
     accel = _reload_accel(monkeypatch, TIGER_ACCEL_DISABLE="all")
     status = accel.available_backends()
-    assert set(status.keys()) == {"julia"}
+    assert set(status.keys()) == {"julia", "torch"}
     assert all(isinstance(flag, bool) for flag in status.values())
 
 
@@ -154,15 +154,15 @@ def test_tensor_backend_results_are_normalized(monkeypatch):
 
         @staticmethod
         def softsign(x: torch.Tensor, tau: float) -> torch.Tensor:
-            return torch.full_like(x, 0.5, dtype=torch.float64)
+            return torch.full(x.shape, 0.5, dtype=torch.float64, device=torch.device("cpu"))
 
         @staticmethod
         def rms(x: torch.Tensor) -> torch.Tensor:
-            return torch.tensor(3.0, dtype=torch.float64)
+            return torch.tensor(3.0, dtype=torch.float64, device=torch.device("cpu"))
 
         @staticmethod
         def norm(x: torch.Tensor) -> torch.Tensor:
-            return torch.tensor(4.0, dtype=torch.float64)
+            return torch.tensor(4.0, dtype=torch.float64, device=torch.device("cpu"))
 
     backend = TensorBackend()
     try:
@@ -321,15 +321,21 @@ def test_backend_wrapped_outputs_are_unwrapped(monkeypatch):
 
         @staticmethod
         def softsign(x: torch.Tensor, tau: float):
-            return SequenceWrapper(torch.full_like(x, 0.75, dtype=torch.float64))
+            return SequenceWrapper(
+                torch.full(x.shape, 0.75, dtype=torch.float64, device=torch.device("cpu"))
+            )
 
         @staticmethod
         def rms(x: torch.Tensor):
-            return {"values": torch.tensor(6.0, dtype=torch.float64)}
+            return {
+                "values": torch.tensor(6.0, dtype=torch.float64, device=torch.device("cpu"))
+            }
 
         @staticmethod
         def norm(x: torch.Tensor):
-            return ValueWrapper(torch.tensor(7.0, dtype=torch.float64))
+            return ValueWrapper(
+                torch.tensor(7.0, dtype=torch.float64, device=torch.device("cpu"))
+            )
 
     backend = WrappedBackend()
     try:
@@ -508,3 +514,34 @@ def test_coerce_backend_value_accepts_sequence(monkeypatch):
     assert coerced.dtype == reference.dtype
     assert coerced.device == reference.device
     assert torch.allclose(coerced, reference.new_tensor([1.0, 2.0, 3.0]))
+
+
+def test_real_torch_backend_handles_active_device(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+    try:
+        accel.configure_backends(preferred=["torch"], disabled=["julia"])
+        accel.refresh_backend_state(reset_metrics=True)
+
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            device = torch.device("mps")
+        else:
+            device = torch.device("cpu")
+
+        x = torch.randn(16, device=device, dtype=torch.float32)
+        tau = 0.2
+
+        softsign = accel.fast_softsign(x, tau)
+        rms = accel.fast_rms(x)
+        norm = accel.fast_norm(x)
+
+        assert torch.allclose(softsign, x / (x.abs() + tau))
+        assert torch.allclose(rms, x.pow(2).mean().sqrt())
+        assert torch.allclose(norm, torch.linalg.vector_norm(x))
+
+        diagnostics = accel.backend_diagnostics()
+        assert diagnostics["torch"]["successes"] >= 3
+    finally:
+        accel.reset_backend_configuration()
+        accel.refresh_backend_state(reload=True, reset_metrics=True)

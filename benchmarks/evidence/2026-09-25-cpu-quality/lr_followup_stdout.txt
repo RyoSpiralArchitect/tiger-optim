@@ -1,0 +1,5 @@
+{"last_heldout_mse": 0.2798212468624115, "lr": 0.01, "seed": 11, "status": "complete", "stopped_at_step": null}
+{"last_heldout_mse": 24155.673828125, "lr": 0.03, "seed": 11, "status": "complete", "stopped_at_step": null}
+{"last_heldout_mse": 0.6616772413253784, "lr": 0.01, "seed": 23, "status": "complete", "stopped_at_step": null}
+{"last_heldout_mse": 0.2308368682861328, "lr": 0.01, "seed": 37, "status": "complete", "stopped_at_step": null}
+results=/tmp/tiger-optim-20260925-quality/lr_followup_results.json

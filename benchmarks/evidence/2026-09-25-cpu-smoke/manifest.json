@@ -1,0 +1,247 @@
+{
+  "aggregates": {
+    "adamw": {
+      "loss_series_identical_across_processes": true,
+      "ms_forward_backward_median": {
+        "max": 3.285041499111685,
+        "median_of_medians": 3.275520999522996,
+        "min": 3.2579375001660082,
+        "per_process": [
+          3.2579375001660082,
+          3.275520999522996,
+          3.285041499111685
+        ],
+        "range": 0.02710399894567672
+      },
+      "ms_median": {
+        "max": 4.076312501638313,
+        "median_of_medians": 4.0483755019522505,
+        "min": 4.035791498608887,
+        "per_process": [
+          4.035791498608887,
+          4.0483755019522505,
+          4.076312501638313
+        ],
+        "range": 0.04052100302942563
+      },
+      "ms_optimizer_median": {
+        "max": 0.7861454996600514,
+        "median_of_medians": 0.7794375014782418,
+        "min": 0.7661875006306218,
+        "per_process": [
+          0.7661875006306218,
+          0.7794375014782418,
+          0.7861454996600514
+        ],
+        "range": 0.01995799902942963
+      }
+    },
+    "tiger_v21_full": {
+      "loss_series_identical_across_processes": true,
+      "ms_forward_backward_median": {
+        "max": 3.464645498752361,
+        "median_of_medians": 3.3956044990191003,
+        "min": 3.377520501089748,
+        "per_process": [
+          3.377520501089748,
+          3.3956044990191003,
+          3.464645498752361
+        ],
+        "range": 0.08712499766261317
+      },
+      "ms_median": {
+        "max": 9.074687501197332,
+        "median_of_medians": 8.973082996817539,
+        "min": 8.958833001088351,
+        "per_process": [
+          8.958833001088351,
+          8.973082996817539,
+          9.074687501197332
+        ],
+        "range": 0.11585450010898057
+      },
+      "ms_optimizer_median": {
+        "max": 5.593416501142201,
+        "median_of_medians": 5.577291498411796,
+        "min": 5.576854000537423,
+        "per_process": [
+          5.576854000537423,
+          5.577291498411796,
+          5.593416501142201
+        ],
+        "range": 0.016562500604777597
+      }
+    }
+  },
+  "created_utc": "2026-09-25T11:26:45.768294+00:00",
+  "entries": [
+    {
+      "command": "env PYTHONPATH='/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages:/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src' python3 -S /Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/bench_compare_optim.py --device cpu --steps 200 --warmup 50 --seed 0 --modes adamw tiger_v21_full",
+      "comparison_id": "0bb401c2edc8447a815cc8590a83e5f7",
+      "cwd": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/results/cpu-repro-20260925T1124Z/rep1",
+      "first_measured_training_loss": 0.7643821835517883,
+      "forward_backward_median_ms": 3.2579375001660082,
+      "last_measured_training_loss": 0.10050919651985168,
+      "mode": "adamw",
+      "optimizer_step_median_ms": 0.7661875006306218,
+      "output": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/results/cpu-repro-20260925T1124Z/rep1/benchmarks/results/compare-adamw-cpu-b0028826-20260925-112432.json",
+      "rep": 1,
+      "run_id": "b002882665e2440189f943c793b2f155",
+      "sha256": "9a94bdeb262b5710e1b8f9a9c2939e4fa701ddd9642a9565f6bc92ea717a95eb",
+      "training_compute_median_ms": 4.035791498608887
+    },
+    {
+      "command": "env PYTHONPATH='/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages:/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src' python3 -S /Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/bench_compare_optim.py --device cpu --steps 200 --warmup 50 --seed 0 --modes adamw tiger_v21_full",
+      "comparison_id": "0bb401c2edc8447a815cc8590a83e5f7",
+      "cwd": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/results/cpu-repro-20260925T1124Z/rep1",
+      "first_measured_training_loss": 1.035725712776184,
+      "forward_backward_median_ms": 3.377520501089748,
+      "last_measured_training_loss": 0.9964064955711365,
+      "mode": "tiger_v21_full",
+      "optimizer_step_median_ms": 5.577291498411796,
+      "output": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/results/cpu-repro-20260925T1124Z/rep1/benchmarks/results/compare-tiger_v21_full-cpu-b76d56c8-20260925-112434.json",
+      "rep": 1,
+      "run_id": "b76d56c82a744d3f95410b009a23e5ca",
+      "sha256": "f20f84d58f75f36fb281d5588139e15d2d0f37823ccb4ce9aab564c07880b7e0",
+      "training_compute_median_ms": 8.958833001088351
+    },
+    {
+      "command": "env PYTHONPATH='/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages:/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src' python3 -S /Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/bench_compare_optim.py --device cpu --steps 200 --warmup 50 --seed 0 --modes adamw tiger_v21_full",
+      "comparison_id": "9433739515044d2196bd7981f8862e1e",
+      "cwd": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/results/cpu-repro-20260925T1124Z/rep2",
+      "first_measured_training_loss": 0.7643821835517883,
+      "forward_backward_median_ms": 3.285041499111685,
+      "last_measured_training_loss": 0.10050919651985168,
+      "mode": "adamw",
+      "optimizer_step_median_ms": 0.7861454996600514,
+      "output": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/results/cpu-repro-20260925T1124Z/rep2/benchmarks/results/compare-adamw-cpu-82a17cef-20260925-112443.json",
+      "rep": 2,
+      "run_id": "82a17cef068f4cb19dcfea66c5a1c687",
+      "sha256": "d468313e3a0e474cfd905477cd6b5b81f1bb54a1f34c9bb0db5e7ec0e1f238b6",
+      "training_compute_median_ms": 4.076312501638313
+    },
+    {
+      "command": "env PYTHONPATH='/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages:/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src' python3 -S /Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/bench_compare_optim.py --device cpu --steps 200 --warmup 50 --seed 0 --modes adamw tiger_v21_full",
+      "comparison_id": "9433739515044d2196bd7981f8862e1e",
+      "cwd": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/results/cpu-repro-20260925T1124Z/rep2",
+      "first_measured_training_loss": 1.035725712776184,
+      "forward_backward_median_ms": 3.3956044990191003,
+      "last_measured_training_loss": 0.9964064955711365,
+      "mode": "tiger_v21_full",
+      "optimizer_step_median_ms": 5.576854000537423,
+      "output": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/results/cpu-repro-20260925T1124Z/rep2/benchmarks/results/compare-tiger_v21_full-cpu-0feb178a-20260925-112445.json",
+      "rep": 2,
+      "run_id": "0feb178a261c420f93c165287b004e88",
+      "sha256": "6fb5e1838f1680a29437feeb8c566eb48a9f66e33d5c984e5cbddf3cf1c15014",
+      "training_compute_median_ms": 8.973082996817539
+    },
+    {
+      "command": "env PYTHONPATH='/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages:/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src' python3 -S /Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/bench_compare_optim.py --device cpu --steps 200 --warmup 50 --seed 0 --modes adamw tiger_v21_full",
+      "comparison_id": "6a827b2d36904be9ac3b6aeb995416d0",
+      "cwd": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/results/cpu-repro-20260925T1124Z/rep3",
+      "first_measured_training_loss": 0.7643821835517883,
+      "forward_backward_median_ms": 3.275520999522996,
+      "last_measured_training_loss": 0.10050919651985168,
+      "mode": "adamw",
+      "optimizer_step_median_ms": 0.7794375014782418,
+      "output": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/results/cpu-repro-20260925T1124Z/rep3/benchmarks/results/compare-adamw-cpu-05e328a9-20260925-112454.json",
+      "rep": 3,
+      "run_id": "05e328a9cc1c4f0d9788b75eb35d0c3a",
+      "sha256": "710c4c8ffe148528a951b96f691de79325dea0e093ffe982d76126f4ad08e03d",
+      "training_compute_median_ms": 4.0483755019522505
+    },
+    {
+      "command": "env PYTHONPATH='/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages:/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src' python3 -S /Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/bench_compare_optim.py --device cpu --steps 200 --warmup 50 --seed 0 --modes adamw tiger_v21_full",
+      "comparison_id": "6a827b2d36904be9ac3b6aeb995416d0",
+      "cwd": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/results/cpu-repro-20260925T1124Z/rep3",
+      "first_measured_training_loss": 1.035725712776184,
+      "forward_backward_median_ms": 3.464645498752361,
+      "last_measured_training_loss": 0.9964064955711365,
+      "mode": "tiger_v21_full",
+      "optimizer_step_median_ms": 5.593416501142201,
+      "output": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/benchmarks/results/cpu-repro-20260925T1124Z/rep3/benchmarks/results/compare-tiger_v21_full-cpu-f63780f8-20260925-112456.json",
+      "rep": 3,
+      "run_id": "f63780f8ccfb401ea46a2e1ba0b5d854",
+      "sha256": "ea6675d40567037c2926dfd4ca02c74d54864b9bfec41638675865299039c29b",
+      "training_compute_median_ms": 9.074687501197332
+    }
+  ],
+  "experiment": "bounded CPU-only same-seed TinyMix benchmark smoke",
+  "interpreter": "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3",
+  "invocation_count": 3,
+  "limitations": [
+    "The three processes repeat one seed and one fixed synthetic training tensor pair; this is not multi-seed or held-out evaluation.",
+    "AdamW always ran before Tiger in each process, so order and thermal effects are not counterbalanced.",
+    "The optimizer configurations differ: AdamW uses betas 0.9/0.999 and weight decay 0.01 on all parameters; Tiger uses betas 0.9/0.98, tagged learning-rate scales, selective zero decay, and adaptive controls. Full initial/final configs are in each JSON.",
+    "The reported training compute ms sums forward/backward and optimizer timers and excludes loss.item/report_metrics; it is not contiguous wall-clock step time.",
+    "The checkout was dirty. The source tree SHA-256 is post-run and does not independently attest contents at each process launch."
+  ],
+  "measured_steps": 200,
+  "modes": [
+    "adamw",
+    "tiger_v21_full"
+  ],
+  "pair_ids": {
+    "1": "0bb401c2edc8447a815cc8590a83e5f7",
+    "2": "9433739515044d2196bd7981f8862e1e",
+    "3": "6a827b2d36904be9ac3b6aeb995416d0"
+  },
+  "repo": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim",
+  "seed": 0,
+  "shape": {
+    "attention_heads": 4,
+    "batch": 16,
+    "ff_width": 512,
+    "sequence_length": 32,
+    "width": 256
+  },
+  "source_files_after_run": [
+    {
+      "mtime_utc": "2026-09-25T11:04:51.463213+00:00",
+      "path": "benchmarks/bench_compare_optim.py",
+      "sha256": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3"
+    },
+    {
+      "mtime_utc": "2026-04-09T11:43:02.133005+00:00",
+      "path": "src/tiger_optim/__init__.py",
+      "sha256": "6e9ab32b162c0a356c69af52b12c178704921844ddd43b700fcb0315907310c4"
+    },
+    {
+      "mtime_utc": "2026-04-10T12:17:08.617960+00:00",
+      "path": "src/tiger_optim/accel/__init__.py",
+      "sha256": "e02a830073e35ad5bf824be5aa071dc6bea1f47a94e101f84e4da0e826e28d3a"
+    },
+    {
+      "mtime_utc": "2026-04-09T11:43:02.133358+00:00",
+      "path": "src/tiger_optim/accel/julia_backend.py",
+      "sha256": "577dc6ba8de28e8373f5cca20b6bb171d7cbeb6ac131e3d0dfbb071f2cd63382"
+    },
+    {
+      "mtime_utc": "2026-04-10T12:17:13.157375+00:00",
+      "path": "src/tiger_optim/accel/torch_backend.py",
+      "sha256": "e38bf5af473112c73718ce59b2187ba3a779ba74c02d8f3542b78c4050c82bb5"
+    },
+    {
+      "mtime_utc": "2026-04-09T11:43:02.133483+00:00",
+      "path": "src/tiger_optim/schedulers.py",
+      "sha256": "72b7aea528ba0f366e42fdbd13affe3b96e6010cae4a53e2b887576be3c7395a"
+    },
+    {
+      "mtime_utc": "2026-04-09T11:43:02.133870+00:00",
+      "path": "src/tiger_optim/tagged.py",
+      "sha256": "6c39d6dabb04c9cd7ba7fb05b7fa8e9c26aac30a3b7325466aa5b625cc0f13cf"
+    },
+    {
+      "mtime_utc": "2026-09-25T11:21:21.969580+00:00",
+      "path": "src/tiger_optim/tiger.py",
+      "sha256": "d65f3f078d2a4230040b96b81dbd0785f8c0fb71ba018077fcf4500ce37cf2cf"
+    },
+    {
+      "mtime_utc": "2026-04-09T11:43:02.134382+00:00",
+      "path": "src/tiger_optim/triton_kernels.py",
+      "sha256": "57c33de9a266d2438d4840b69237ed3d5d9650c9d8496d7a17f4a0ab0f1724c9"
+    }
+  ],
+  "source_tree_sha256_after_run": "d0a18b73104f7da159b235959c0938ca4aca7de9c1131ac9045ad0940e814027",
+  "warmup_steps": 50
+}

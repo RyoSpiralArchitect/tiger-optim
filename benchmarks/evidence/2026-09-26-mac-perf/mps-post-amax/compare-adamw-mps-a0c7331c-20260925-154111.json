@@ -1,0 +1,446 @@
+{
+  "summary": {
+    "mode": "adamw",
+    "device": "mps",
+    "steps": 30,
+    "warmup": 10,
+    "ms_median": 3.2518340012757108,
+    "ms_mean": 3.2945611669371524,
+    "ms_forward_backward_median": 2.203895495767938,
+    "ms_forward_backward_mean": 2.231029166917627,
+    "ms_optimizer_median": 0.9982709998439532,
+    "ms_optimizer_mean": 1.0635320000195254,
+    "loss_last": 0.9608365297317505,
+    "loss_min": 0.9608365297317505,
+    "loss_mean": 1.3085485339164733
+  },
+  "run": {
+    "run_id": "a0c7331c5d024d838e2c59af4babd389",
+    "comparison_id": "98c01b8122654ef6ab0349af321dbcdf",
+    "timestamp_utc": "2026-09-25T15:41:10.824175+00:00",
+    "git": {
+      "commit": "66374f21a0ddb00a27dd119c7f616e4d5c74eb27",
+      "dirty": true
+    },
+    "python": "3.12.6 (v3.12.6:a4a2d2b0d85, Sep  6 2024, 16:08:03) [Clang 13.0.0 (clang-1300.0.29.30)]",
+    "pytorch": "2.12.1",
+    "pytorch_cuda_build": null,
+    "os": "macOS-26.4.1-arm64-arm-64bit",
+    "device": {
+      "requested": "mps",
+      "resolved": "mps",
+      "name": "Apple M4"
+    },
+    "runtime": {
+      "torch_default_device": "cpu",
+      "torch_default_dtype": "torch.float32",
+      "deterministic_algorithms": false,
+      "TIGER_ACCEL_DISABLE": null,
+      "TIGER_ACCEL_PREFER": null,
+      "PYTORCH_ENABLE_MPS_FALLBACK": null
+    },
+    "cli": {
+      "argv": [
+        "--device",
+        "mps",
+        "--steps",
+        "30",
+        "--warmup",
+        "10",
+        "--seed",
+        "0",
+        "--modes",
+        "adamw",
+        "tiger_v21_full"
+      ],
+      "parsed": {
+        "device": "mps",
+        "steps": 30,
+        "warmup": 10,
+        "seed": 0,
+        "modes": [
+          "adamw",
+          "tiger_v21_full"
+        ]
+      }
+    },
+    "effective_arguments": {
+      "mode": "adamw",
+      "device": "mps",
+      "steps": 30,
+      "warmup": 10,
+      "seed": 0,
+      "batch": 16,
+      "sequence_length": 32,
+      "model_width": 256,
+      "ff_width": 512,
+      "attention_heads": 4
+    },
+    "optimizer_config_initial": {
+      "class": "torch.optim.adamw.AdamW",
+      "defaults": {
+        "lr": 0.0003,
+        "betas": [
+          0.9,
+          0.999
+        ],
+        "eps": 1e-08,
+        "weight_decay": 0.01,
+        "amsgrad": false,
+        "maximize": false,
+        "foreach": null,
+        "capturable": false,
+        "differentiable": false,
+        "fused": null,
+        "decoupled_weight_decay": true
+      },
+      "param_groups": [
+        {
+          "parameters": [
+            {
+              "name": "mha.in_proj_weight",
+              "shape": [
+                768,
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "mha.in_proj_bias",
+              "shape": [
+                768
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "mha.out_proj.weight",
+              "shape": [
+                256,
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "mha.out_proj.bias",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "up.weight",
+              "shape": [
+                512,
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "up.bias",
+              "shape": [
+                512
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "down.weight",
+              "shape": [
+                256,
+                512
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "down.bias",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "ln.weight",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "ln.bias",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            }
+          ],
+          "options": {
+            "lr": 0.0003,
+            "betas": [
+              0.9,
+              0.999
+            ],
+            "eps": 1e-08,
+            "weight_decay": 0.01,
+            "amsgrad": false,
+            "maximize": false,
+            "foreach": null,
+            "capturable": false,
+            "differentiable": false,
+            "fused": null,
+            "decoupled_weight_decay": true
+          }
+        }
+      ]
+    },
+    "timing_scope": {
+      "ms": "zero_grad + forward + loss + backward + opt.step + synchronization",
+      "ms_forward_backward": "zero_grad + forward + loss + backward + synchronization",
+      "ms_optimizer": "opt.step + synchronization",
+      "excluded": "loss.item + report_metrics between timed sections"
+    },
+    "optimizer_config_final": {
+      "class": "torch.optim.adamw.AdamW",
+      "defaults": {
+        "lr": 0.0003,
+        "betas": [
+          0.9,
+          0.999
+        ],
+        "eps": 1e-08,
+        "weight_decay": 0.01,
+        "amsgrad": false,
+        "maximize": false,
+        "foreach": null,
+        "capturable": false,
+        "differentiable": false,
+        "fused": null,
+        "decoupled_weight_decay": true
+      },
+      "param_groups": [
+        {
+          "parameters": [
+            {
+              "name": "mha.in_proj_weight",
+              "shape": [
+                768,
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "mha.in_proj_bias",
+              "shape": [
+                768
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "mha.out_proj.weight",
+              "shape": [
+                256,
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "mha.out_proj.bias",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "up.weight",
+              "shape": [
+                512,
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "up.bias",
+              "shape": [
+                512
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "down.weight",
+              "shape": [
+                256,
+                512
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "down.bias",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "ln.weight",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "ln.bias",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            }
+          ],
+          "options": {
+            "lr": 0.0003,
+            "betas": [
+              0.9,
+              0.999
+            ],
+            "eps": 1e-08,
+            "weight_decay": 0.01,
+            "amsgrad": false,
+            "maximize": false,
+            "foreach": null,
+            "capturable": false,
+            "differentiable": false,
+            "fused": null,
+            "decoupled_weight_decay": true
+          }
+        }
+      ]
+    }
+  },
+  "series": {
+    "ms": [
+      3.153374003886711,
+      3.9114589962991886,
+      3.183957996952813,
+      3.2443759992020205,
+      3.259292003349401,
+      3.545624997059349,
+      3.4694589921855368,
+      2.9851660001440905,
+      3.3407920054742135,
+      3.3547909988556057,
+      3.0400010000448674,
+      3.8336670040735044,
+      3.2692079985281453,
+      3.661916998680681,
+      3.1166660046437755,
+      3.759457998967264,
+      3.0155420026858337,
+      3.4379999997327104,
+      3.170500000123866,
+      3.0194159990060143,
+      3.640708004240878,
+      2.982582009281032,
+      3.1487090018345043,
+      3.2098329975269735,
+      2.879583989852108,
+      3.2682909950381145,
+      3.0667920000269078,
+      3.293084002507385,
+      3.368501005752478,
+      3.2060840021586046
+    ],
+    "ms_forward_backward": [
+      2.1599160027108155,
+      2.4251249997178093,
+      2.208832993346732,
+      2.1977919968776405,
+      2.26670900156023,
+      2.209124999353662,
+      2.3181669967016205,
+      2.1032500008004718,
+      2.116958006809,
+      2.304832996742334,
+      2.1325420020730235,
+      2.779917005682364,
+      2.198957998189144,
+      2.6141249982174486,
+      2.1207080062595196,
+      2.3907909999252297,
+      2.079750003758818,
+      2.449542000249494,
+      2.216291999502573,
+      2.120625002135057,
+      2.3162080033216625,
+      2.0655410044128075,
+      2.179041999625042,
+      2.22395799937658,
+      1.9892919954145327,
+      2.093790993967559,
+      2.0662079987232573,
+      2.299084000696894,
+      2.263959002448246,
+      2.0198339989292435
+    ],
+    "ms_optimizer": [
+      0.9934580011758953,
+      1.4863339965813793,
+      0.975125003606081,
+      1.04658400232438,
+      0.9925830017891712,
+      1.3364999977056868,
+      1.1512919954839163,
+      0.8819159993436188,
+      1.2238339986652136,
+      1.0499580021132715,
+      0.9074589979718439,
+      1.0537499983911403,
+      1.0702500003390014,
+      1.0477920004632324,
+      0.9959579983842559,
+      1.3686669990420341,
+      0.9357919989270158,
+      0.9884579994832166,
+      0.9542080006212927,
+      0.8987909968709573,
+      1.3245000009192154,
+      0.9170410048682243,
+      0.9696670022094622,
+      0.9858749981503934,
+      0.8902919944375753,
+      1.1745000010705553,
+      1.0005840013036504,
+      0.9940000018104911,
+      1.104542003304232,
+      1.186250003229361
+    ],
+    "loss": [
+      1.686141014099121,
+      1.6561470031738281,
+      1.6273162364959717,
+      1.5998353958129883,
+      1.573737382888794,
+      1.5488488674163818,
+      1.5247750282287598,
+      1.5009623765945435,
+      1.4768438339233398,
+      1.452012300491333,
+      1.4263310432434082,
+      1.3999193906784058,
+      1.3730189800262451,
+      1.345825433731079,
+      1.3184140920639038,
+      1.290806531906128,
+      1.2630903720855713,
+      1.2354933023452759,
+      1.2083766460418701,
+      1.1821472644805908,
+      1.1571040153503418,
+      1.1332926750183105,
+      1.1104743480682373,
+      1.0882540941238403,
+      1.0662972927093506,
+      1.0444824695587158,
+      1.0228991508483887,
+      1.0017224550247192,
+      0.9810504913330078,
+      0.9608365297317505
+    ]
+  }
+}

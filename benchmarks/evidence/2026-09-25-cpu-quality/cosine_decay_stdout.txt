@@ -1,0 +1,4 @@
+{"adamw_final_heldout_mse": 0.12178730219602585, "cosine_final_heldout_mse": 0.006239535287022591, "fixed_lr_final_heldout_mse": 0.2798212468624115, "seed": 11, "status": "complete", "stopped_at_step": null}
+{"adamw_final_heldout_mse": 0.07630322873592377, "cosine_final_heldout_mse": 0.00682262284681201, "fixed_lr_final_heldout_mse": 0.6616772413253784, "seed": 23, "status": "complete", "stopped_at_step": null}
+{"adamw_final_heldout_mse": 0.08221199363470078, "cosine_final_heldout_mse": 0.002943276660516858, "fixed_lr_final_heldout_mse": 0.2308368682861328, "seed": 37, "status": "complete", "stopped_at_step": null}
+results=/tmp/tiger-optim-20260925-quality/cosine_decay_results.json

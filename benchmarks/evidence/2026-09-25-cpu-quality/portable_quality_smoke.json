@@ -1,0 +1,372 @@
+{
+  "environment": {
+    "deterministic_algorithms": true,
+    "device": "cpu",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.6",
+    "threads": 1,
+    "torch": "2.12.1",
+    "torch_default_device": "cpu"
+  },
+  "git": {
+    "commit": "66374f21a0ddb00a27dd119c7f616e4d5c74eb27",
+    "dirty": true,
+    "script_sha256": "f155610b681798be30fe2fc99a6874b5c072dd87beb4a8e527b21e2526e03a87",
+    "tiger_py_sha256": "d65f3f078d2a4230040b96b81dbd0785f8c0fb71ba018077fcf4500ce37cf2cf"
+  },
+  "label": "CPU-only toy held-out quality smoke; not a general optimizer ranking",
+  "limitations": [
+    "Single synthetic nonlinear regression task with three default seeds.",
+    "AdamW uses a fixed learning rate while Tiger uses a cosine schedule.",
+    "The Tiger recipe followed bounded local exploration and is not a broad tuning result."
+  ],
+  "seeds": [
+    {
+      "runs": [
+        {
+          "config": {
+            "betas": [
+              0.9,
+              0.999
+            ],
+            "eps": 1e-08,
+            "lr": 0.001,
+            "scheduler": null,
+            "weight_decay": 0.01
+          },
+          "optimizer": "AdamW",
+          "status": "complete",
+          "stopped_at_step": null,
+          "trace": [
+            {
+              "heldout_mse": 1.5034139156341553,
+              "lr": 0.001,
+              "step": 0,
+              "train_mse": 1.3643838167190552
+            },
+            {
+              "heldout_mse": 0.39299044013023376,
+              "lr": 0.001,
+              "step": 50,
+              "train_mse": 0.38059625029563904
+            },
+            {
+              "heldout_mse": 0.16777923703193665,
+              "lr": 0.001,
+              "step": 100,
+              "train_mse": 0.14936554431915283
+            },
+            {
+              "heldout_mse": 0.1447521597146988,
+              "lr": 0.001,
+              "step": 150,
+              "train_mse": 0.1276727169752121
+            },
+            {
+              "heldout_mse": 0.12178730219602585,
+              "lr": 0.001,
+              "step": 200,
+              "train_mse": 0.10780880600214005
+            }
+          ]
+        },
+        {
+          "config": {
+            "agc_clip": 0.0,
+            "auto_blend": false,
+            "auto_lr": false,
+            "factored": true,
+            "lr": 0.01,
+            "precond_alpha": 1.0,
+            "rms_clip_granularity": "param",
+            "rms_clip_threshold": 1.0,
+            "scheduler": {
+              "T_max": 200,
+              "eta_min": 0.0001,
+              "name": "CosineAnnealingLR",
+              "order": "scheduler.step() after optimizer.step()"
+            },
+            "trust_clip": 5.0,
+            "trust_space": "precond",
+            "update_buffer_dtype": "fp32",
+            "weight_decay": 0.01
+          },
+          "optimizer": "Tiger",
+          "status": "complete",
+          "stopped_at_step": null,
+          "trace": [
+            {
+              "heldout_mse": 1.5034139156341553,
+              "lr": 0.01,
+              "step": 0,
+              "train_mse": 1.3643838167190552
+            },
+            {
+              "heldout_mse": 0.6946249604225159,
+              "lr": 0.008550178566873411,
+              "step": 50,
+              "train_mse": 0.6210750937461853
+            },
+            {
+              "heldout_mse": 0.1617494821548462,
+              "lr": 0.0050500000000000015,
+              "step": 100,
+              "train_mse": 0.15061743557453156
+            },
+            {
+              "heldout_mse": 0.033686116337776184,
+              "lr": 0.0015498214331265915,
+              "step": 150,
+              "train_mse": 0.029554342851042747
+            },
+            {
+              "heldout_mse": 0.006239535287022591,
+              "lr": 0.0001,
+              "step": 200,
+              "train_mse": 0.009324301034212112
+            }
+          ]
+        }
+      ],
+      "seed": 11
+    },
+    {
+      "runs": [
+        {
+          "config": {
+            "betas": [
+              0.9,
+              0.999
+            ],
+            "eps": 1e-08,
+            "lr": 0.001,
+            "scheduler": null,
+            "weight_decay": 0.01
+          },
+          "optimizer": "AdamW",
+          "status": "complete",
+          "stopped_at_step": null,
+          "trace": [
+            {
+              "heldout_mse": 1.6868082284927368,
+              "lr": 0.001,
+              "step": 0,
+              "train_mse": 1.448326587677002
+            },
+            {
+              "heldout_mse": 0.5280787944793701,
+              "lr": 0.001,
+              "step": 50,
+              "train_mse": 0.4758647382259369
+            },
+            {
+              "heldout_mse": 0.17804838716983795,
+              "lr": 0.001,
+              "step": 100,
+              "train_mse": 0.17843620479106903
+            },
+            {
+              "heldout_mse": 0.12630610167980194,
+              "lr": 0.001,
+              "step": 150,
+              "train_mse": 0.12468740344047546
+            },
+            {
+              "heldout_mse": 0.07630322873592377,
+              "lr": 0.001,
+              "step": 200,
+              "train_mse": 0.07964534312486649
+            }
+          ]
+        },
+        {
+          "config": {
+            "agc_clip": 0.0,
+            "auto_blend": false,
+            "auto_lr": false,
+            "factored": true,
+            "lr": 0.01,
+            "precond_alpha": 1.0,
+            "rms_clip_granularity": "param",
+            "rms_clip_threshold": 1.0,
+            "scheduler": {
+              "T_max": 200,
+              "eta_min": 0.0001,
+              "name": "CosineAnnealingLR",
+              "order": "scheduler.step() after optimizer.step()"
+            },
+            "trust_clip": 5.0,
+            "trust_space": "precond",
+            "update_buffer_dtype": "fp32",
+            "weight_decay": 0.01
+          },
+          "optimizer": "Tiger",
+          "status": "complete",
+          "stopped_at_step": null,
+          "trace": [
+            {
+              "heldout_mse": 1.6868082284927368,
+              "lr": 0.01,
+              "step": 0,
+              "train_mse": 1.448326587677002
+            },
+            {
+              "heldout_mse": 0.8891823291778564,
+              "lr": 0.008550178566873411,
+              "step": 50,
+              "train_mse": 0.7584030628204346
+            },
+            {
+              "heldout_mse": 0.20041492581367493,
+              "lr": 0.0050500000000000015,
+              "step": 100,
+              "train_mse": 0.19309492409229279
+            },
+            {
+              "heldout_mse": 0.02177407033741474,
+              "lr": 0.0015498214331265915,
+              "step": 150,
+              "train_mse": 0.0224765632301569
+            },
+            {
+              "heldout_mse": 0.00682262284681201,
+              "lr": 0.0001,
+              "step": 200,
+              "train_mse": 0.01009372528642416
+            }
+          ]
+        }
+      ],
+      "seed": 23
+    },
+    {
+      "runs": [
+        {
+          "config": {
+            "betas": [
+              0.9,
+              0.999
+            ],
+            "eps": 1e-08,
+            "lr": 0.001,
+            "scheduler": null,
+            "weight_decay": 0.01
+          },
+          "optimizer": "AdamW",
+          "status": "complete",
+          "stopped_at_step": null,
+          "trace": [
+            {
+              "heldout_mse": 1.2614563703536987,
+              "lr": 0.001,
+              "step": 0,
+              "train_mse": 1.3680917024612427
+            },
+            {
+              "heldout_mse": 0.2974547743797302,
+              "lr": 0.001,
+              "step": 50,
+              "train_mse": 0.309654176235199
+            },
+            {
+              "heldout_mse": 0.14143186807632446,
+              "lr": 0.001,
+              "step": 100,
+              "train_mse": 0.15566231310367584
+            },
+            {
+              "heldout_mse": 0.12031584978103638,
+              "lr": 0.001,
+              "step": 150,
+              "train_mse": 0.127981036901474
+            },
+            {
+              "heldout_mse": 0.08221199363470078,
+              "lr": 0.001,
+              "step": 200,
+              "train_mse": 0.0895683765411377
+            }
+          ]
+        },
+        {
+          "config": {
+            "agc_clip": 0.0,
+            "auto_blend": false,
+            "auto_lr": false,
+            "factored": true,
+            "lr": 0.01,
+            "precond_alpha": 1.0,
+            "rms_clip_granularity": "param",
+            "rms_clip_threshold": 1.0,
+            "scheduler": {
+              "T_max": 200,
+              "eta_min": 0.0001,
+              "name": "CosineAnnealingLR",
+              "order": "scheduler.step() after optimizer.step()"
+            },
+            "trust_clip": 5.0,
+            "trust_space": "precond",
+            "update_buffer_dtype": "fp32",
+            "weight_decay": 0.01
+          },
+          "optimizer": "Tiger",
+          "status": "complete",
+          "stopped_at_step": null,
+          "trace": [
+            {
+              "heldout_mse": 1.2614563703536987,
+              "lr": 0.01,
+              "step": 0,
+              "train_mse": 1.3680917024612427
+            },
+            {
+              "heldout_mse": 0.5363180637359619,
+              "lr": 0.008550178566873411,
+              "step": 50,
+              "train_mse": 0.6197117567062378
+            },
+            {
+              "heldout_mse": 0.13853618502616882,
+              "lr": 0.0050500000000000015,
+              "step": 100,
+              "train_mse": 0.1517890840768814
+            },
+            {
+              "heldout_mse": 0.040654223412275314,
+              "lr": 0.0015498214331265915,
+              "step": 150,
+              "train_mse": 0.04550635814666748
+            },
+            {
+              "heldout_mse": 0.002943276660516858,
+              "lr": 0.0001,
+              "step": 200,
+              "train_mse": 0.006403140723705292
+            }
+          ]
+        }
+      ],
+      "seed": 37
+    }
+  ],
+  "task": {
+    "batch_size": 64,
+    "evaluation_steps": [
+      0,
+      50,
+      100,
+      150,
+      200
+    ],
+    "heldout_labels": "noise-free",
+    "heldout_n": 256,
+    "input_distribution": "uniform[-2, 2]^2",
+    "kind": "2D nonlinear regression",
+    "minibatches": "same precomputed indices for both optimizers per seed",
+    "model": "2-64-64-1 SiLU MLP",
+    "steps": 200,
+    "teacher": "sin(1.5*x0) + 0.4*x1^2 + 0.5*x0*x1",
+    "train_label_noise_std": 0.05,
+    "train_n": 768
+  }
+}

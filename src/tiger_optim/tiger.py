@@ -21,6 +21,7 @@
 from __future__ import annotations
 import logging
 import math, time, os, json
+from copy import deepcopy
 from collections.abc import Mapping, Sequence
 from typing import Dict, List, Optional, Tuple, Union
 import torch
@@ -30,6 +31,27 @@ from .accel import fast_norm, fast_rms, fast_softsign
 
 
 _LOG = logging.getLogger(__name__)
+
+_CHECKPOINT_VERSION = 1
+_CHECKPOINT_FIELDS = (
+    "_global_step", "_last_metrics", "_ffn", "_plateau",
+    "_pending_lr_scale", "_pending_group_updates", "_last_reflect",
+    "_trust_ema", "_qkv_trust_ema", "_lora_pid", "_lora_cross_state",
+    "_lora_bridge", "_qkv_lr_ema", "_qkv_disp_ema", "_qkv_disp_ema_prev",
+    "_qkv_spec_ema",
+)
+
+
+def _group_tensors_to_device(value, device: torch.device):
+    if isinstance(value, torch.Tensor):
+        return value.to(device=device)
+    if isinstance(value, dict):
+        return {key: _group_tensors_to_device(item, device) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_group_tensors_to_device(item, device) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_group_tensors_to_device(item, device) for item in value)
+    return value
 
 
 def _rms(x):
@@ -97,9 +119,53 @@ def _scalar_like(
         target_dtype = dtype if dtype is not None else reference.dtype
         return reference.new_tensor(value, dtype=target_dtype, device=target_device)
     target_dtype = dtype if dtype is not None else torch.get_default_dtype()
-    if device is None:
-        return torch.tensor(value, dtype=target_dtype)
-    return torch.tensor(value, dtype=target_dtype, device=device)
+    target_device = torch.device("cpu") if device is None else device
+    return torch.tensor(value, dtype=target_dtype, device=target_device)
+
+
+def _scalar_tensor(
+    value: Union[torch.Tensor, float, int],
+    reference: torch.Tensor,
+    *,
+    dtype: torch.dtype = torch.float32,
+) -> torch.Tensor:
+    if isinstance(value, torch.Tensor):
+        out = value
+        if out.ndim != 0:
+            out = out.reshape(())
+        if out.device != reference.device or out.dtype != dtype:
+            out = out.to(device=reference.device, dtype=dtype)
+        return out
+    return _scalar_like(reference, float(value), dtype=dtype, device=reference.device)
+
+
+def _scalar_to_float(value: Union[torch.Tensor, float, int]) -> float:
+    if isinstance(value, torch.Tensor):
+        if value.ndim != 0:
+            value = value.reshape(())
+        return float(value.item())
+    return float(value)
+
+
+def _foreach_all_finite(tensors: Sequence[torch.Tensor]) -> Optional[bool]:
+    if not tensors:
+        return True
+    if not hasattr(torch, "_foreach_norm"):
+        return None
+    detached = [tensor.detach() for tensor in tensors]
+    try:
+        norms = torch._foreach_norm(detached)
+    except Exception:
+        return None
+    try:
+        if all(isinstance(norm, torch.Tensor) and norm.ndim == 0 for norm in norms):
+            stacked = torch.stack(list(norms))
+        else:
+            reference = detached[0]
+            stacked = torch.stack([_scalar_tensor(norm, reference) for norm in norms])
+    except Exception:
+        return None
+    return bool(torch.isfinite(stacked).all().item())
 
 
 def _median_tensor(
@@ -158,15 +224,19 @@ def _reference_tensor(
     return None
 
 
-def _spectral_dispersion(x: torch.Tensor, low_band: float, high_band: float) -> Tuple[float, float, float]:
-    """Estimate mean spectral energy for low/high bands and the phase spread."""
+def _spectral_dispersion_tensors(
+    x: Optional[torch.Tensor], low_band: float, high_band: float
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Estimate low/high spectral energy and phase spread without syncing to Python."""
 
     if x is None:
-        return 0.0, 0.0, 0.0
+        zero = torch.zeros((), dtype=torch.float32)
+        return zero, zero, zero
 
     y = x.reshape(-1).detach()
+    zero = _scalar_like(y, 0.0, dtype=torch.float32, device=y.device)
     if y.numel() <= 1:
-        return 0.0, 0.0, 0.0
+        return zero, zero, zero
 
     if not y.is_floating_point() or y.dtype != torch.float32:
         y = y.to(torch.float32)
@@ -177,13 +247,13 @@ def _spectral_dispersion(x: torch.Tensor, low_band: float, high_band: float) -> 
     spec = torch.fft.rfft(y)
     power = spec.abs().pow(2)
     if power.numel() == 0:
-        return 0.0, 0.0, 0.0
+        return zero, zero, zero
 
     # drop the DC component when slicing the spectrum
     side = power[1:] if power.numel() > 1 else power
     if side.numel() == 0:
-        val = float(power.mean().item()) if power.numel() else 0.0
-        return val, val, 0.0
+        val = power.mean().reshape(()) if power.numel() else zero
+        return val, val, zero
 
     n_eff = side.numel()
     # ensure the requested bands are inside (0, 1]
@@ -195,8 +265,8 @@ def _spectral_dispersion(x: torch.Tensor, low_band: float, high_band: float) -> 
     low_slice = side[:low_len]
     high_slice = side[-high_len:]
 
-    low_energy = float(low_slice.mean().item()) if low_slice.numel() else 0.0
-    high_energy = float(high_slice.mean().item()) if high_slice.numel() else 0.0
+    low_energy = low_slice.mean().reshape(()) if low_slice.numel() else zero
+    high_energy = high_slice.mean().reshape(()) if high_slice.numel() else zero
 
     if spec.numel() > 1:
         phase = torch.angle(spec[1:])
@@ -204,11 +274,59 @@ def _spectral_dispersion(x: torch.Tensor, low_band: float, high_band: float) -> 
         phase_vector = torch.polar(torch.ones_like(phase), phase)
         phase_coherence = torch.abs(torch.mean(phase_vector))
         # convert to spread in [0, 1]
-        phase_spread = float((1.0 - phase_coherence.clamp(0.0, 1.0)).item())
+        phase_spread = (1.0 - phase_coherence.clamp(0.0, 1.0)).reshape(())
     else:
-        phase_spread = 0.0
+        phase_spread = zero
 
     return low_energy, high_energy, phase_spread
+
+
+def _spectral_dispersion(x: torch.Tensor, low_band: float, high_band: float) -> Tuple[float, float, float]:
+    """Estimate mean spectral energy for low/high bands and the phase spread."""
+
+    low_energy, high_energy, phase_spread = _spectral_dispersion_tensors(x, low_band, high_band)
+    return (
+        _scalar_to_float(low_energy),
+        _scalar_to_float(high_energy),
+        _scalar_to_float(phase_spread),
+    )
+
+
+def _chunk_scalar_norms(x: torch.Tensor, dim: int, parts: int) -> torch.Tensor:
+    """Compute equal-split chunk norms in one pass when possible."""
+
+    if x.ndim == 0 or parts <= 0:
+        return torch.stack([_scalar_tensor(_norm(x), x)])
+
+    dim = dim % x.ndim
+    size = x.shape[dim]
+    if size % parts != 0:
+        return torch.stack([_scalar_tensor(_norm(chunk), x) for chunk in torch.chunk(x, parts, dim=dim)])
+
+    moved = x.detach().movedim(dim, 0)
+    chunk_size = size // parts
+    flat = moved.reshape(parts, chunk_size, -1)
+    if not flat.is_floating_point() or flat.dtype != torch.float32:
+        flat = flat.to(torch.float32)
+    return flat.square().sum(dim=(1, 2)).sqrt()
+
+
+def _scalars_to_host(
+    values: Sequence[Union[torch.Tensor, float, int]],
+    *,
+    reference: Optional[torch.Tensor] = None,
+    dtype: torch.dtype = torch.float32,
+) -> List[float]:
+    """Move multiple scalar-like values to Python with a single host transfer."""
+
+    if not values:
+        return []
+    ref = _reference_tensor(reference, values)
+    stacked = torch.stack([
+        _scalar_tensor(value, ref, dtype=dtype) if ref is not None else torch.as_tensor(value, dtype=dtype)
+        for value in values
+    ])
+    return [float(item) for item in stacked.detach().cpu().tolist()]
 
 class _Profiler:
     def __init__(self, enabled=False, path="benchmarks/profiles/tiger.jsonl", interval=10, ema_decay=0.9):
@@ -354,6 +472,12 @@ class Tiger(Optimizer):
                  compile_guard=True, reflect_interval=50,
                  # profiler
                  profiler_enabled=False, profiler_path="benchmarks/profiles/tiger.jsonl", profiler_interval=10, profiler_ema_decay=0.9):
+        if not 0.0 <= float(lr_decay) <= 1.0:
+            raise ValueError("lr_decay must be in [0, 1]")
+        if float(lr_min) < 0.0:
+            raise ValueError("lr_min must be nonnegative")
+        if int(plateau_patience) < 1:
+            raise ValueError("plateau_patience must be positive")
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay,
                         factored=factored, precond_alpha=precond_alpha,
                         sign_mode=sign_mode, sign_tau=sign_tau, sign_blend=sign_blend,
@@ -420,7 +544,8 @@ class Tiger(Optimizer):
         self._last_reflect = 0
 
         # trust EMA per group id
-        self._trust_ema: Dict[int, float] = {}
+        self._trust_ema: Dict[Tuple[int, int], Union[float, torch.Tensor]] = {}
+        self._qkv_trust_ema: Dict[Tuple[int, int], torch.Tensor] = {}
         # LoRA PID state per group id
         self._lora_pid: Dict[int, Dict[str, float]] = {}  # plus ki_eff/kd_eff for recovery
         self._lora_cross_state: Dict[str, object] = {"global_density": None, "tag_density": {}}
@@ -429,19 +554,114 @@ class Tiger(Optimizer):
         self._qkv_lr_ema: Dict[int, Dict[str, float]] = {}
         self._qkv_disp_ema: Dict[int, float] = {}
         self._qkv_disp_ema_prev: Dict[int, float] = {}
-        self._qkv_spec_ema: Dict[int, Dict[str, Dict[str, float]]] = {}
+        self._qkv_spec_ema: Dict[int, Dict[str, Dict[str, Union[float, torch.Tensor]]]] = {}
+        self._group_scalar_cache: Dict[int, Dict[str, Tuple[float, torch.Tensor]]] = {}
         self._fused_apply_failures: List[str] = []
 
     # ---------- Public API ----------
+    def state_dict(self):
+        """Save parameter state and the adaptive state needed for exact resume."""
+
+        packed = super().state_dict()
+        for group, saved_group in zip(self.param_groups, packed["param_groups"]):
+            rules = group.get("qkv_rules") or {}
+            if not rules:
+                continue
+            packed_ids = {id(param): saved_id for param, saved_id in zip(group["params"], saved_group["params"])}
+            unknown = set(rules).difference(packed_ids)
+            if unknown:
+                raise ValueError("qkv_rules contains keys that do not identify parameters in its group")
+            saved_group["qkv_rules"] = {packed_ids[key]: tuple(rule) for key, rule in rules.items()}
+        packed["tiger_state"] = {
+            "version": _CHECKPOINT_VERSION,
+            "defaults": deepcopy(self.defaults),
+            **{name: deepcopy(getattr(self, name)) for name in _CHECKPOINT_FIELDS},
+        }
+        return packed
+
+    def load_state_dict(self, state_dict):
+        """Restore adaptive state and translate QKV rules to current parameters."""
+
+        tiger_state = state_dict.get("tiger_state")
+        if tiger_state is not None and tiger_state.get("version") != _CHECKPOINT_VERSION:
+            raise ValueError(f"unsupported Tiger checkpoint version: {tiger_state.get('version')!r}")
+
+        prepared = dict(state_dict)
+        saved_groups = []
+        for saved_group, current_group in zip(state_dict["param_groups"], self.param_groups):
+            saved_group = dict(saved_group)
+            rules = saved_group.get("qkv_rules") or {}
+            if rules:
+                if tiger_state is None:
+                    # Old checkpoints stored process-local id(param) keys. The
+                    # caller must provide the rules again when constructing Tiger.
+                    current_rules = current_group.get("qkv_rules") or {}
+                    if not current_rules:
+                        raise ValueError("legacy checkpoint has QKV rules; construct Tiger with fresh qkv_rules before loading")
+                    saved_group["qkv_rules"] = dict(current_rules)
+                else:
+                    saved_to_current = dict(zip(saved_group["params"], current_group["params"]))
+                    if set(rules).difference(saved_to_current):
+                        raise ValueError("checkpoint QKV rules reference parameters outside their group")
+                    saved_group["qkv_rules"] = {
+                        id(saved_to_current[key]): tuple(rule) for key, rule in rules.items()
+                    }
+            saved_groups.append(saved_group)
+        prepared["param_groups"] = saved_groups
+        super().load_state_dict(prepared)
+        # Older versions could mark nonfinite moments as sane. Recheck loaded
+        # moments once before the first update.
+        for param_state in self.state.values():
+            if isinstance(param_state, dict):
+                param_state["_state_sane"] = False
+
+        if tiger_state is None:
+            _LOG.warning("Loaded a legacy Tiger checkpoint without adaptive state; exact continuation is unavailable")
+            self._global_step = 0
+            self._last_metrics = {}
+            self._ffn = {"ema_up": None, "ema_down": None, "last": 0}
+            self._plateau = {"best": None, "streak": 0, "last_loss": None}
+            self._pending_lr_scale = {}
+            self._pending_group_updates = {}
+            self._last_reflect = 0
+            self._trust_ema = {}
+            self._qkv_trust_ema = {}
+            self._lora_pid = {}
+            self._lora_cross_state = {"global_density": None, "tag_density": {}}
+            self._lora_bridge = {}
+            self._qkv_lr_ema = {}
+            self._qkv_disp_ema = {}
+            self._qkv_disp_ema_prev = {}
+            self._qkv_spec_ema = {}
+        else:
+            self.defaults = deepcopy(tiger_state["defaults"])
+            for name in _CHECKPOINT_FIELDS:
+                setattr(self, name, deepcopy(tiger_state[name]))
+            for name in ("_trust_ema", "_qkv_trust_ema", "_qkv_spec_ema"):
+                per_group = getattr(self, name)
+                for key, value in list(per_group.items()):
+                    gi = key[0] if isinstance(key, tuple) else key
+                    if 0 <= gi < len(self.param_groups) and self.param_groups[gi]["params"]:
+                        device = self.param_groups[gi]["params"][0].device
+                        per_group[key] = _group_tensors_to_device(value, device)
+
+        self._mom_storage_dtype = {
+            "fp32": torch.float32, "bf16": torch.bfloat16, "fp16": torch.float16,
+        }[self.defaults["mom_dtype"].lower()]
+        self._group_scalar_cache = {}
+        self._fused_apply_failures = []
+
     def report_metrics(self, loss: Optional[float] = None, **kwargs):
         if loss is not None:
-            self._last_metrics["loss"] = float(loss)
-            p = self._plateau
-            if p["best"] is None or loss < p["best"] - self.defaults["plateau_tol"]:
-                p["best"] = float(loss); p["streak"] = 0
-            else:
-                p["streak"] += 1
-            p["last_loss"] = float(loss)
+            loss_value = float(loss)
+            self._last_metrics["loss"] = loss_value
+            if math.isfinite(loss_value):
+                p = self._plateau
+                if p["best"] is None or loss_value < p["best"] - self.defaults["plateau_tol"]:
+                    p["best"] = loss_value; p["streak"] = 0
+                else:
+                    p["streak"] += 1
+                p["last_loss"] = loss_value
         for k, v in kwargs.items():
             try: self._last_metrics[k] = float(v)
             except Exception: pass
@@ -467,8 +687,63 @@ class Tiger(Optimizer):
         self._last_reflect = self._global_step
         return applied
 
+    def _group_scalar(
+        self,
+        gi: int,
+        key: str,
+        reference: torch.Tensor,
+        value: float,
+        *,
+        dtype: torch.dtype = torch.float32,
+    ) -> torch.Tensor:
+        cache = self._group_scalar_cache.setdefault(gi, {})
+        scalar_value = float(value)
+        cached = cache.get(key)
+        if cached is not None:
+            cached_value, tensor = cached
+            if cached_value == scalar_value and tensor.device == reference.device and tensor.dtype == dtype:
+                return tensor
+        tensor = _scalar_like(reference, scalar_value, dtype=dtype, device=reference.device)
+        cache[key] = (scalar_value, tensor)
+        return tensor
+
     def stage_group_update(self, gi: int, fields: Dict[str, object], policy: str = "replace"):
         self._pending_group_updates.setdefault(int(gi), []).append((dict(fields), str(policy)))
+
+    def _qkv_chunk_trust(
+        self,
+        gi: int,
+        pi: int,
+        p: torch.Tensor,
+        d: torch.Tensor,
+        *,
+        dim: int,
+        parts: int,
+        trust_beta: float,
+        trust_cap_t: torch.Tensor,
+        scalar_one: torch.Tensor,
+        scalar_zero: torch.Tensor,
+        scalar_tiny: torch.Tensor,
+        trust_denominator: Optional[torch.Tensor] = None,
+        record_ema: bool = True,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        p_norms = _chunk_scalar_norms(p, dim, parts)
+        d_norms = _chunk_scalar_norms(d, dim, parts)
+        denom_norms = _chunk_scalar_norms(trust_denominator, dim, parts) if trust_denominator is not None else d_norms
+        valid = (p_norms * denom_norms > scalar_zero).to(dtype=p_norms.dtype)
+        raw = scalar_one + valid * (p_norms / torch.clamp(denom_norms, min=scalar_tiny) - scalar_one)
+        if trust_beta > 0.0:
+            key = (gi, pi)
+            prev = self._qkv_trust_ema.get(key)
+            if prev is not None and prev.numel() == raw.numel():
+                prev = prev.to(device=raw.device, dtype=raw.dtype)
+                smooth = trust_beta * prev + (1.0 - trust_beta) * raw
+            else:
+                smooth = raw
+            if record_ema:
+                self._qkv_trust_ema[key] = smooth.detach()
+            return torch.minimum(trust_cap_t, smooth), d_norms
+        return torch.minimum(trust_cap_t, raw), d_norms
 
     # ---------- Bucket stats helpers ----------
     def _bucket_global_rms(self, updates: List[torch.Tensor], source="global", *, reference: Optional[torch.Tensor] = None):
@@ -608,19 +883,32 @@ class Tiger(Optimizer):
         return True
 
     # ---------- Internal helpers ----------
-    def _maybe_auto_blend(self):
+    def _maybe_plateau_adapt(self):
         d = self.defaults
-        if not d["auto_blend"] or d["blend_steps"] > 0: return
         p = self._plateau
         if p["best"] is None: return
         if p["streak"] >= d["plateau_patience"]:
-            lo, hi = d["auto_blend_bounds"]
-            for g in self.param_groups:
-                sb = float(g.get("sign_blend", d["sign_blend"]))
-                sb = min(hi, sb + d["auto_blend_gain"])
-                g["sign_blend"] = sb
-            p["streak"] = 0
-            self._last_metrics["auto_blend_bump"] = 1.0
+            adapted = False
+            if d["auto_lr"]:
+                lr_changed = False
+                for g in self.param_groups:
+                    old_lr = float(g["lr"])
+                    new_lr = max(float(d["lr_min"]), old_lr * float(d["lr_decay"]))
+                    if new_lr < old_lr:
+                        g["lr"] = new_lr
+                        lr_changed = True
+                if lr_changed:
+                    self._last_metrics["auto_lr_decay"] = 1.0
+                    adapted = True
+            if d["auto_blend"] and d["blend_steps"] <= 0:
+                _, hi = d["auto_blend_bounds"]
+                for g in self.param_groups:
+                    sb = float(g.get("sign_blend", d["sign_blend"]))
+                    g["sign_blend"] = min(hi, sb + d["auto_blend_gain"])
+                self._last_metrics["auto_blend_bump"] = 1.0
+                adapted = True
+            if adapted:
+                p["streak"] = 0
 
     def _dtype_for_update(self, p: torch.Tensor) -> torch.dtype:
         mode = str(self.defaults.get("update_buffer_dtype","param"))
@@ -636,8 +924,23 @@ class Tiger(Optimizer):
             with torch.enable_grad():
                 loss = closure()
 
+        active_params_by_group: List[List[torch.Tensor]] = [
+            [p for p in group["params"] if p.grad is not None]
+            for group in self.param_groups
+        ]
+        if self.defaults["skip_if_nonfinite"]:
+            for group, active_params in zip(self.param_groups, active_params_by_group):
+                foreach_updates = bool(group.get("use_foreach_update", self.defaults["use_foreach_update"])) and bool(group.get("use_foreach", self.defaults["use_foreach"]))
+                min_bucket = int(group.get("foreach_min_bucket", self.defaults["foreach_min_bucket"]))
+                if (foreach_updates and bool(group.get("bucket_standardize", self.defaults["bucket_standardize"]))
+                        and str(group.get("bucket_standardize_source", self.defaults["bucket_standardize_source"])).lower() == "median"
+                        and len(active_params) >= min_bucket
+                        and any(p.dtype in (torch.float16, torch.bfloat16) for p in active_params)):
+                    raise ValueError("median bucket standardization with low-precision parameters and skip_if_nonfinite is unsupported")
+
         self._global_step += 1
         self._last_metrics.pop("auto_blend_bump", None)
+        self._last_metrics.pop("auto_lr_decay", None)
 
         # staged reflect cadence
         if (not _is_compiling()) and self.defaults.get("compile_guard", True):
@@ -645,7 +948,9 @@ class Tiger(Optimizer):
                 self.reflect_pending()
 
         # profiler counters
-        prof_c = dict(foreach_wd=0, foreach_update=0, foreach_update_tensors=0,
+        profiler_enabled = bool(self._prof.enabled)
+        profiler_detail_enabled = profiler_enabled and ((self._global_step % self._prof.interval) == 0)
+        prof_c = dict(foreach_wd=0, scalar_wd=0, foreach_update=0, foreach_update_tensors=0,
                       foreach_bucket_size=0, foreach_bucket_global_rms=None, foreach_bucket_trust_est=None, foreach_bucket_source=None,
                       triton_fused_apply=None, triton_fused_apply_reason=None,
                       agc_clips=0, nonfinite_skips=0, pruned_params=0, pruned_elems=0,
@@ -661,18 +966,41 @@ class Tiger(Optimizer):
         sprune_thr = float(self.defaults["state_prune_threshold"])
         sprune_int = int(self.defaults["state_prune_interval"])
         do_prune = (sprune_thr > 0.0) and (sprune_int > 0) and (self._global_step % sprune_int == 0)
+        if self.defaults["skip_if_nonfinite"]:
+            for gi, active_params in enumerate(active_params_by_group):
+                if not active_params:
+                    continue
+                # Squaring a finite FP32 gradient can overflow the second moment.
+                # Probe the entire group first so the common path needs one sync.
+                probe = _foreach_all_finite([
+                    *active_params,
+                    *[_to_dtype(p.grad, torch.float32).square() for p in active_params],
+                ])
+                if probe is True:
+                    continue
+                valid = []
+                for p in active_params:
+                    grad_square = _to_dtype(p.grad, torch.float32).square()
+                    if bool(torch.isfinite(p).all() and torch.isfinite(grad_square).all()):
+                        valid.append(p)
+                    else:
+                        prof_c["nonfinite_skips"] += 1
+                active_params_by_group[gi] = valid
 
-        # ---------- Pre-pass: foreach weight decay ----------
-        for g in self.param_groups:
-            wd = float(g["weight_decay"]); lr = float(g["lr"]); lr_scale = float(g.get("lr_scale", 1.0))
-            if wd == 0.0: continue
-            plist = [p for p in g["params"] if p.grad is not None]
-            if not plist: continue
-            if g["use_foreach"] and hasattr(torch, "_foreach_add_"):
-                torch._foreach_add_(plist, plist, alpha=-(lr * lr_scale * wd))
-                prof_c["foreach_wd"] += len(plist)
-            else:
-                for p in plist: p.add_(p, alpha=-(lr * lr_scale * wd))
+        # Without the skip policy, decay can be batched before the main pass.
+        # Under the skip policy it is applied only after candidate moments pass
+        # validation so a rejected parameter remains fully unchanged.
+        if not self.defaults["skip_if_nonfinite"]:
+            for g, active_params in zip(self.param_groups, active_params_by_group):
+                wd = float(g["weight_decay"]); lr = float(g["lr"]); lr_scale = float(g.get("lr_scale", 1.0))
+                if wd == 0.0 or not active_params:
+                    continue
+                if g["use_foreach"] and hasattr(torch, "_foreach_add_"):
+                    torch._foreach_add_(active_params, active_params, alpha=-(lr * lr_scale * wd))
+                    prof_c["foreach_wd"] += len(active_params)
+                else:
+                    for p in active_params:
+                        p.add_(p, alpha=-(lr * lr_scale * wd))
 
         # ---------- Main pass ----------
         up_s2 = 0.0; up_n = 0
@@ -686,16 +1014,30 @@ class Tiger(Optimizer):
         cross_ffn_tags = tuple(self.defaults.get("lora_cross_ffn_tags", ())) if cross_enabled else tuple()
         cross_tag_set = set(cross_attn_tags) | set(cross_ffn_tags)
         pending_lora_blocks: List[Tuple[int, str, Dict[str, float], float]] = []
+        ffn_asym_enabled = any(g.get("auto_ffn_asym", self.defaults["auto_ffn_asym"]) for g in self.param_groups)
 
-        for gi, group in enumerate(self.param_groups):
+        for gi, (group, active_params) in enumerate(zip(self.param_groups, active_params_by_group)):
+            if not active_params:
+                continue
+            param_indices = {id(param): index for index, param in enumerate(group["params"])}
+            group_ref = active_params[0]
             lr = float(group["lr"]); (b1,b2) = group["betas"]; eps = float(group["eps"])
             factored = bool(group["factored"]); alpha = float(group["precond_alpha"])
             sblend0 = float(group["sign_blend"]); sblendT = int(group["blend_steps"]); sblendTo = float(group["blend_to"]); sched = group["blend_schedule"]
             use_trust = bool(group["use_trust_ratio"]); trust_clip = float(group["trust_clip"]); trust_space = str(group.get("trust_space","update"))
             trust_beta = float(group.get("trust_ema_beta", self.defaults["trust_ema_beta"]))
             agc_clip = float(group["agc_clip"]); agc_eps = float(group["agc_eps"])
+            scalar_zero = self._group_scalar(gi, "zero", group_ref, 0.0)
+            scalar_one = self._group_scalar(gi, "one", group_ref, 1.0)
+            scalar_tiny = self._group_scalar(gi, "tiny", group_ref, 1e-12)
+            scalar_vtiny = self._group_scalar(gi, "vtiny", group_ref, 1e-30)
+            eps_t = self._group_scalar(gi, "eps", group_ref, eps)
+            agc_clip_t = self._group_scalar(gi, "agc_clip", group_ref, agc_clip) if agc_clip and agc_clip > 0.0 else None
+            trust_cap_t = self._group_scalar(gi, "trust_clip", group_ref, trust_clip)
+            agc_eps_t = self._group_scalar(gi, "agc_eps", group_ref, agc_eps)
             lr_scale = float(group.get("lr_scale", 1.0)); tag = group.get("block_tag","default")
             rms_thr = float(group.get("rms_clip_threshold", 0.0)); rms_gran = group.get("rms_clip_granularity","param")
+            rms_thr_t = self._group_scalar(gi, "rms_thr", group_ref, rms_thr) if rms_thr else None
             qkv_rules = group.get("qkv_rules") or {}; qkv_split = bool(group.get("qkv_trust_split", False))
             qkv_lr = group.get("qkv_lr_scales")
             blk_chunks = int(group.get("block_trust_chunks", 0))
@@ -711,7 +1053,16 @@ class Tiger(Optimizer):
             spec_high_band = float(self.defaults.get("qkv_spectral_high_band", 0.25))
             spec_beta = float(self.defaults.get("qkv_spectral_beta", 0.7))
             spec_eps = float(self.defaults.get("qkv_spectral_eps", 1e-9))
+            spec_eps_t = self._group_scalar(gi, "spec_eps", group_ref, spec_eps) if spec_enabled else None
             spec_state = self._qkv_spec_ema.setdefault(gi, {}) if spec_enabled else None
+            qkv_adapt_due = (
+                tag == "attn_qkv"
+                and qkv_lr is not None
+                and bool(self.defaults["qkv_lr_autoadapt"])
+                and (self._global_step % int(self.defaults["qkv_lr_interval"]) == 0)
+            )
+            capture_qkv_stats = profiler_detail_enabled or qkv_adapt_due
+            collect_qkv_spectral = capture_qkv_stats and spec_enabled and spec_state is not None
 
             # schedule override for sign_blend
             if sblendT and sblendT>0:
@@ -728,24 +1079,29 @@ class Tiger(Optimizer):
 
             # LoRA EMA/PID accumulators
             lora_dense_sum = 0.0; lora_count = 0
+            lora_dense_sum_t: Optional[torch.Tensor] = scalar_zero.clone() if tag in ("lora_a", "lora_b") and bool(self.defaults["lora_density_adapt"]) else None
+            cross_density_sum_t: Optional[torch.Tensor] = scalar_zero.clone() if cross_enabled and tag in cross_tag_set else None
+            up_s2_t: Optional[torch.Tensor] = scalar_zero.clone() if ffn_asym_enabled and tag == "ffn_up" else None
+            dn_s2_t: Optional[torch.Tensor] = scalar_zero.clone() if ffn_asym_enabled and tag == "ffn_down" else None
+            agc_clips_t: Optional[torch.Tensor] = scalar_zero.clone() if profiler_detail_enabled and agc_clip and agc_clip > 0.0 else None
 
-            # QKV slice logging (last seen in this group)
-            last_qkv = {"q":None,"k":None,"v":None}
+            # Collect every fused QKV tensor before adapting the shared group scales.
+            # The order of parameters in a group must not select the observation.
+            qkv_observations = (
+                {label: [] for label in ("q", "k", "v")}
+                if capture_qkv_stats else None
+            )
             cross_density_sum = 0.0; cross_density_count = 0
 
-            for p in group["params"]:
-                if p.grad is None: continue
-
-                if bool(self.defaults["skip_if_nonfinite"]):
-                    if (not torch.isfinite(p).all()) or (not torch.isfinite(p.grad).all()):
-                        prof_c["nonfinite_skips"] += 1
-                        continue
-
+            for p in active_params:
+                pi = param_indices[id(p)]
                 g = p.grad
                 st = self.state[p]
                 dt = self._mom_storage_dtype
+                created_keys = []
                 if "m" not in st:
                     st["m"] = torch.zeros_like(p, dtype=dt)
+                    created_keys.append("m")
                 m = st["m"]
 
                 if factored and p.ndim>=2:
@@ -753,53 +1109,94 @@ class Tiger(Optimizer):
                     if "vr" not in st:
                         st["vr"] = torch.zeros(rows, dtype=dt, device=p.device)
                         st["vc"] = torch.zeros(cols, dtype=dt, device=p.device)
+                        created_keys.extend(("vr", "vc"))
                     vr = st["vr"]; vc = st["vc"]
                 else:
                     if "v" not in st:
                         st["v"] = torch.zeros_like(p, dtype=dt)
+                        created_keys.append("v")
                     v = st["v"]
+                state_sane = bool(st.get("_state_sane", False))
+                sanitize_loaded_state = not state_sane
+                sanitize_after_update = not bool(self.defaults["skip_if_nonfinite"])
 
                 # m update
                 m32 = _to_dtype(m, torch.float32); g32 = _to_dtype(g, torch.float32)
+                if self.defaults["skip_if_nonfinite"] and m32 is m:
+                    m32 = m32.clone()
+                if sanitize_loaded_state:
+                    _nan_to_num_(m32, posinf=0.0, neginf=0.0)
                 m32.mul_(b1).add_(g32, alpha=1.0-b1)
-                _nan_to_num_(m32)
+                if sanitize_after_update:
+                    _nan_to_num_(m32)
                 if do_prune and float(self.defaults["state_prune_threshold"]) > 0.0:
                     thr = float(self.defaults["state_prune_threshold"])
                     m32.masked_fill_(m32.abs() < thr, 0.0)
-                m.copy_(m32.to(m.dtype))
 
                 # vhat
                 if factored and p.ndim>=2:
-                    g2 = g32.view(p.shape[0], -1).pow(2)
+                    g2 = g32.view(p.shape[0], -1).square()
                     vr32 = _to_dtype(vr, torch.float32); vc32 = _to_dtype(vc, torch.float32)
-                    vr32.mul_(b2).add_(g2.mean(dim=1), alpha=1.0-b2)
-                    vc32.mul_(b2).add_(g2.mean(dim=0), alpha=1.0-b2)
-                    _nan_to_num_(vr32)
-                    _nan_to_num_(vc32)
-                    vr32.clamp_(min=1e-30)
-                    vc32.clamp_(min=1e-30)
-                    vr.copy_(vr32.to(vr.dtype)); vc.copy_(vc32.to(vc.dtype))
-                    vhat = torch.outer(vr32, vc32) / vr32.mean().clamp_min(1e-30)
+                    if self.defaults["skip_if_nonfinite"]:
+                        if vr32 is vr: vr32 = vr32.clone()
+                        if vc32 is vc: vc32 = vc32.clone()
+                    if sanitize_loaded_state:
+                        _nan_to_num_(vr32, posinf=0.0, neginf=0.0)
+                        _nan_to_num_(vc32, posinf=0.0, neginf=0.0)
+                        vr32.clamp_(min=0.0)
+                        vc32.clamp_(min=0.0)
+                    # Divide before reducing so a finite mean does not
+                    # overflow in the intermediate sum.
+                    vr32.mul_(b2).add_((g2 / float(cols)).sum(dim=1), alpha=1.0 - b2)
+                    vc32.mul_(b2).add_((g2 / float(rows)).sum(dim=0), alpha=1.0 - b2)
+                    if sanitize_after_update:
+                        _nan_to_num_(vr32, neginf=0.0)
+                        _nan_to_num_(vc32, neginf=0.0)
+                        vr32.clamp_(min=0.0)
+                        vc32.clamp_(min=0.0)
+                    # Normalize first: the unnormalized outer product can
+                    # overflow even when every factored moment is finite.
+                    vr_mean = (vr32 / float(rows)).sum()
+                    vhat = (vr32 / torch.maximum(vr_mean, scalar_vtiny)).unsqueeze(1) * vc32.unsqueeze(0)
                     vhat = vhat.view_as(p)
-                    _nan_to_num_(vhat)
-                    vhat.clamp_(min=1e-30)
                 else:
-                    if "v" not in st: st["v"] = torch.zeros_like(p, dtype=dt)
                     v = st["v"]
                     v32 = _to_dtype(v, torch.float32)
+                    if self.defaults["skip_if_nonfinite"] and v32 is v:
+                        v32 = v32.clone()
+                    if sanitize_loaded_state:
+                        _nan_to_num_(v32, posinf=0.0, neginf=0.0)
+                        v32.clamp_(min=0.0)
                     v32.mul_(b2).addcmul_(g32, g32, value=1.0-b2)
-                    _nan_to_num_(v32)
-                    v32.clamp_(min=0.0)
+                    if sanitize_after_update:
+                        _nan_to_num_(v32, neginf=0.0)
+                        v32.clamp_(min=0.0)
                     if do_prune and float(self.defaults["state_prune_threshold"]) > 0.0:
                         thr = float(self.defaults["state_prune_threshold"])
                         v32.masked_fill_(v32.abs() < thr, 0.0)
-                    v.copy_(v32.to(v.dtype)); vhat = v32
+                    vhat = v32
 
-                if isinstance(vhat, torch.Tensor):
-                    _nan_to_num_(vhat)
+                if self.defaults["skip_if_nonfinite"]:
+                    stored_candidates = [m32, vr32, vc32] if factored and p.ndim >= 2 else [m32, v32]
+                    # Reduce each nonempty tensor on device before testing finiteness.
+                    # An empty tensor passed the old isfinite(...).all() check.
+                    stored_magnitudes = [candidate.abs().amax() for candidate in stored_candidates if candidate.numel()]
+                    finite_magnitudes = list(stored_magnitudes)
+                    if factored and p.ndim >= 2 and vhat.numel():
+                        finite_magnitudes.append(vhat.abs().amax())
+                    checks = []
+                    if dt != torch.float32:
+                        storage_max = torch.finfo(dt).max
+                        if stored_magnitudes:
+                            checks.append(torch.stack(stored_magnitudes).amax() <= storage_max)
+
+                if sanitize_after_update and isinstance(vhat, torch.Tensor):
                     vhat.clamp_(min=1e-30)
-                P = (vhat.sqrt().add_(eps)).pow(-float(alpha)) if alpha>0 else 1.0
-                P = _clamp_finite(P, lo=1e-8, hi=1e8)
+                P = (vhat.sqrt().add_(eps_t)).pow(-float(alpha)) if alpha>0 else 1.0
+                if isinstance(P, torch.Tensor):
+                    P.clamp_(min=1e-8, max=1e8)
+                else:
+                    P = _clamp_finite(P, lo=1e-8, hi=1e8)
 
                 # Direction
                 if group["sign_mode"] == "softsign":
@@ -808,115 +1205,324 @@ class Tiger(Optimizer):
                     d_sign = torch.sign(m32) * P
                 d_mag = (m32 / (_rms(m32)+eps)) * P
                 d = (1.0 - sblend) * d_sign + sblend * d_mag
-                if isinstance(d, torch.Tensor):
-                    _nan_to_num_(d)
-                    if not torch.isfinite(d).all():
+                if self.defaults["skip_if_nonfinite"]:
+                    # Keep one host decision for candidate state and direction.
+                    # No moment, parameter, or weight-decay update occurs before it.
+                    if d.numel():
+                        finite_magnitudes.append(d.abs().amax())
+                    checks.append(
+                        torch.isfinite(torch.stack(finite_magnitudes).amax())
+                        if finite_magnitudes else torch.ones_like(scalar_zero, dtype=torch.bool)
+                    )
+                    if p.dtype in (torch.float16, torch.bfloat16):
+                        # Preview the final parameter value before committing
+                        # moments or weight decay. A finite FP32 direction can
+                        # overflow when stored in a low-precision parameter.
+                        storage_max = torch.finfo(p.dtype).max
+                        preview_p = p.detach().clone()
+                        preview_p.add_(preview_p, alpha=-(lr * lr_scale * float(group["weight_decay"])))
+                        checks.append(torch.isfinite(preview_p).all())
+                        preview_d = d
+                        if agc_clip and agc_clip > 0.0:
+                            preview_p_norm = _scalar_tensor(_norm(preview_p), preview_p)
+                            preview_d_norm = _scalar_tensor(_norm(preview_d), preview_d)
+                            agc_scale = torch.minimum(
+                                (preview_p_norm + agc_eps_t) * agc_clip_t
+                                / (preview_d_norm + scalar_tiny), scalar_one,
+                            )
+                            preview_d = preview_d * agc_scale.to(dtype=preview_d.dtype)
+                        preview_clip = scalar_one
+                        if rms_thr and rms_gran == "param":
+                            preview_rms = preview_d.to(torch.float32).square().mean().sqrt()
+                            preview_clip = torch.minimum(
+                                rms_thr_t / (preview_rms + scalar_tiny), scalar_one,
+                            )
+
+                        def preview_trust() -> torch.Tensor:
+                            if not use_trust:
+                                return scalar_one
+                            if trust_space == "update":
+                                denominator = _scalar_tensor(_norm(preview_d), preview_d)
+                            elif trust_space == "precond":
+                                denominator = _scalar_tensor(_norm(m32 * P), preview_p)
+                            else:
+                                return scalar_one
+                            numerator = _scalar_tensor(_norm(preview_p), preview_p)
+                            valid = (numerator * denominator > scalar_zero).to(dtype=numerator.dtype)
+                            raw = scalar_one + valid * (
+                                numerator / torch.clamp(denominator, min=scalar_tiny) - scalar_one
+                            )
+                            if trust_beta > 0.0:
+                                old = self._trust_ema.get((gi, pi))
+                                if old is not None:
+                                    raw = trust_beta * _scalar_tensor(old, group_ref) + (1.0 - trust_beta) * raw
+                            return torch.minimum(trust_cap_t, raw)
+
+                        preview_value = preview_p.to(torch.float32).clone()
+                        preview_rule = qkv_rules.get(id(p))
+                        preview_qkv_route = preview_rule is not None and (
+                            qkv_lr is not None or (qkv_split and use_trust)
+                        )
+                        if preview_qkv_route:
+                            dim, parts = preview_rule
+                            if use_trust and qkv_split:
+                                preview_trusts, _ = self._qkv_chunk_trust(
+                                    gi, pi, preview_p, preview_d, dim=dim, parts=parts,
+                                    trust_beta=trust_beta, trust_cap_t=trust_cap_t,
+                                    scalar_one=scalar_one, scalar_zero=scalar_zero,
+                                    scalar_tiny=scalar_tiny,
+                                    trust_denominator=m32 * P if trust_space == "precond" else None,
+                                    record_ema=False,
+                                )
+                            else:
+                                preview_trusts = preview_trust().expand(parts)
+                            for i, (candidate, direction) in enumerate(zip(
+                                torch.chunk(preview_value, parts, dim=dim),
+                                torch.chunk(preview_d, parts, dim=dim),
+                            )):
+                                effective_lr = lr * float(qkv_lr.get(("q", "k", "v")[i], lr_scale)) if qkv_lr is not None and i < 3 else lr * lr_scale
+                                candidate.add_(direction.to(torch.float32) * (preview_trusts[i] * preview_clip), alpha=-effective_lr)
+                        else:
+                            unstandardized = preview_d.to(torch.float32) * (preview_trust() * preview_clip) * (lr * lr_scale)
+                            # Bucket standardization can replace preview_value
+                            # with a finite bound, so validate its input too.
+                            checks.append(torch.isfinite(unstandardized).all())
+                            if (use_foreach_upd and bucket_std and hasattr(torch, "_foreach_add_")
+                                    and len(active_params) >= foreach_min_bucket
+                                    and not (blk_chunks and p.ndim == 2 and p.shape[0] % blk_chunks == 0)):
+                                # The bucket's other updates are not available
+                                # yet. These are sufficient bounds for its
+                                # eventual RMS standardization.
+                                if use_triton_stats or bucket_src == "global":
+                                    bound = math.sqrt(sum(item.numel() for item in active_params))
+                                else:
+                                    bound = len(active_params) * math.sqrt(p.numel())
+                                preview_value = preview_value.abs() + bound
+                            else:
+                                preview_value.sub_(unstandardized)
+                        checks.extend((
+                            torch.isfinite(preview_value).all(),
+                            (preview_value.abs() <= storage_max).all(),
+                        ))
+                    elif (p.dtype == torch.float32
+                          and not (qkv_rules.get(id(p)) is not None and (qkv_lr is not None or (qkv_split and use_trust)))
+                          and not (blk_chunks and p.ndim == 2 and p.shape[0] % blk_chunks == 0)
+                          and not (use_foreach_upd and bucket_std and hasattr(torch, "_foreach_add_")
+                                   and len(active_params) >= foreach_min_bucket)
+                          and rms_thr >= 0.0
+                          and (not agc_clip or agc_eps >= 0.0)
+                          and (not use_trust or (trust_clip >= 0.0 and 0.0 <= trust_beta <= 1.0))):
+                        # For ordinary scalar/foreach updates, AGC and RMS
+                        # clipping can only shrink the direction; trust is
+                        # capped. Catch FP32 overflow before committing state.
+                        param_max = p.detach().abs().amax() if p.numel() else scalar_zero
+                        direction_max = d.abs().amax() if d.numel() else scalar_zero
+                        decay_growth = 1.0 + abs(lr * lr_scale * float(group["weight_decay"]))
+                        trust_growth = max(1.0, trust_clip) if use_trust else 1.0
+                        output_bound = param_max * decay_growth + direction_max * (abs(lr * lr_scale) * trust_growth)
+                        fp32_limit = torch.finfo(torch.float32).max * (1.0 - 8.0 * torch.finfo(torch.float32).eps)
+                        checks.append(output_bound <= fp32_limit)
+                    if not bool(torch.stack(checks).all().item()):
                         prof_c["nonfinite_skips"] += 1
-                        if bool(self.defaults["skip_if_nonfinite"]):
-                            continue
-                        d = torch.where(torch.isfinite(d), d, torch.zeros_like(d))
+                        for key in created_keys:
+                            st.pop(key, None)
+                        if not st:
+                            self.state.pop(p, None)
+                        continue
+                if m32 is not m: m.copy_(m32.to(m.dtype))
+                if factored and p.ndim >= 2:
+                    if vr32 is not vr: vr.copy_(vr32.to(vr.dtype))
+                    if vc32 is not vc: vc.copy_(vc32.to(vc.dtype))
+                elif v32 is not v:
+                    v.copy_(v32.to(v.dtype))
+                st["_state_sane"] = True
+                if self.defaults["skip_if_nonfinite"] and group["weight_decay"]:
+                    p.add_(p, alpha=-(lr * lr_scale * float(group["weight_decay"])))
+                    prof_c["scalar_wd"] += 1
+                clip_scale_param = scalar_one
+                p_norm_t: Optional[torch.Tensor] = None
+                d_norm_t: Optional[torch.Tensor] = None
 
                 # AGC
                 if agc_clip and agc_clip > 0.0:
-                    p_n = float(_norm(p)); d_n = float(_norm(d))
-                    max_n = agc_clip * (p_n + agc_eps)
-                    if d_n > max_n and d_n > 0.0:
-                        d = d * (max_n / d_n); prof_c["agc_clips"] += 1
+                    p_norm_t = _scalar_tensor(_norm(p), p)
+                    d_norm_t = _scalar_tensor(_norm(d), d)
+                    scale = torch.minimum((p_norm_t + agc_eps_t) * agc_clip_t / (d_norm_t + scalar_tiny), scalar_one)
+                    d = d * scale.to(dtype=d.dtype)
+                    d_norm_t = d_norm_t * scale
+                    if agc_clips_t is not None:
+                        agc_clips_t.add_((scale < scalar_one).to(dtype=agc_clips_t.dtype))
 
-                if tag=="ffn_up":
-                    up_s2 += float((d.float()*d.float()).sum().item()); up_n += d.numel()
-                elif tag=="ffn_down":
-                    dn_s2 += float((d.float()*d.float()).sum().item()); dn_n += d.numel()
+                need_d_rms = bool(lora_dense_sum_t is not None or cross_density_sum_t is not None or (rms_thr and rms_gran == "param"))
+                need_d_sq = bool(need_d_rms or up_s2_t is not None or dn_s2_t is not None)
+                d_sq_sum_t: Optional[torch.Tensor] = None
+                d_rms_t: Optional[torch.Tensor] = None
+                if need_d_sq:
+                    d32 = d if d.dtype == torch.float32 else d.to(torch.float32)
+                    d_sq_sum_t = d32.square().sum()
+                    if up_s2_t is not None:
+                        up_s2_t.add_(d_sq_sum_t)
+                        up_n += d.numel()
+                    elif dn_s2_t is not None:
+                        dn_s2_t.add_(d_sq_sum_t)
+                        dn_n += d.numel()
+                    if need_d_rms:
+                        d_numel_t = _scalar_like(d_sq_sum_t, float(d.numel()), dtype=torch.float32, device=d_sq_sum_t.device)
+                        d_rms_t = torch.sqrt(d_sq_sum_t / d_numel_t)
 
-                d_rms = float(_rms(d))
+                if lora_dense_sum_t is not None and d_rms_t is not None:
+                    thr = d_rms_t * float(self.defaults["lora_density_k"])
+                    lora_dense_sum_t.add_((d.abs() > thr.to(dtype=d.dtype)).to(dtype=lora_dense_sum_t.dtype).mean())
+                    lora_count += 1
 
-                if tag in ("lora_a","lora_b") and bool(self.defaults["lora_density_adapt"]):
-                    thr = float(self.defaults["lora_density_k"]) * d_rms
-                    if thr > 0.0:
-                        dense = float((d.abs() > thr).float().mean().item())
-                        lora_dense_sum += dense; lora_count += 1
-
-                if cross_enabled and tag in cross_tag_set:
-                    thr_cross = float(self.defaults["lora_density_k"]) * d_rms
-                    if thr_cross > 0.0:
-                        dense_cross = float((d.abs() > thr_cross).float().mean().item())
-                        cross_density_sum += dense_cross; cross_density_count += 1
+                if cross_density_sum_t is not None and d_rms_t is not None:
+                    thr_cross = d_rms_t * float(self.defaults["lora_density_k"])
+                    cross_density_sum_t.add_((d.abs() > thr_cross.to(dtype=d.dtype)).to(dtype=cross_density_sum_t.dtype).mean())
+                    cross_density_count += 1
 
                 base_lr = lr * lr_scale
 
                 # RMS clip (param)
-                clip_scale_param = 1.0
                 if rms_thr and rms_gran == "param":
-                    rr = d_rms
-                    clip_scale_param = min(1.0, rms_thr/rr) if rr>0 else 1.0
+                    if d_rms_t is None:
+                        d_rms_t = _scalar_tensor(_rms(d), d)
+                    clip_scale_param = torch.minimum(rms_thr_t / (d_rms_t + scalar_tiny), scalar_one)
+
+                precond_norm_t: Optional[torch.Tensor] = None
+                if use_trust and trust_space == "precond":
+                    precond_norm_t = _scalar_tensor(_norm(m32 * P), p)
 
                 # trust
                 def eff_trust_for(_p, _d):
-                    if not use_trust: return 1.0
+                    nonlocal p_norm_t, d_norm_t
+                    if not use_trust:
+                        return scalar_one
                     if trust_space == "update":
-                        pn = float(_norm(_p)); dn = float(_norm(_d)); raw = (pn/(dn+1e-12)) if (pn>0 and dn>0) else 1.0
+                        if _p is p:
+                            if p_norm_t is None:
+                                p_norm_t = _scalar_tensor(_norm(_p), _p)
+                            pn = p_norm_t
+                        else:
+                            pn = _scalar_tensor(_norm(_p), _p)
+                        if _d is d:
+                            if d_norm_t is None:
+                                d_norm_t = _scalar_tensor(_norm(_d), _d)
+                            dn = d_norm_t
+                        else:
+                            dn = _scalar_tensor(_norm(_d), _d)
+                        valid = (pn * dn > scalar_zero).to(dtype=pn.dtype)
+                        raw = scalar_one + valid * (pn / torch.clamp(dn, min=scalar_tiny) - scalar_one)
                     elif trust_space == "precond":
-                        pn = float(_norm(_p))
-                        denom_n = float(_norm(m32 / (vhat.sqrt().add(eps).pow(alpha)))); raw = (pn/(denom_n+1e-12)) if (pn>0 and denom_n>0) else 1.0
+                        if _p is p:
+                            if p_norm_t is None:
+                                p_norm_t = _scalar_tensor(_norm(_p), _p)
+                            pn = p_norm_t
+                        else:
+                            pn = _scalar_tensor(_norm(_p), _p)
+                        denom_n = precond_norm_t if precond_norm_t is not None else scalar_one
+                        valid = (pn * denom_n > scalar_zero).to(dtype=pn.dtype)
+                        raw = scalar_one + valid * (pn / torch.clamp(denom_n, min=scalar_tiny) - scalar_one)
                     else:
-                        raw = 1.0
+                        raw = scalar_one
                     if trust_beta > 0.0:
-                        old = self._trust_ema.get(gi, raw); sm = trust_beta*old + (1.0-trust_beta)*raw; self._trust_ema[gi] = sm; return min(trust_clip, sm)
-                    return min(trust_clip, raw)
+                        trust_key = (gi, pi)
+                        old = self._trust_ema.get(trust_key)
+                        if old is None:
+                            sm = raw
+                        else:
+                            old_t = _scalar_tensor(old, group_ref)
+                            sm = trust_beta * old_t + (1.0-trust_beta) * raw
+                        self._trust_ema[trust_key] = sm.detach()
+                        return torch.minimum(trust_cap_t, sm)
+                    return torch.minimum(trust_cap_t, raw)
 
                 # chunked paths
                 chunked = False
-                if (blk_chunks and p.ndim==2 and p.shape[0] % blk_chunks == 0) or (id(p) in qkv_rules and bool(qkv_split) and use_trust):
+                qkv_rule = qkv_rules.get(id(p))
+                qkv_route = qkv_rule is not None and (qkv_lr is not None or (qkv_split and use_trust))
+                if (blk_chunks and p.ndim==2 and p.shape[0] % blk_chunks == 0) or qkv_route:
                     chunked = True
-                    if id(p) in qkv_rules:
-                        dim, parts = qkv_rules[id(p)]
+                    if qkv_route:
+                        dim, parts = qkv_rule
                         p_chunks = torch.chunk(p, parts, dim=dim)
                         d_chunks = torch.chunk(d, parts, dim=dim)
                         keys = ("q","k","v")
+                        if use_trust and qkv_split:
+                            chunk_trust_t, d_chunk_norms_t = self._qkv_chunk_trust(
+                                gi,
+                                pi,
+                                p,
+                                d,
+                                dim=dim,
+                                parts=parts,
+                                trust_beta=trust_beta,
+                                trust_cap_t=trust_cap_t,
+                                scalar_one=scalar_one,
+                                scalar_zero=scalar_zero,
+                                scalar_tiny=scalar_tiny,
+                                trust_denominator=m32 * P if trust_space == "precond" else None,
+                            )
+                        else:
+                            d_chunk_norms_t = _chunk_scalar_norms(d, dim, parts)
+                            trust = eff_trust_for(p, d) if use_trust else scalar_one
+                            chunk_trust_t = trust.expand(parts)
+                        chunk_rms_t = d_chunk_norms_t / math.sqrt(max(1, d.numel() // parts))
                         for i, (pc, dc) in enumerate(zip(p_chunks, d_chunks)):
-                            tr = eff_trust_for(pc, dc)
+                            tr = chunk_trust_t[i]
                             eff_lr = base_lr
                             if qkv_lr is not None and i < len(keys):
                                 eff_lr = lr * float(qkv_lr.get(keys[i], lr_scale))
-                            freq_disp = 0.0; low_ema = 0.0; high_ema = 0.0; phase_ema = 0.0
-                            if spec_enabled and i < len(keys) and spec_state is not None:
-                                label = keys[i]
-                                low_raw, high_raw, phase_raw = _spectral_dispersion(dc, spec_low_band, spec_high_band)
-                                prev = spec_state.get(label)
-                                if prev is None:
-                                    low_ema = low_raw
-                                    high_ema = high_raw
-                                    phase_ema = phase_raw
-                                else:
-                                    low_ema = spec_beta*prev.get("low", low_raw) + (1.0 - spec_beta)*low_raw
-                                    high_ema = spec_beta*prev.get("high", high_raw) + (1.0 - spec_beta)*high_raw
-                                    phase_ema = spec_beta*prev.get("phase", phase_raw) + (1.0 - spec_beta)*phase_raw
-                                spec_state[label] = {"low": float(low_ema), "high": float(high_ema), "phase": float(phase_ema)}
-                                denom = low_ema + spec_eps
-                                freq_disp = math.log((high_ema + spec_eps) / denom) if denom > 0.0 else 0.0
-                            k = keys[i]
-                            last_qkv[k] = dict(tr=float(tr), rms=float(_rms(dc)),
-                                               freq_low=float(low_ema), freq_high=float(high_ema),
-                                               freq_phase=float(phase_ema), freq_disp=float(freq_disp))
-                            pc.add_(dc.to(pc.dtype), alpha=-(eff_lr * tr * clip_scale_param))
+                            low_raw_t = high_raw_t = phase_raw_t = None
+                            if collect_qkv_spectral and i < len(keys):
+                                low_raw_t, high_raw_t, phase_raw_t = _spectral_dispersion_tensors(dc, spec_low_band, spec_high_band)
+                            if qkv_observations is not None and i < len(keys):
+                                qkv_observations[keys[i]].append((
+                                    tr.detach(), chunk_rms_t[i].detach(),
+                                    low_raw_t, high_raw_t, phase_raw_t,
+                                ))
+                            scale = (tr * clip_scale_param).to(device=pc.device, dtype=torch.float32)
+                            if pc.dtype in (torch.float16, torch.bfloat16):
+                                pc.copy_((pc.to(torch.float32) - eff_lr * dc.to(torch.float32) * scale).to(pc.dtype))
+                            else:
+                                pc.add_(dc.to(torch.float32) * scale, alpha=-eff_lr)
                     else:
                         parts = blk_chunks
                         p_chunks = torch.chunk(p, parts, dim=0)
                         d_chunks = torch.chunk(d, parts, dim=0)
+                        block_scale = (eff_trust_for(p, d) * clip_scale_param).to(device=p.device, dtype=torch.float32)
                         for pc, dc in zip(p_chunks, d_chunks):
-                            tr = eff_trust_for(pc, dc)
-                            pc.add_(dc.to(pc.dtype), alpha=-(base_lr * tr * clip_scale_param))
+                            if pc.dtype in (torch.float16, torch.bfloat16):
+                                pc.copy_((pc.to(torch.float32) - base_lr * dc.to(torch.float32) * block_scale).to(pc.dtype))
+                            else:
+                                pc.add_(dc.to(torch.float32) * block_scale, alpha=-base_lr)
 
                 # foreach bucket
                 if not chunked:
-                    eff = -(base_lr * eff_trust_for(p, d) * clip_scale_param)
+                    eff = (eff_trust_for(p, d) * clip_scale_param).to(device=d.device, dtype=torch.float32)
                     if use_foreach_upd and hasattr(torch, "_foreach_add_"):
-                        upd = d.to(self._dtype_for_update(p)) * eff
+                        requested_dtype = self._dtype_for_update(p)
+                        # Apply the scalar scale in FP32 before any optional
+                        # low-precision buffer cast. Under the skip policy,
+                        # retain FP32 so an otherwise finite step cannot be
+                        # spoiled by a narrower scratch buffer.
+                        update_dtype = (
+                            torch.float32
+                            if p.dtype in (torch.float16, torch.bfloat16)
+                            or (self.defaults["skip_if_nonfinite"] and requested_dtype in (torch.float16, torch.bfloat16))
+                            else requested_dtype
+                        )
+                        upd = d.to(torch.float32) * eff
+                        upd.mul_(-base_lr)
+                        if update_dtype != torch.float32:
+                            upd = upd.to(update_dtype)
                         b_params.append(p); b_updates.append(upd); 
                         if bucket_std:
                             b_updates_f32.append(upd.to(torch.float32))
                     else:
-                        p.add_(d.to(p.dtype), alpha=eff)
+                        if p.dtype in (torch.float16, torch.bfloat16):
+                            p.copy_((p.to(torch.float32) - base_lr * d.to(torch.float32) * eff).to(p.dtype))
+                        else:
+                            p.add_(d.to(torch.float32) * eff, alpha=-base_lr)
 
             # flush foreach bucket (combined stats & scale)
             if b_params and b_updates and hasattr(torch, "_foreach_add_"):
@@ -933,9 +1539,10 @@ class Tiger(Optimizer):
                         trust_est = torch.sqrt(pssq) / torch.clamp(torch.sqrt(ussq), min=_scalar_like(ussq, 1e-12))
                     sf = (1.0 / torch.clamp(grms, min=1e-12)).to(b_updates[0].dtype)
                     for i in range(len(b_updates)): b_updates[i] = b_updates[i] * sf
-                    prof_c["foreach_bucket_global_rms"] = float(grms.detach().cpu())
-                    prof_c["foreach_bucket_trust_est"] = float(trust_est.detach().cpu())
-                    prof_c["foreach_bucket_source"] = bucket_src
+                    if profiler_detail_enabled:
+                        prof_c["foreach_bucket_global_rms"] = float(grms.detach().cpu())
+                        prof_c["foreach_bucket_trust_est"] = float(trust_est.detach().cpu())
+                        prof_c["foreach_bucket_source"] = bucket_src
 
                 if use_triton_fused and len(b_params) >= foreach_min_bucket:
                     ok = self._fused_apply_triton(b_params, b_updates, prof_c)
@@ -953,16 +1560,90 @@ class Tiger(Optimizer):
                         for P, U in zip(b_params, b_updates):
                             P.add_(U)
 
+            scalar_payload_specs = []
+            if agc_clips_t is not None:
+                scalar_payload_specs.append(("agc_clips", "int", agc_clips_t))
+            if up_s2_t is not None:
+                scalar_payload_specs.append(("up_s2", "float", up_s2_t))
+            if dn_s2_t is not None:
+                scalar_payload_specs.append(("dn_s2", "float", dn_s2_t))
+            if lora_dense_sum_t is not None:
+                scalar_payload_specs.append(("lora_dense_sum", "float", lora_dense_sum_t))
+            if cross_density_sum_t is not None:
+                scalar_payload_specs.append(("cross_density_sum", "float", cross_density_sum_t))
+            if scalar_payload_specs:
+                scalar_payload_vals = _scalars_to_host(
+                    [value for _, _, value in scalar_payload_specs],
+                    reference=group_ref,
+                )
+                for (name, kind, _), value in zip(scalar_payload_specs, scalar_payload_vals):
+                    if name == "agc_clips":
+                        prof_c["agc_clips"] += int(value)
+                    elif name == "up_s2":
+                        up_s2 += value
+                    elif name == "dn_s2":
+                        dn_s2 += value
+                    elif name == "lora_dense_sum":
+                        lora_dense_sum = value
+                    elif name == "cross_density_sum":
+                        cross_density_sum = value
+
+            last_qkv = None
+            if qkv_observations is not None:
+                last_qkv = {}
+                for label, observations in qkv_observations.items():
+                    if not observations:
+                        last_qkv[label] = None
+                        continue
+                    trusts = [item[0] for item in observations]
+                    rms_values = [item[1] for item in observations]
+                    tr_t = trusts[0] if len(trusts) == 1 else torch.stack(trusts).mean()
+                    rms_t = rms_values[0] if len(rms_values) == 1 else torch.stack(rms_values).square().mean().sqrt()
+                    low_ema_t = high_ema_t = phase_ema_t = freq_disp_t = scalar_zero
+                    if collect_qkv_spectral:
+                        def mean_observation(index):
+                            values = [item[index] for item in observations]
+                            return values[0] if len(values) == 1 else torch.stack(values).mean()
+
+                        low_raw_t = mean_observation(2)
+                        high_raw_t = mean_observation(3)
+                        phase_raw_t = mean_observation(4)
+                        prev = spec_state.get(label) if qkv_adapt_due else None
+                        if prev is None:
+                            low_ema_t, high_ema_t, phase_ema_t = low_raw_t, high_raw_t, phase_raw_t
+                        else:
+                            prev_low_t = _scalar_tensor(prev.get("low", low_raw_t), group_ref)
+                            prev_high_t = _scalar_tensor(prev.get("high", high_raw_t), group_ref)
+                            prev_phase_t = _scalar_tensor(prev.get("phase", phase_raw_t), group_ref)
+                            low_ema_t = spec_beta * prev_low_t + (1.0 - spec_beta) * low_raw_t
+                            high_ema_t = spec_beta * prev_high_t + (1.0 - spec_beta) * high_raw_t
+                            phase_ema_t = spec_beta * prev_phase_t + (1.0 - spec_beta) * phase_raw_t
+                        if qkv_adapt_due:
+                            spec_state[label] = {"low": low_ema_t.detach(), "high": high_ema_t.detach(), "phase": phase_ema_t.detach()}
+                        freq_disp_t = torch.log((high_ema_t + spec_eps_t) / torch.clamp(low_ema_t + spec_eps_t, min=spec_eps_t))
+                    last_qkv[label] = dict(
+                        tr=tr_t, rms=rms_t, freq_low=low_ema_t,
+                        freq_high=high_ema_t, freq_phase=phase_ema_t,
+                        freq_disp=freq_disp_t,
+                    )
+
             # write QKV stats
-            if last_qkv["q"] is not None:
-                prof_c["qkv_q_r"] = last_qkv["q"]["tr"]; prof_c["qkv_q_rms"] = last_qkv["q"]["rms"]
-                prof_c["qkv_q_freq"] = last_qkv["q"].get("freq_disp")
-            if last_qkv["k"] is not None:
-                prof_c["qkv_k_r"] = last_qkv["k"]["tr"]; prof_c["qkv_k_rms"] = last_qkv["k"]["rms"]
-                prof_c["qkv_k_freq"] = last_qkv["k"].get("freq_disp")
-            if last_qkv["v"] is not None:
-                prof_c["qkv_v_r"] = last_qkv["v"]["tr"]; prof_c["qkv_v_rms"] = last_qkv["v"]["rms"]
-                prof_c["qkv_v_freq"] = last_qkv["v"].get("freq_disp")
+            if profiler_detail_enabled and last_qkv is not None:
+                qkv_payload = []
+                qkv_labels = []
+                for label in ("q", "k", "v"):
+                    stats = last_qkv.get(label)
+                    if stats is None:
+                        continue
+                    qkv_labels.append(label)
+                    qkv_payload.extend([stats["tr"], stats["rms"], stats.get("freq_disp", 0.0)])
+                if qkv_payload:
+                    qkv_values = _scalars_to_host(qkv_payload, reference=group_ref)
+                    for idx, label in enumerate(qkv_labels):
+                        base = idx * 3
+                        prof_c[f"qkv_{label}_r"] = qkv_values[base]
+                        prof_c[f"qkv_{label}_rms"] = qkv_values[base + 1]
+                        prof_c[f"qkv_{label}_freq"] = qkv_values[base + 2]
 
             # LoRA EMA + PID + inertia + minima + recovery
             if tag in ("lora_a","lora_b") and bool(self.defaults["lora_density_adapt"]) and (lora_count > 0) and (self._global_step % int(self.defaults["lora_interval"]) == 0):
@@ -1074,7 +1755,7 @@ class Tiger(Optimizer):
                     pending_lora_blocks[-1] = (gi, tag, st, st["ema"])
 
             # QKV two-objective with gamma auto-scale + step-clip via acceleration
-            if tag == "attn_qkv" and qkv_lr is not None and bool(self.defaults["qkv_lr_autoadapt"]) and (self._global_step % int(self.defaults["qkv_lr_interval"]) == 0):
+            if qkv_adapt_due and last_qkv is not None:
                 if last_qkv["q"] and last_qkv["k"] and last_qkv["v"]:
                     wr = float(self.defaults["qkv_w_rms"]); wt = float(self.defaults["qkv_w_trust"])
                     base_gain = float(self.defaults["qkv_lr_gain"]); gamma0 = float(self.defaults["qkv_gain_shrink_gamma"])
@@ -1084,12 +1765,28 @@ class Tiger(Optimizer):
                     gmin = float(self.defaults["qkv_gamma_min"]); gmax = float(self.defaults["qkv_gamma_max"])
                     k_shrink = float(self.defaults["qkv_clip_shrink_k"]); cmin = float(self.defaults["qkv_clip_min"]); cmax=float(self.defaults["qkv_clip_max"])
 
-                    rms = [max(1e-12, float(last_qkv[k]["rms"])) for k in ("q","k","v")]
-                    trs = [max(1e-12, float(last_qkv[k]["tr"])) for k in ("q","k","v")]
-                    freq_disp_vals = [float(last_qkv[k].get("freq_disp", 0.0)) for k in ("q","k","v")]
-                    freq_low_vals = [float(last_qkv[k].get("freq_low", 0.0)) for k in ("q","k","v")]
-                    freq_high_vals = [float(last_qkv[k].get("freq_high", 0.0)) for k in ("q","k","v")]
-                    phase_vals = [float(last_qkv[k].get("freq_phase", 0.0)) for k in ("q","k","v")]
+                    qkv_stat_values = _scalars_to_host(
+                        [
+                            last_qkv[k]["rms"] for k in ("q", "k", "v")
+                        ] + [
+                            last_qkv[k]["tr"] for k in ("q", "k", "v")
+                        ] + [
+                            last_qkv[k].get("freq_disp", 0.0) for k in ("q", "k", "v")
+                        ] + [
+                            last_qkv[k].get("freq_low", 0.0) for k in ("q", "k", "v")
+                        ] + [
+                            last_qkv[k].get("freq_high", 0.0) for k in ("q", "k", "v")
+                        ] + [
+                            last_qkv[k].get("freq_phase", 0.0) for k in ("q", "k", "v")
+                        ],
+                        reference=group_ref,
+                    )
+                    rms = [max(1e-12, value) for value in qkv_stat_values[0:3]]
+                    trs = [max(1e-12, value) for value in qkv_stat_values[3:6]]
+                    freq_disp_vals = qkv_stat_values[6:9]
+                    freq_low_vals = qkv_stat_values[9:12]
+                    freq_high_vals = qkv_stat_values[12:15]
+                    phase_vals = qkv_stat_values[15:18]
 
                     disp_r = math.log(max(rms)/min(rms)); disp_t = math.log(max(trs)/min(trs))
                     disp = math.sqrt(wr*disp_r*disp_r + wt*disp_t*disp_t)
@@ -1155,7 +1852,8 @@ class Tiger(Optimizer):
                                                "qkv_freq_low": sum(freq_low_vals)/len(freq_low_vals) if freq_low_vals else 0.0,
                                                "qkv_freq_high": sum(freq_high_vals)/len(freq_high_vals) if freq_high_vals else 0.0,
                                                "qkv_phase_mean": phase_mean})
-                    prof_c.update(qkv_freq_disp=freq_disp_mean, qkv_freq_factor=freq_factor, qkv_phase_boost=phase_boost)
+                    if profiler_detail_enabled:
+                        prof_c.update(qkv_freq_disp=freq_disp_mean, qkv_freq_factor=freq_factor, qkv_phase_boost=phase_boost)
 
             # end group loop
 
@@ -1262,7 +1960,7 @@ class Tiger(Optimizer):
                 })
 
         if not (_is_compiling() and self.defaults.get("compile_guard", True)):
-            self._maybe_auto_blend()
+            self._maybe_plateau_adapt()
 
         if self._fused_apply_failures:
             prof_c["foreach_triton_failures"] = list(self._fused_apply_failures)

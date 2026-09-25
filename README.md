@@ -1,31 +1,30 @@
 # Tiger Optimizer
-— **beyond AdamW. A precision beast born from pure Python and stubborn curiosity — LoRA-aware, QKV-adaptive, trust-ratio-driven 🐅**
+Tiger is a PyTorch optimizer exploring sign-aware updates, trust ratios, and
+LoRA/QKV adaptation. 🐅
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="AGPL-3.0">
-  <a href="docs/PRICING.md"><img src="https://img.shields.io/badge/Commercial%20License-Available-orange.svg" alt="Commercial License Available"></a>
-  <img src="https://img.shields.io/badge/Apple%20Silicon-MPS%20Verified-success.svg" alt="MPS Verified">
+  <a href="#pricing--licensing"><img src="https://img.shields.io/badge/Commercial%20License-Available-orange.svg" alt="Commercial License Available"></a>
   <img src="https://img.shields.io/badge/PyTorch-2.x-lightgrey.svg" alt="PyTorch 2.x">
   <a href="issues?q=label%3Abenchmark"><img src="https://img.shields.io/badge/Benchmarks-help%20wanted-brightgreen.svg" alt="Benchmarks: help wanted"></a>
 </p>
 <p align="center"><i>Sign‑aware, trust‑ratio, LoRA‑PID with inertia — precise like a tiger.</i></p>
 
-> **Bold, evidence‑based.** Tiger is verified on Apple’s MPS backend (real hardware).  
-> On our Mac microbench (TinyMix; 120 steps), Tiger v2.1 (full) achieved a median of
-> <b>8.50 ms/step (CPU)</b> and <b>26.84–35.53 ms/step (MPS)</b> with convergence comparable to AdamW.  
-> On Windows + CUDA (legacy GPU), Tiger v2.1 (full) measured <b>14.8–15.0 ms/step</b> (median).  
-> PNG plots below.
+The timing figures below are historical local notes for Tiger v2.1. They are
+not a performance or convergence claim for this checkout; the corresponding raw
+results and environment records are not tracked in this repository.
 
 ---
 
 ## Contents
 - [Install](#install)
 - [Quickstart](#quickstart)
-- [Reference Bench (CPU/MPS/CUDA)](#reference-bench-cpumpscuda)
+- [Historical Local Timing Notes](#historical-local-timing-notes)
+- [Benchmark and Claim Gate](#benchmark-and-claim-gate)
 - [System Info for This CUDA Run (Legacy Reference)](#system-info-for-this-cuda-run-legacy-reference)
 - [Call for Community CUDA Runs](#call-for-community-cuda-runs)
 - [Pricing & Licensing](#pricing--licensing)
-- [Known Good Settings](#known-good-settings)
+- [Experimental Starting Settings](#experimental-starting-settings)
 - [Legacy CUDA: Quick Preset](#legacy-cuda-quick-preset)
 - [Roadmap & Lessons from Legacy GPUs](#roadmap--lessons-from-legacy-gpus)
 
@@ -36,8 +35,19 @@
 ```bash
 # dev install from this repo
 pip install -e .
-# or (future)
+
+# editable install with tests/benchmark tooling
+pip install -e ".[dev]"
+
+# add the optional Julia acceleration bridge
+pip install -e ".[julia]"
+
+# or grab everything most contributors want
+pip install -e ".[dev,julia,bench]"
+
+# published package
 # pip install tiger-optim
+# pip install "tiger-optim[julia,bench]"
 ```
 
 > Tiger Optimizer is released under **GNU AGPL‑3.0**.  
@@ -73,7 +83,6 @@ opt = Tiger(
     # modern default
     factored=True, precond_alpha=1.0, trust_space="precond",
     use_foreach_update=True, bucket_standardize=True, bucket_scalarless=True,
-    # premium toggles are automatically no-op on AGPL build
 )
 
 x = torch.randn(16, 32, 256)
@@ -86,26 +95,61 @@ loss.backward()
 opt.step()
 ```
 
+LoRA/QKV adaptation and scalarless foreach options in this repository execute
+when enabled; this public build has no license-based no-op path for them.
+
+### Reporting loss and resuming training
+
+The plateau-based `auto_lr` and `auto_blend` controls act only after the training
+loop calls `opt.report_metrics(loss=...)`. With `auto_lr=True`, a plateau of
+`plateau_patience` reported finite losses multiplies each group LR by
+`lr_decay`, down to `lr_min`. These controls run in eager mode.
+
+Save both the model and optimizer to resume the blend schedule and adaptation
+state. Recreate the optimizer with parameter groups in the same order before
+loading:
+
+```python
+torch.save({"model": model.state_dict(), "optimizer": opt.state_dict()}, "checkpoint.pt")
+
+# In a later process, after recreating the model and its tagged groups:
+checkpoint = torch.load("checkpoint.pt", map_location="cpu")
+model.load_state_dict(checkpoint["model"])
+opt = Tiger(build_tagged_param_groups(model, base_lr=3e-4, base_wd=0.01))
+opt.load_state_dict(checkpoint["optimizer"])
+```
+
+Checkpoints made before Tiger stored adaptive state cannot resume exactly. The
+loader warns about this and needs fresh QKV rules from the new model when the
+old checkpoint contains QKV groups.
+
+With FP16 or BF16 parameters and `skip_if_nonfinite=True`, median bucket
+standardization is rejected before updating. Use the `global` or `mean` bucket
+source for low-precision parameters.
+
 ---
 
 ## Acceleration toolchain (Pure Python core + optional Julia)
 
-Tiger v2.3.0 keeps the optimizer entirely in Python while still offering an
-opt-in Julia bridge for the CPU-centric primitives (softsign, RMS and
-vector-norm) that dominate small-model training loops. When Julia ≥1.9 and the
-`juliacall` Python bridge are present Tiger dispatches to an optimized Julia
-loop; otherwise it gracefully falls back to the reference PyTorch kernels.
+Tiger v2.4.0 keeps the optimizer entirely in Python while still offering two
+runtime acceleration paths:
+
+- `torch`: a real backend built on native PyTorch kernels that works on CPU,
+  MPS, and CUDA devices without extra dependencies.
+- `julia`: an optional backend for CPU-centric primitives (softsign, RMS and
+  vector-norm). When Julia ≥1.9 and the `juliacall` bridge are present Tiger
+  can dispatch to Julia loops.
 
 The runtime still profiles every backend invocation and automatically reorders
 the priority list to favour the fastest healthy implementation. Backends that
-raise errors (or return `None`) are temporarily suppressed so your training loop
-never stalls on a flaky native module.
+raise errors (or return `None`) are temporarily suppressed so later calls can
+fall back to another backend or the PyTorch reference path.
 
 Runtime selection is automatic. You can inspect the availability at runtime:
 
 ```python
 from tiger_optim import available_backends, current_backend_priority
-print(available_backends())  # e.g. {"julia": False}
+print(available_backends())  # e.g. {"julia": False, "torch": True}
 print(current_backend_priority())  # runtime ordering after scoring
 ```
 
@@ -124,8 +168,11 @@ from tiger_optim import (
     reset_backend_configuration,
 )
 
-# Prefer Julia for the current process (falls back to eager PyTorch otherwise)
-configure_backends(preferred=["julia"])
+# Prefer Julia for the current process, then the torch backend
+configure_backends(preferred=["julia", "torch"])
+
+# Prefer the device-native torch backend on MPS/CUDA
+configure_backends(preferred=["torch"])
 
 # Disable all native accelerators (forces the PyTorch eager path)
 configure_backends(disabled=["all"])
@@ -142,7 +189,7 @@ Prefer environment variables? Set them before import:
 
 ```bash
 export TIGER_ACCEL_DISABLE=all       # disable all accelerators
-export TIGER_ACCEL_PREFER=julia     # prefer Julia when available
+export TIGER_ACCEL_PREFER=julia,torch     # prefer Julia when available
 ```
 
 Both signals are lazily cached, so changes made at runtime can be picked up via
@@ -153,9 +200,13 @@ implementations, so you can opt-in incrementally.
 
 ---
 
-## Reference Bench (CPU/Mac, MPS/Mac, CUDA/Win)
+## Historical Local Timing Notes
 
-**TinyMix; 120 steps (warmup 30–50).**  
+Earlier local TinyMix notes recorded the following medians during Tiger v2.1
+comparisons, using 120 steps and 30–50 warmup steps. The raw JSON, plots,
+exact source revision, and full environment records for these rows are not
+tracked here.
+These figures cannot establish a current speed or convergence comparison.
 
 | Device | Optimizer | Median step time |
 |-------:|:---------:|-----------------:|
@@ -164,15 +215,57 @@ implementations, so you can opt-in incrementally.
 | CUDA (Win, GTX 1650 / CUDA 11.1) | AdamW | **5.43–6.69 ms** |
 | CUDA (Win, GTX 1650 / CUDA 11.1) | Tiger v2.1 (full) | **14.8–15.0 ms** |
 
-<p align="center">
-  <img src="benchmarks/plots/median_step_time.png" width="60%" alt="AdamW vs Tiger — Median Step Time">
-  <br/>
-  <img src="benchmarks/plots/loss_curves.png" width="60%" alt="Loss Curves">
-</p>
+The CUDA entries came from a legacy GPU and driver (see below). Measure on the
+target workload and device before drawing a performance conclusion.
 
-> Notes:  
-> • MPS can be slower on small batches due to launch/transfer overheads; larger batch/T/D typically improves.  
-> • The CUDA numbers above are **legacy GPU** reference values (see next section).
+## Benchmark and Claim Gate
+
+For a new result, record the exact commit and dirty state, Python/PyTorch and
+device/driver versions, seed, command, warmup, and step count. Run AdamW and
+Tiger on the same seeded model and data, repeat each mode in at least three
+fresh processes, and retain every raw JSON file. Use a clean result set for
+each comparison: the plotter reads all matching files, while the summarizer
+selects the latest file per device and mode rather than measuring variation.
+Publish all raw files (with SHA-256 hashes), the spread across runs, and plots
+alongside any timing claim. A convergence claim also needs a defined
+quality metric, a fixed compute budget, and multiple seeds; the current bench
+CLI is a smoke/timing tool and does not establish that claim.
+
+The [2026-09-25 CPU smoke](benchmarks/evidence/2026-09-25-cpu-smoke/README.md)
+preserves three fresh-process pairs with raw JSON and hashes. On that fixed
+synthetic workload, Tiger took 8.97 ms per measured compute step versus 4.05 ms
+for AdamW, and ended with a higher training loss. The configurations differ and
+the runs repeat one seed, so this is a local negative result rather than a
+general comparison.
+
+The [2026-09-26 Mac diagnostic](benchmarks/evidence/2026-09-26-mac-perf/README.md)
+preserves CPU/MPS raw runs, profiler traces, source hashes, and the host-load
+caveat. Consolidating finite checks reduced profiled MPS scalar reads inside
+Tiger from 68 to 30 per step at the recorded intermediate source revisions;
+the final source measured 36 per step after the FP32 overflow guard.
+In the final paired MPS smoke, Tiger's optimizer median was 23.95 ms versus
+0.998 ms for AdamW. The Tiger global-step-25 spike remains unresolved, and
+these runs do not establish a wall-clock speedup or a convergence comparison.
+
+Run `python benchmarks/bench_quality_smoke.py` for a separate CPU toy task with
+held-out data and three seeds. Its Tiger recipe uses a cosine LR schedule while
+the AdamW reference uses a fixed LR, so its output checks learning rather than
+ranking the optimizers; the archived traces are
+[here](benchmarks/evidence/2026-09-25-cpu-quality/README.md).
+
+```bash
+git rev-parse HEAD
+git status --short
+python -c 'import platform, torch; print(platform.platform()); print(torch.__version__)'
+for run in 1 2 3; do
+  python benchmarks/bench_compare_optim.py --device cpu --steps 200 --warmup 50 --modes adamw tiger_v21_full
+done
+python benchmarks/summarize_results.py --pattern 'benchmarks/results/compare-*.json' --markdown-out benchmarks/results/summary.md
+shasum -a 256 benchmarks/results/compare-*.json
+```
+
+Use the wildcard above only when `benchmarks/results` contains the current
+comparison. Run the same command on MPS/CUDA only when that device is available.
 
 ---
 
@@ -193,12 +286,17 @@ We’d love **fresh results on modern GPUs** (Ampere/Ada/Hopper; CUDA 11.8+/12.x
 **How to contribute**
 1. Run:
    ```bash
+   git rev-parse HEAD
+   git status --short
    python benchmarks/bench_compare_optim.py --device cuda --steps 200 --warmup 50
    python benchmarks/plot_bench.py --out-dir benchmarks/plots
+   python benchmarks/summarize_results.py --pattern "benchmarks/results/compare-*.json" --markdown-out benchmarks/results/summary.md
    ```
 2. Collect and attach:
    - `benchmarks/results/compare-*.json` (AdamW + Tiger)
+   - `benchmarks/results/summary.md`
    - `benchmarks/plots/median_step_time.png`, `benchmarks/plots/loss_curves.png`
+   - SHA-256 hashes for the raw JSON and the exact source commit/dirty state
    - Environment info:
      ```
      nvidia-smi
@@ -223,7 +321,7 @@ We’d love **fresh results on modern GPUs** (Ampere/Ada/Hopper; CUDA 11.8+/12.x
 SpiralReality and its components are licensed under the  
 [GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)](https://www.gnu.org/licenses/agpl-3.0.html).  
 © 2025 Ryo ∴ SpiralArchitect and SpiralReality. for the public build.  
-**Commercial License** available for proprietary integration; see `docs/PRICING.md`.
+**Commercial License** available for proprietary integration; pricing is listed below.
 
 ### Pricing (Annual) — Conservative (current)
 | Tier | Rights & Scope | Price | Support |
@@ -234,7 +332,11 @@ SpiralReality and its components are licensed under the
 | OEM | Redistribution/embedding in shipped products or SaaS | **$75,000 + royalty** | Premier |
 
 Royalty (OEM): 0.5% Tiger‑attributable GTV **or** $0.05/MAU (higher of), floor **$50k/yr**, cap **$250k/yr**.  
-Premium (Commercial): LoRA‑PID inertia + minima/recovery, QKV dual‑objective auto‑LR (γ auto‑scale + accel clip), scalarless foreach + Triton stats, pending arithmetic pipelines, Auto‑FFN asym.  
+
+The public build includes the experimental LoRA, QKV, and foreach paths
+described above; commercial terms cover proprietary integration rather than a
+separate feature unlock.
+
 Early adopters: first 10 customers −25% (year 1).  
 Contact: **kishkavsesvit@icloud.com**
 
@@ -242,15 +344,40 @@ Contact: **kishkavsesvit@icloud.com**
 
 ---
 
-## Known Good Settings
+## Experimental Starting Settings
 
-- **Stability first (any device)**  
+- **Conservative clipping experiment.** This configuration keeps the update
+  buffer in FP32, but its AGC setting can make learning very slow. Validate the
+  actual update size and held-out loss on your task. RMS clipping is a parameter
+  group option:
   ```python
-  Tiger(..., update_buffer_dtype="fp32", lr=2e-4, agc_clip=0.02, trust_clip=5.0,
-        rms_clip_threshold=1.0, rms_clip_granularity="param")
+  groups = [{"params": model.parameters(),
+             "rms_clip_threshold": 1.0, "rms_clip_granularity": "param"}]
+  opt = Tiger(groups, update_buffer_dtype="fp32", lr=2e-4,
+              agc_clip=0.02, trust_clip=5.0)
   ```
+  In a [three-seed held-out CPU probe](benchmarks/evidence/2026-09-25-cpu-quality/README.md),
+  this setting barely learned the test task; treat it as a clipping experiment,
+  not a validated quality preset.
 - **MPS (Apple Silicon)**: keep Triton flags off; prefer FP32 update buffer.  
 - **CUDA (modern)**: try `use_foreach_update=True`, `bucket_standardize=True`, and Triton stats if available.
+
+### Profiling `opt.step()` on MPS
+
+Use the built-in profiler harness when you want to see where Apple Silicon time is
+really going:
+
+```bash
+python benchmarks/bench_profile_v21.py \
+  --device mps \
+  --steps 4 \
+  --warmup 2 \
+  --torch-profiler \
+  --profile-steps 3
+```
+
+The profiler output can identify operations to investigate. Preserve the trace,
+table, source revision, and a paired baseline before reporting an improvement.
 
 ---
 

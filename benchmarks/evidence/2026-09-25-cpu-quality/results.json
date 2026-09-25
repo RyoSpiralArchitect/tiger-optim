@@ -1,0 +1,305 @@
+{
+  "environment": {
+    "python": "3.12.6",
+    "site_customization": "disabled via python3 -S",
+    "torch": "2.12.1",
+    "torch_default_device": "cpu",
+    "torch_threads": 1
+  },
+  "label": "preliminary CPU-only synthetic learning-quality probe; no superiority claim",
+  "seeds": [
+    {
+      "runs": [
+        {
+          "config": {
+            "betas": [
+              0.9,
+              0.999
+            ],
+            "eps": 1e-08,
+            "lr": 0.001,
+            "weight_decay": 0.01
+          },
+          "elapsed_seconds": 0.06060266599888564,
+          "optimizer": "AdamW",
+          "trace": [
+            {
+              "heldout_mse": 1.5034139156341553,
+              "step": 0,
+              "train_mse": 1.3643838167190552
+            },
+            {
+              "heldout_mse": 0.39299044013023376,
+              "step": 50,
+              "train_mse": 0.38059625029563904
+            },
+            {
+              "heldout_mse": 0.16777923703193665,
+              "step": 100,
+              "train_mse": 0.14936554431915283
+            },
+            {
+              "heldout_mse": 0.1447521597146988,
+              "step": 150,
+              "train_mse": 0.1276727169752121
+            },
+            {
+              "heldout_mse": 0.12178730219602585,
+              "step": 200,
+              "train_mse": 0.10780880600214005
+            }
+          ]
+        },
+        {
+          "config": {
+            "agc_clip": 0.02,
+            "auto_blend": false,
+            "auto_lr": false,
+            "factored": true,
+            "lr": 0.0002,
+            "precond_alpha": 1.0,
+            "rms_clip_granularity": "param",
+            "rms_clip_threshold": 1.0,
+            "trust_clip": 5.0,
+            "trust_space": "precond",
+            "update_buffer_dtype": "fp32",
+            "weight_decay": 0.01
+          },
+          "elapsed_seconds": 0.19552950000070268,
+          "optimizer": "Tiger",
+          "trace": [
+            {
+              "heldout_mse": 1.5034139156341553,
+              "step": 0,
+              "train_mse": 1.3643838167190552
+            },
+            {
+              "heldout_mse": 1.503376841545105,
+              "step": 50,
+              "train_mse": 1.364344596862793
+            },
+            {
+              "heldout_mse": 1.5033304691314697,
+              "step": 100,
+              "train_mse": 1.364296793937683
+            },
+            {
+              "heldout_mse": 1.5032811164855957,
+              "step": 150,
+              "train_mse": 1.3642463684082031
+            },
+            {
+              "heldout_mse": 1.5032286643981934,
+              "step": 200,
+              "train_mse": 1.3641924858093262
+            }
+          ]
+        }
+      ],
+      "seed": 11
+    },
+    {
+      "runs": [
+        {
+          "config": {
+            "betas": [
+              0.9,
+              0.999
+            ],
+            "eps": 1e-08,
+            "lr": 0.001,
+            "weight_decay": 0.01
+          },
+          "elapsed_seconds": 0.04936229200029629,
+          "optimizer": "AdamW",
+          "trace": [
+            {
+              "heldout_mse": 1.6868082284927368,
+              "step": 0,
+              "train_mse": 1.448326587677002
+            },
+            {
+              "heldout_mse": 0.5280787944793701,
+              "step": 50,
+              "train_mse": 0.4758647382259369
+            },
+            {
+              "heldout_mse": 0.17804838716983795,
+              "step": 100,
+              "train_mse": 0.17843620479106903
+            },
+            {
+              "heldout_mse": 0.12630610167980194,
+              "step": 150,
+              "train_mse": 0.12468740344047546
+            },
+            {
+              "heldout_mse": 0.07630322873592377,
+              "step": 200,
+              "train_mse": 0.07964534312486649
+            }
+          ]
+        },
+        {
+          "config": {
+            "agc_clip": 0.02,
+            "auto_blend": false,
+            "auto_lr": false,
+            "factored": true,
+            "lr": 0.0002,
+            "precond_alpha": 1.0,
+            "rms_clip_granularity": "param",
+            "rms_clip_threshold": 1.0,
+            "trust_clip": 5.0,
+            "trust_space": "precond",
+            "update_buffer_dtype": "fp32",
+            "weight_decay": 0.01
+          },
+          "elapsed_seconds": 0.19494245799796772,
+          "optimizer": "Tiger",
+          "trace": [
+            {
+              "heldout_mse": 1.6868082284927368,
+              "step": 0,
+              "train_mse": 1.448326587677002
+            },
+            {
+              "heldout_mse": 1.6867855787277222,
+              "step": 50,
+              "train_mse": 1.4483083486557007
+            },
+            {
+              "heldout_mse": 1.6867587566375732,
+              "step": 100,
+              "train_mse": 1.4482860565185547
+            },
+            {
+              "heldout_mse": 1.6867280006408691,
+              "step": 150,
+              "train_mse": 1.4482601881027222
+            },
+            {
+              "heldout_mse": 1.6866941452026367,
+              "step": 200,
+              "train_mse": 1.448231816291809
+            }
+          ]
+        }
+      ],
+      "seed": 23
+    },
+    {
+      "runs": [
+        {
+          "config": {
+            "betas": [
+              0.9,
+              0.999
+            ],
+            "eps": 1e-08,
+            "lr": 0.001,
+            "weight_decay": 0.01
+          },
+          "elapsed_seconds": 0.048295250002411194,
+          "optimizer": "AdamW",
+          "trace": [
+            {
+              "heldout_mse": 1.2614563703536987,
+              "step": 0,
+              "train_mse": 1.3680917024612427
+            },
+            {
+              "heldout_mse": 0.2974547743797302,
+              "step": 50,
+              "train_mse": 0.309654176235199
+            },
+            {
+              "heldout_mse": 0.14143186807632446,
+              "step": 100,
+              "train_mse": 0.15566231310367584
+            },
+            {
+              "heldout_mse": 0.12031584978103638,
+              "step": 150,
+              "train_mse": 0.127981036901474
+            },
+            {
+              "heldout_mse": 0.08221199363470078,
+              "step": 200,
+              "train_mse": 0.0895683765411377
+            }
+          ]
+        },
+        {
+          "config": {
+            "agc_clip": 0.02,
+            "auto_blend": false,
+            "auto_lr": false,
+            "factored": true,
+            "lr": 0.0002,
+            "precond_alpha": 1.0,
+            "rms_clip_granularity": "param",
+            "rms_clip_threshold": 1.0,
+            "trust_clip": 5.0,
+            "trust_space": "precond",
+            "update_buffer_dtype": "fp32",
+            "weight_decay": 0.01
+          },
+          "elapsed_seconds": 0.19652545799908694,
+          "optimizer": "Tiger",
+          "trace": [
+            {
+              "heldout_mse": 1.2614563703536987,
+              "step": 0,
+              "train_mse": 1.3680917024612427
+            },
+            {
+              "heldout_mse": 1.2614517211914062,
+              "step": 50,
+              "train_mse": 1.3680883646011353
+            },
+            {
+              "heldout_mse": 1.261441946029663,
+              "step": 100,
+              "train_mse": 1.3680797815322876
+            },
+            {
+              "heldout_mse": 1.2614288330078125,
+              "step": 150,
+              "train_mse": 1.3680680990219116
+            },
+            {
+              "heldout_mse": 1.2614147663116455,
+              "step": 200,
+              "train_mse": 1.368054986000061
+            }
+          ]
+        }
+      ],
+      "seed": 37
+    }
+  ],
+  "source": {
+    "head": "66374f21a0ddb00a27dd119c7f616e4d5c74eb27",
+    "repo": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim",
+    "tiger_py_sha256": "d65f3f078d2a4230040b96b81dbd0785f8c0fb71ba018077fcf4500ce37cf2cf"
+  },
+  "task": {
+    "batch_size": 64,
+    "evaluation_steps": [
+      0,
+      50,
+      100,
+      150,
+      200
+    ],
+    "heldout_labels": "noise-free",
+    "heldout_n": 256,
+    "kind": "2D nonlinear regression",
+    "minibatches": "same precomputed indices for both optimizers per seed",
+    "model": "2-64-64-1 SiLU MLP",
+    "steps": 200,
+    "train_label_noise_std": 0.05,
+    "train_n": 768
+  }
+}

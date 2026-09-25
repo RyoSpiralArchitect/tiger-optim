@@ -1,0 +1,3 @@
+{"final_heldout_mse": 1.1018668413162231, "final_train_mse": 0.986544668674469, "lr": 0.001, "seed": 11}
+{"final_heldout_mse": 0.32387250661849976, "final_train_mse": 0.2838303744792938, "lr": 0.003, "seed": 11}
+results=/tmp/tiger-optim-20260925-quality/lr_sensitivity_results.json

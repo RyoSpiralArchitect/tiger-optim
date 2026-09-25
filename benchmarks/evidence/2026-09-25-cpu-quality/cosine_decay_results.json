@@ -1,0 +1,277 @@
+{
+  "fixed_lr_results_sha256": "6bcb1fc2e19fedfd5622da4b148543568ce7b06f9a8ddaa5b9f6ee7fa7fcd593",
+  "label": "predeclared cosine LR decay test of late regression; preliminary CPU-only evidence",
+  "optimizer_config": {
+    "agc_clip": 0.0,
+    "auto_blend": false,
+    "auto_lr": false,
+    "factored": true,
+    "lr_end": 0.0001,
+    "lr_start": 0.01,
+    "precond_alpha": 1.0,
+    "rms_clip_granularity": "param",
+    "rms_clip_threshold": 1.0,
+    "trust_clip": 5.0,
+    "trust_space": "precond",
+    "update_buffer_dtype": "fp32",
+    "weight_decay": 0.01
+  },
+  "quality_probe_sha256": "83827a7211c7338fa82f23c27835e6e2d5bc359331ec490c7f515f206aa72354",
+  "runs": [
+    {
+      "adamw_heldout_trace": [
+        {
+          "heldout_mse": 1.5034139156341553,
+          "step": 0
+        },
+        {
+          "heldout_mse": 0.39299044013023376,
+          "step": 50
+        },
+        {
+          "heldout_mse": 0.16777923703193665,
+          "step": 100
+        },
+        {
+          "heldout_mse": 0.1447521597146988,
+          "step": 150
+        },
+        {
+          "heldout_mse": 0.12178730219602585,
+          "step": 200
+        }
+      ],
+      "elapsed_seconds": 0.18572024999957648,
+      "fixed_lr_heldout_trace": [
+        {
+          "heldout_mse": 1.5034139156341553,
+          "step": 0
+        },
+        {
+          "heldout_mse": 0.6556332111358643,
+          "step": 50
+        },
+        {
+          "heldout_mse": 0.1965194046497345,
+          "step": 100
+        },
+        {
+          "heldout_mse": 0.07734231650829315,
+          "step": 150
+        },
+        {
+          "heldout_mse": 0.2798212468624115,
+          "step": 200
+        }
+      ],
+      "seed": 11,
+      "status": "complete",
+      "stopped_at_step": null,
+      "trace": [
+        {
+          "heldout_mse": 1.5034139156341553,
+          "lr": 0.01,
+          "step": 0,
+          "train_mse": 1.3643838167190552
+        },
+        {
+          "heldout_mse": 0.6946249604225159,
+          "lr": 0.008550178566873411,
+          "step": 50,
+          "train_mse": 0.6210750937461853
+        },
+        {
+          "heldout_mse": 0.1617494821548462,
+          "lr": 0.0050500000000000015,
+          "step": 100,
+          "train_mse": 0.15061743557453156
+        },
+        {
+          "heldout_mse": 0.033686116337776184,
+          "lr": 0.0015498214331265915,
+          "step": 150,
+          "train_mse": 0.029554342851042747
+        },
+        {
+          "heldout_mse": 0.006239535287022591,
+          "lr": 0.0001,
+          "step": 200,
+          "train_mse": 0.009324301034212112
+        }
+      ]
+    },
+    {
+      "adamw_heldout_trace": [
+        {
+          "heldout_mse": 1.6868082284927368,
+          "step": 0
+        },
+        {
+          "heldout_mse": 0.5280787944793701,
+          "step": 50
+        },
+        {
+          "heldout_mse": 0.17804838716983795,
+          "step": 100
+        },
+        {
+          "heldout_mse": 0.12630610167980194,
+          "step": 150
+        },
+        {
+          "heldout_mse": 0.07630322873592377,
+          "step": 200
+        }
+      ],
+      "elapsed_seconds": 0.175406499998644,
+      "fixed_lr_heldout_trace": [
+        {
+          "heldout_mse": 1.6868082284927368,
+          "step": 0
+        },
+        {
+          "heldout_mse": 0.8464824557304382,
+          "step": 50
+        },
+        {
+          "heldout_mse": 0.11130359023809433,
+          "step": 100
+        },
+        {
+          "heldout_mse": 0.1616295725107193,
+          "step": 150
+        },
+        {
+          "heldout_mse": 0.6616772413253784,
+          "step": 200
+        }
+      ],
+      "seed": 23,
+      "status": "complete",
+      "stopped_at_step": null,
+      "trace": [
+        {
+          "heldout_mse": 1.6868082284927368,
+          "lr": 0.01,
+          "step": 0,
+          "train_mse": 1.448326587677002
+        },
+        {
+          "heldout_mse": 0.8891823291778564,
+          "lr": 0.008550178566873411,
+          "step": 50,
+          "train_mse": 0.7584030628204346
+        },
+        {
+          "heldout_mse": 0.20041492581367493,
+          "lr": 0.0050500000000000015,
+          "step": 100,
+          "train_mse": 0.19309492409229279
+        },
+        {
+          "heldout_mse": 0.02177407033741474,
+          "lr": 0.0015498214331265915,
+          "step": 150,
+          "train_mse": 0.0224765632301569
+        },
+        {
+          "heldout_mse": 0.00682262284681201,
+          "lr": 0.0001,
+          "step": 200,
+          "train_mse": 0.01009372528642416
+        }
+      ]
+    },
+    {
+      "adamw_heldout_trace": [
+        {
+          "heldout_mse": 1.2614563703536987,
+          "step": 0
+        },
+        {
+          "heldout_mse": 0.2974547743797302,
+          "step": 50
+        },
+        {
+          "heldout_mse": 0.14143186807632446,
+          "step": 100
+        },
+        {
+          "heldout_mse": 0.12031584978103638,
+          "step": 150
+        },
+        {
+          "heldout_mse": 0.08221199363470078,
+          "step": 200
+        }
+      ],
+      "elapsed_seconds": 0.18331399999806308,
+      "fixed_lr_heldout_trace": [
+        {
+          "heldout_mse": 1.2614563703536987,
+          "step": 0
+        },
+        {
+          "heldout_mse": 0.5063616633415222,
+          "step": 50
+        },
+        {
+          "heldout_mse": 0.08003678172826767,
+          "step": 100
+        },
+        {
+          "heldout_mse": 0.20099060237407684,
+          "step": 150
+        },
+        {
+          "heldout_mse": 0.2308368682861328,
+          "step": 200
+        }
+      ],
+      "seed": 37,
+      "status": "complete",
+      "stopped_at_step": null,
+      "trace": [
+        {
+          "heldout_mse": 1.2614563703536987,
+          "lr": 0.01,
+          "step": 0,
+          "train_mse": 1.3680917024612427
+        },
+        {
+          "heldout_mse": 0.5363180637359619,
+          "lr": 0.008550178566873411,
+          "step": 50,
+          "train_mse": 0.6197117567062378
+        },
+        {
+          "heldout_mse": 0.13853618502616882,
+          "lr": 0.0050500000000000015,
+          "step": 100,
+          "train_mse": 0.1517890840768814
+        },
+        {
+          "heldout_mse": 0.040654223412275314,
+          "lr": 0.0015498214331265915,
+          "step": 150,
+          "train_mse": 0.04550635814666748
+        },
+        {
+          "heldout_mse": 0.002943276660516858,
+          "lr": 0.0001,
+          "step": 200,
+          "train_mse": 0.006403140723705292
+        }
+      ]
+    }
+  ],
+  "scheduler": {
+    "T_max": 200,
+    "eta_min": 0.0001,
+    "kind": "torch.optim.lr_scheduler.CosineAnnealingLR",
+    "order": "scheduler.step() after optimizer.step()"
+  },
+  "task": "same synthetic task, initial model, data, minibatches, and 200 steps as quality_probe.py",
+  "tiger_py_sha256": "d65f3f078d2a4230040b96b81dbd0785f8c0fb71ba018077fcf4500ce37cf2cf",
+  "torch_default_device": "cpu"
+}
