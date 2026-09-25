@@ -1,0 +1,29 @@
+{
+  "rows": [
+    {
+      "fft_r2c": 0,
+      "fft_rfft": 0,
+      "isfinite": 53,
+      "local_scalar_dense": 244,
+      "marker_duration_us": 41405.2,
+      "step": 24
+    },
+    {
+      "fft_r2c": 2,
+      "fft_rfft": 2,
+      "isfinite": 53,
+      "local_scalar_dense": 244,
+      "marker_duration_us": 67878.971,
+      "step": 25
+    },
+    {
+      "fft_r2c": 0,
+      "fft_rfft": 0,
+      "isfinite": 53,
+      "local_scalar_dense": 244,
+      "marker_duration_us": 36192.113,
+      "step": 26
+    }
+  ],
+  "schema": 1
+}

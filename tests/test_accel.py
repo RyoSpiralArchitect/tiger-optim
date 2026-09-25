@@ -545,3 +545,98 @@ def test_real_torch_backend_handles_active_device(monkeypatch):
     finally:
         accel.reset_backend_configuration()
         accel.refresh_backend_state(reload=True, reset_metrics=True)
+
+
+def test_large_finite_reductions_stay_finite_with_torch_and_fallback(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+    x = torch.tensor([1e20, 1e20], dtype=torch.float32)
+    expected_norm = x.new_tensor(1.4142135623730951e20)
+    expected_rms = x.new_tensor(1e20)
+    try:
+        for disabled in (["julia"], ["all"]):
+            accel.configure_backends(preferred=["torch"], disabled=disabled)
+            accel.refresh_backend_state(reset_metrics=True)
+            actual_norm = accel.fast_norm(x)
+            actual_rms = accel.fast_rms(x)
+            assert torch.isfinite(actual_norm)
+            assert torch.isfinite(actual_rms)
+            torch.testing.assert_close(actual_norm, expected_norm)
+            torch.testing.assert_close(actual_rms, expected_rms)
+
+        half = torch.tensor([65504.0, 65504.0], dtype=torch.float16)
+        torch.testing.assert_close(accel.fast_rms(half), half[0])
+    finally:
+        accel.reset_backend_configuration()
+        accel.refresh_backend_state(reload=True, reset_metrics=True)
+
+
+def test_reduction_fallback_has_finite_zero_gradient(monkeypatch):
+    accel = _reload_accel(monkeypatch, TIGER_ACCEL_DISABLE="all")
+    for reduce in (accel.fast_norm, accel.fast_rms):
+        x = torch.zeros(3, dtype=torch.float32, requires_grad=True)
+        reduce(x).backward()
+        torch.testing.assert_close(x.grad, torch.zeros_like(x))
+
+
+def test_complex_reductions_return_real_magnitudes(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+    x = torch.tensor([3.0 + 4.0j, 12.0j], dtype=torch.complex64)
+    try:
+        for disabled in (["julia"], ["all"]):
+            accel.configure_backends(preferred=["torch"], disabled=disabled)
+            accel.refresh_backend_state(reset_metrics=True)
+            norm = accel.fast_norm(x)
+            rms = accel.fast_rms(x)
+            assert norm.dtype == torch.float32
+            assert rms.dtype == torch.float32
+            torch.testing.assert_close(norm, x.real.new_tensor(13.0))
+            torch.testing.assert_close(rms, x.real.new_tensor(13.0 / 2**0.5))
+    finally:
+        accel.reset_backend_configuration()
+        accel.refresh_backend_state(reload=True, reset_metrics=True)
+
+
+def test_integer_and_boolean_reductions_return_floating_values(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+    try:
+        for disabled in (["julia"], ["all"]):
+            accel.configure_backends(preferred=["torch"], disabled=disabled)
+            accel.refresh_backend_state(reset_metrics=True)
+            for dtype, expected_dtype in (
+                (torch.int32, torch.float32),
+                (torch.int64, torch.float64),
+                (torch.bool, torch.float32),
+            ):
+                values = [True, False] if dtype is torch.bool else [1, 2]
+                x = torch.tensor(values, dtype=dtype)
+                norm = accel.fast_norm(x)
+                rms = accel.fast_rms(x)
+                assert norm.dtype == expected_dtype
+                assert rms.dtype == expected_dtype
+                expected = x.to(expected_dtype)
+                torch.testing.assert_close(norm, torch.linalg.vector_norm(expected))
+                torch.testing.assert_close(rms, torch.linalg.vector_norm(expected) / 2**0.5)
+    finally:
+        accel.reset_backend_configuration()
+        accel.refresh_backend_state(reload=True, reset_metrics=True)
+
+
+def test_julia_overflow_and_underflow_fall_back_to_torch(monkeypatch):
+    accel = _reload_accel(monkeypatch)
+    julia = accel._BACKEND_MODULES["julia"]
+    if julia is None or julia.np is None:
+        return
+    monkeypatch.setattr(julia, "jl", object())
+    monkeypatch.setattr(julia, "_NORM32", lambda _: float("inf"))
+    monkeypatch.setattr(julia, "_RMS32", lambda _: 0.0)
+    try:
+        accel.configure_backends(preferred=["julia", "torch"])
+        accel.refresh_backend_state(reset_metrics=True)
+        large = torch.tensor([1e20, 1e20], dtype=torch.float32)
+        tiny = torch.tensor([1e-40, 1e-40], dtype=torch.float32)
+        assert torch.isfinite(accel.fast_norm(large))
+        assert accel.fast_rms(tiny) > 0
+        assert accel.backend_diagnostics()["julia"]["failures"] >= 2
+    finally:
+        accel.reset_backend_configuration()
+        accel.refresh_backend_state(reload=True, reset_metrics=True)

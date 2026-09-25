@@ -1,11 +1,13 @@
 """Behavior that must hold for training loops and checkpoint continuation."""
 
 from copy import deepcopy
+import warnings
 
 import pytest
 import torch
 
 from tiger_optim import Tiger
+from tiger_optim.tiger import _spectral_dispersion_tensors
 
 
 def _simple_optimizer(params, **kwargs):
@@ -98,6 +100,166 @@ def test_fp32_ordinary_update_overflow_skips_before_state_commit(use_foreach):
 
     assert torch.equal(param, torch.ones_like(param))
     assert param not in opt.state
+
+
+def test_fp32_finite_weight_decay_does_not_false_skip_large_parameter():
+    param = torch.nn.Parameter(torch.tensor([3.2e38], device="cpu"))
+    opt = _simple_optimizer(
+        [param], lr=0.1, weight_decay=1.0,
+        use_trust_ratio=False, skip_if_nonfinite=True,
+    )
+    param.grad = torch.zeros_like(param)
+
+    opt.step()
+
+    torch.testing.assert_close(param, torch.tensor([2.88e38], device="cpu"))
+    assert param in opt.state
+
+
+@pytest.mark.parametrize("device", ["cpu", "mps"])
+def test_fp32_sparse_large_finite_trust_norm_does_not_false_skip(device):
+    if device == "mps" and not torch.backends.mps.is_available():
+        pytest.skip("requires MPS")
+    param = torch.nn.Parameter(torch.tensor([3e38, 0.0], device=device))
+    opt = _simple_optimizer(
+        [param], lr=0.1, use_trust_ratio=True, trust_clip=10.0,
+        skip_if_nonfinite=True,
+    )
+    param.grad = torch.tensor([0.0, 1.0], device=device)
+
+    opt.step()
+
+    assert torch.isfinite(param).all()
+    assert param[1] < 0.0
+    assert param in opt.state
+
+
+def test_empty_fused_qkv_tensor_passes_chunk_norm_path():
+    param = torch.nn.Parameter(torch.empty((0, 2), device="cpu"))
+    opt = _simple_optimizer(
+        [_qkv_group(param)], use_trust_ratio=True, skip_if_nonfinite=True,
+    )
+    param.grad = torch.empty_like(param)
+
+    opt.step()
+
+    assert param.numel() == 0
+
+
+@pytest.mark.parametrize("route", ["qkv", "block", "bucket_global", "bucket_mean", "bucket_median"])
+def test_fp32_specialized_update_overflow_preserves_parameter_and_moments(route):
+    if route == "qkv":
+        param = torch.nn.Parameter(torch.ones((3, 100), device="cpu"))
+        params = [param]
+        groups = [_qkv_group(param)]
+    elif route == "block":
+        param = torch.nn.Parameter(torch.ones((2, 100), device="cpu"))
+        params = [param]
+        groups = [{"params": params, "block_trust_chunks": 2}]
+    else:
+        params = [torch.nn.Parameter(torch.ones(100, device="cpu")) for _ in range(4)]
+        groups = [{"params": params, "bucket_standardize": True,
+                   "bucket_standardize_source": route.removeprefix("bucket_")}]
+
+    foreach = route.startswith("bucket_")
+    opt = _simple_optimizer(
+        groups, sign_blend=1.0, use_trust_ratio=False,
+        skip_if_nonfinite=True, use_foreach=foreach,
+        use_foreach_update=foreach, foreach_min_bucket=4,
+    )
+    for param in params:
+        param.grad = torch.ones_like(param)
+    opt.step()
+    before_params = [param.detach().clone() for param in params]
+    before_moments = [deepcopy(opt.state[param]) for param in params]
+
+    opt.param_groups[0]["lr"] = 3e38
+    for param in params:
+        param.grad = torch.zeros_like(param)
+        param.grad.flatten()[0] = 1.0
+    opt.step()
+
+    for param, before_param, before_state in zip(params, before_params, before_moments):
+        torch.testing.assert_close(param, before_param, rtol=0.0, atol=0.0)
+        torch.testing.assert_close(opt.state[param]["m"], before_state["m"])
+        torch.testing.assert_close(opt.state[param]["v"], before_state["v"])
+
+
+def test_fp32_preconditioned_trust_nonfinite_norm_skips_transactionally():
+    param = torch.nn.Parameter(torch.full((2,), 3e38, device="cpu"))
+    opt = _simple_optimizer(
+        [param], lr=0.1, betas=(1.0, 1.0), precond_alpha=1.0,
+        use_trust_ratio=True, trust_space="precond", trust_clip=10.0,
+        skip_if_nonfinite=True,
+    )
+    opt.state[param]["m"] = torch.full_like(param, 1e31)
+    opt.state[param]["v"] = torch.full_like(param, 1e-30)
+    opt.state[param]["_state_sane"] = True
+    before_param = param.detach().clone()
+    before_state = deepcopy(opt.state[param])
+    param.grad = torch.zeros_like(param)
+
+    opt.step()
+
+    torch.testing.assert_close(param, before_param, rtol=0.0, atol=0.0)
+    torch.testing.assert_close(opt.state[param]["m"], before_state["m"])
+    torch.testing.assert_close(opt.state[param]["v"], before_state["v"])
+    assert opt.state[param]["_state_sane"] is before_state["_state_sane"]
+
+
+@pytest.mark.parametrize("source", ["mean", "median"])
+def test_fp32_bucket_standardization_ignores_empty_update(source):
+    empty = torch.nn.Parameter(torch.empty(0, device="cpu"))
+    valid = [torch.nn.Parameter(torch.ones(8, device="cpu")) for _ in range(3)]
+    params = [empty, *valid]
+    opt = _simple_optimizer(
+        [{"params": params, "bucket_standardize": True,
+          "bucket_standardize_source": source}],
+        use_foreach=True, use_foreach_update=True, foreach_min_bucket=4,
+        use_trust_ratio=False, skip_if_nonfinite=True,
+    )
+    for param in params:
+        param.grad = torch.ones_like(param)
+
+    opt.step()
+
+    assert empty.numel() == 0
+    assert all(torch.isfinite(param).all() and torch.all(param < 1.0) for param in valid)
+
+
+def test_qkv_preconditioned_trust_uses_stable_large_finite_chunk_norms():
+    param = torch.nn.Parameter(torch.full((3, 2), 1e20, device="cpu"))
+    opt = _simple_optimizer(
+        [_qkv_group(param)], lr=1e14, betas=(1.0, 1.0),
+        precond_alpha=0.0, use_trust_ratio=True, trust_space="precond",
+        trust_clip=10.0, trust_ema_beta=0.5,
+        skip_if_nonfinite=True,
+    )
+    opt.state[param]["m"] = torch.full_like(param, 1e20)
+    opt.state[param]["v"] = torch.ones_like(param)
+    opt.state[param]["_state_sane"] = True
+    before_param = param.detach().clone()
+    param.grad = torch.zeros_like(param)
+
+    opt.step()
+
+    assert torch.isfinite(param).all()
+    assert torch.all(param < before_param)
+    torch.testing.assert_close(opt._qkv_trust_ema[(0, 0)], torch.ones(3))
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires MPS")
+def test_mps_spectral_rfft_uses_preallocated_output_without_resize_warning():
+    cpu_values = torch.linspace(-1.0, 1.0, 256, device="cpu")
+    expected = _spectral_dispersion_tensors(cpu_values, 0.2, 0.25)
+    with warnings.catch_warnings(record=True) as seen:
+        warnings.simplefilter("always")
+        actual = _spectral_dispersion_tensors(cpu_values.to("mps"), 0.2, 0.25)
+        torch.mps.synchronize()
+
+    assert not any("resized" in str(item.message) for item in seen)
+    for result, reference in zip(actual, expected):
+        torch.testing.assert_close(result.cpu(), reference, rtol=1e-4, atol=1e-4)
 
 
 def test_factored_moments_avoid_reduction_and_outer_product_overflow():

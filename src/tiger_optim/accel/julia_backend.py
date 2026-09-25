@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 import torch
@@ -87,6 +88,17 @@ def _numpy_view(x: torch.Tensor) -> Optional[np.ndarray]:
         return None
 
 
+def _validated_reduction(result: object, arr: np.ndarray) -> Optional[float]:
+    """Fall back to Torch if Julia overflowed or underflowed finite input."""
+
+    value = float(result)
+    if not math.isfinite(value):
+        return None if np.isfinite(arr).all() else value
+    if value == 0.0 and np.any(arr):
+        return None
+    return value
+
+
 def softsign(x: torch.Tensor, tau: float) -> Optional[torch.Tensor]:
     if jl is None or np is None:
         return None
@@ -111,9 +123,9 @@ def rms(x: torch.Tensor) -> Optional[float]:
     if arr is None:
         return None
     if arr.dtype == np.float32 and _RMS32 is not None:
-        return float(_RMS32(arr))
+        return _validated_reduction(_RMS32(arr), arr)
     if arr.dtype == np.float64 and _RMS64 is not None:
-        return float(_RMS64(arr))
+        return _validated_reduction(_RMS64(arr), arr)
     return None
 
 
@@ -124,9 +136,9 @@ def norm(x: torch.Tensor) -> Optional[float]:
     if arr is None:
         return None
     if arr.dtype == np.float32 and _NORM32 is not None:
-        return float(_NORM32(arr))
+        return _validated_reduction(_NORM32(arr), arr)
     if arr.dtype == np.float64 and _NORM64 is not None:
-        return float(_NORM64(arr))
+        return _validated_reduction(_NORM64(arr), arr)
     return None
 
 

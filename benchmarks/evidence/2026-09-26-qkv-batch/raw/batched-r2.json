@@ -1,0 +1,2202 @@
+{
+  "summary": {
+    "mode": "tiger_v21_full",
+    "device": "mps",
+    "steps": 30,
+    "warmup": 10,
+    "ms_median": 15.774791503645247,
+    "ms_mean": 16.648144399368903,
+    "ms_forward_backward_median": 1.5968330008035991,
+    "ms_forward_backward_mean": 1.6090430663704562,
+    "ms_optimizer_median": 14.171958500810433,
+    "ms_optimizer_mean": 15.039101332998447,
+    "loss_last": 1.0066518783569336,
+    "loss_min": 1.004164218902588,
+    "loss_mean": 1.027649470170339
+  },
+  "run": {
+    "run_id": "b9842339b09f488589742c75c365b2c0",
+    "comparison_id": "4441501f5f85414085b7a4769a50af1b",
+    "timestamp_utc": "2026-09-25T17:28:09.598835+00:00",
+    "git": {
+      "commit": "a4dd249cbfb0d4b1caed4fa9fd292d6cee83de9f",
+      "dirty": true
+    },
+    "python": "3.12.6 (v3.12.6:a4a2d2b0d85, Sep  6 2024, 16:08:03) [Clang 13.0.0 (clang-1300.0.29.30)]",
+    "pytorch": "2.12.1",
+    "pytorch_cuda_build": null,
+    "os": "macOS-26.4.1-arm64-arm-64bit",
+    "device": {
+      "requested": "mps",
+      "resolved": "mps",
+      "name": "Apple M4"
+    },
+    "runtime": {
+      "torch_default_device": "cpu",
+      "torch_default_dtype": "torch.float32",
+      "deterministic_algorithms": false,
+      "TIGER_ACCEL_DISABLE": null,
+      "TIGER_ACCEL_PREFER": null,
+      "PYTORCH_ENABLE_MPS_FALLBACK": null
+    },
+    "cli": {
+      "argv": [
+        "--device",
+        "mps",
+        "--steps",
+        "30",
+        "--warmup",
+        "10",
+        "--seed",
+        "0",
+        "--modes",
+        "tiger_v21_full"
+      ],
+      "parsed": {
+        "device": "mps",
+        "steps": 30,
+        "warmup": 10,
+        "seed": 0,
+        "modes": [
+          "tiger_v21_full"
+        ]
+      }
+    },
+    "effective_arguments": {
+      "mode": "tiger_v21_full",
+      "device": "mps",
+      "steps": 30,
+      "warmup": 10,
+      "seed": 0,
+      "batch": 16,
+      "sequence_length": 32,
+      "model_width": 256,
+      "ff_width": 512,
+      "attention_heads": 4
+    },
+    "optimizer_config_initial": {
+      "class": "tiger_optim.tiger.Tiger",
+      "defaults": {
+        "lr": 0.0002,
+        "betas": [
+          0.9,
+          0.98
+        ],
+        "eps": 1e-08,
+        "weight_decay": 0.0,
+        "factored": true,
+        "precond_alpha": 1.0,
+        "sign_mode": "softsign",
+        "sign_tau": 0.001,
+        "sign_blend": 0.2,
+        "blend_to": 0.6,
+        "blend_steps": 0,
+        "blend_schedule": "cosine",
+        "use_trust_ratio": true,
+        "trust_clip": 10.0,
+        "trust_space": "precond",
+        "trust_ema_beta": 0.9,
+        "agc_clip": 0.0,
+        "agc_eps": 1e-12,
+        "use_foreach": true,
+        "use_foreach_update": true,
+        "foreach_min_bucket": 4,
+        "update_buffer_dtype": "param",
+        "bucket_standardize": true,
+        "bucket_standardize_source": "global",
+        "bucket_scalarless": true,
+        "use_triton_bucket_stats": false,
+        "use_triton_fused_apply": false,
+        "mom_dtype": "fp32",
+        "state_prune_threshold": 0.0,
+        "state_prune_interval": 100,
+        "skip_if_nonfinite": true,
+        "auto_lr": true,
+        "lr_decay": 0.5,
+        "lr_min": 1e-06,
+        "plateau_patience": 200,
+        "plateau_tol": 0.0001,
+        "auto_blend": true,
+        "auto_blend_gain": 0.05,
+        "auto_blend_bounds": [
+          0.1,
+          0.8
+        ],
+        "auto_ffn_asym": false,
+        "ffn_asym_target": 1.0,
+        "ffn_asym_gain": 0.05,
+        "ffn_asym_beta": 0.9,
+        "ffn_asym_interval": 10,
+        "ffn_lr_min": 0.5,
+        "ffn_lr_max": 1.5,
+        "lr_scale": 1.0,
+        "block_tag": "default",
+        "rms_clip_threshold": 0.0,
+        "rms_clip_granularity": "param",
+        "qkv_rules": {},
+        "qkv_trust_split": false,
+        "qkv_lr_scales": null,
+        "block_trust_chunks": 0,
+        "lora_density_adapt": true,
+        "lora_density_k": 0.25,
+        "lora_density_beta": 0.9,
+        "lora_sb_bounds": [
+          0.1,
+          0.5
+        ],
+        "lora_agc_bounds": [
+          0.01,
+          0.05
+        ],
+        "lora_pid_kp": 0.6,
+        "lora_pid_ki": 0.05,
+        "lora_pid_kd": 0.1,
+        "lora_interval": 20,
+        "lora_int_clip_sb": 0.5,
+        "lora_int_clip_agc": 0.5,
+        "lora_aw_reset_on_saturation": true,
+        "lora_aw_eps": 0.001,
+        "lora_dwell_decay": 0.9,
+        "lora_dwell_gain": 0.05,
+        "lora_errflip_damp_sb": 0.5,
+        "lora_errflip_damp_agc": 0.5,
+        "lora_pid_mode": "auto",
+        "lora_inertia_beta": 0.9,
+        "lora_inertia_strength": 1.5,
+        "lora_flip_ema_beta": 0.8,
+        "lora_ki_min": 0.01,
+        "lora_kd_min": 0.005,
+        "lora_recover_rate": 0.15,
+        "lora_cross_adapt": true,
+        "lora_cross_beta": 0.6,
+        "lora_cross_sync": 0.25,
+        "lora_cross_gain": 0.1,
+        "lora_cross_attn_tags": [
+          "attn_qkv"
+        ],
+        "lora_cross_ffn_tags": [
+          "ffn_up",
+          "ffn_down"
+        ],
+        "lora_bridge": true,
+        "lora_bridge_gain": 0.25,
+        "lora_bridge_bounds": [
+          0.6,
+          1.4
+        ],
+        "lora_bridge_beta": 0.8,
+        "qkv_lr_autoadapt": true,
+        "qkv_w_rms": 0.7,
+        "qkv_w_trust": 0.3,
+        "qkv_lr_gain": 0.02,
+        "qkv_lr_bounds": [
+          0.7,
+          1.3
+        ],
+        "qkv_lr_interval": 25,
+        "qkv_lr_ema_beta": 0.8,
+        "qkv_gain_shrink_gamma": 1.2,
+        "qkv_lr_step_clip": 0.08,
+        "qkv_disp_ema_beta": 0.8,
+        "qkv_gamma_rate": 0.6,
+        "qkv_gamma_min": 0.2,
+        "qkv_gamma_max": 5.0,
+        "qkv_clip_shrink_k": 0.6,
+        "qkv_clip_min": 0.02,
+        "qkv_clip_max": 0.2,
+        "qkv_spectral_adapt": true,
+        "qkv_spectral_low_band": 0.2,
+        "qkv_spectral_high_band": 0.25,
+        "qkv_spectral_beta": 0.7,
+        "qkv_spectral_eps": 1e-09,
+        "qkv_gamma_spectral_gain": 0.75,
+        "qkv_gamma_spectral_clip": [
+          0.5,
+          1.5
+        ],
+        "qkv_phase_boost_gain": 0.4,
+        "qkv_phase_target": 0.6,
+        "qkv_phase_boost_clip": [
+          0.6,
+          1.6
+        ],
+        "compile_guard": true,
+        "reflect_interval": 50
+      },
+      "param_groups": [
+        {
+          "parameters": [
+            {
+              "name": "mha.in_proj_weight",
+              "shape": [
+                768,
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "mha.in_proj_bias",
+              "shape": [
+                768
+              ],
+              "dtype": "torch.float32"
+            }
+          ],
+          "options": {
+            "lr": 0.0003,
+            "weight_decay": 0.01,
+            "lr_scale": 1.0,
+            "block_tag": "attn_qkv",
+            "rms_clip_threshold": 0.0,
+            "rms_clip_granularity": "param",
+            "agc_clip": 0.0,
+            "block_trust_chunks": 0,
+            "use_foreach": true,
+            "use_foreach_update": true,
+            "foreach_min_bucket": 4,
+            "bucket_standardize": false,
+            "bucket_standardize_source": "global",
+            "bucket_scalarless": true,
+            "use_triton_bucket_stats": false,
+            "use_triton_fused_apply": false,
+            "qkv_rules": {
+              "mha.in_proj_weight": [
+                0,
+                3
+              ],
+              "mha.in_proj_bias": [
+                0,
+                3
+              ]
+            },
+            "qkv_trust_split": true,
+            "qkv_lr_scales": {
+              "q": 0.9,
+              "k": 0.8,
+              "v": 1.1
+            },
+            "betas": [
+              0.9,
+              0.98
+            ],
+            "eps": 1e-08,
+            "factored": true,
+            "precond_alpha": 1.0,
+            "sign_mode": "softsign",
+            "sign_tau": 0.001,
+            "sign_blend": 0.2,
+            "blend_to": 0.6,
+            "blend_steps": 0,
+            "blend_schedule": "cosine",
+            "use_trust_ratio": true,
+            "trust_clip": 10.0,
+            "trust_space": "precond",
+            "trust_ema_beta": 0.9,
+            "agc_eps": 1e-12,
+            "update_buffer_dtype": "param",
+            "mom_dtype": "fp32",
+            "state_prune_threshold": 0.0,
+            "state_prune_interval": 100,
+            "skip_if_nonfinite": true,
+            "auto_lr": true,
+            "lr_decay": 0.5,
+            "lr_min": 1e-06,
+            "plateau_patience": 200,
+            "plateau_tol": 0.0001,
+            "auto_blend": true,
+            "auto_blend_gain": 0.05,
+            "auto_blend_bounds": [
+              0.1,
+              0.8
+            ],
+            "auto_ffn_asym": false,
+            "ffn_asym_target": 1.0,
+            "ffn_asym_gain": 0.05,
+            "ffn_asym_beta": 0.9,
+            "ffn_asym_interval": 10,
+            "ffn_lr_min": 0.5,
+            "ffn_lr_max": 1.5,
+            "lora_density_adapt": true,
+            "lora_density_k": 0.25,
+            "lora_density_beta": 0.9,
+            "lora_sb_bounds": [
+              0.1,
+              0.5
+            ],
+            "lora_agc_bounds": [
+              0.01,
+              0.05
+            ],
+            "lora_pid_kp": 0.6,
+            "lora_pid_ki": 0.05,
+            "lora_pid_kd": 0.1,
+            "lora_interval": 20,
+            "lora_int_clip_sb": 0.5,
+            "lora_int_clip_agc": 0.5,
+            "lora_aw_reset_on_saturation": true,
+            "lora_aw_eps": 0.001,
+            "lora_dwell_decay": 0.9,
+            "lora_dwell_gain": 0.05,
+            "lora_errflip_damp_sb": 0.5,
+            "lora_errflip_damp_agc": 0.5,
+            "lora_pid_mode": "auto",
+            "lora_inertia_beta": 0.9,
+            "lora_inertia_strength": 1.5,
+            "lora_flip_ema_beta": 0.8,
+            "lora_ki_min": 0.01,
+            "lora_kd_min": 0.005,
+            "lora_recover_rate": 0.15,
+            "lora_cross_adapt": true,
+            "lora_cross_beta": 0.6,
+            "lora_cross_sync": 0.25,
+            "lora_cross_gain": 0.1,
+            "lora_cross_attn_tags": [
+              "attn_qkv"
+            ],
+            "lora_cross_ffn_tags": [
+              "ffn_up",
+              "ffn_down"
+            ],
+            "lora_bridge": true,
+            "lora_bridge_gain": 0.25,
+            "lora_bridge_bounds": [
+              0.6,
+              1.4
+            ],
+            "lora_bridge_beta": 0.8,
+            "qkv_lr_autoadapt": true,
+            "qkv_w_rms": 0.7,
+            "qkv_w_trust": 0.3,
+            "qkv_lr_gain": 0.02,
+            "qkv_lr_bounds": [
+              0.7,
+              1.3
+            ],
+            "qkv_lr_interval": 25,
+            "qkv_lr_ema_beta": 0.8,
+            "qkv_gain_shrink_gamma": 1.2,
+            "qkv_lr_step_clip": 0.08,
+            "qkv_disp_ema_beta": 0.8,
+            "qkv_gamma_rate": 0.6,
+            "qkv_gamma_min": 0.2,
+            "qkv_gamma_max": 5.0,
+            "qkv_clip_shrink_k": 0.6,
+            "qkv_clip_min": 0.02,
+            "qkv_clip_max": 0.2,
+            "qkv_spectral_adapt": true,
+            "qkv_spectral_low_band": 0.2,
+            "qkv_spectral_high_band": 0.25,
+            "qkv_spectral_beta": 0.7,
+            "qkv_spectral_eps": 1e-09,
+            "qkv_gamma_spectral_gain": 0.75,
+            "qkv_gamma_spectral_clip": [
+              0.5,
+              1.5
+            ],
+            "qkv_phase_boost_gain": 0.4,
+            "qkv_phase_target": 0.6,
+            "qkv_phase_boost_clip": [
+              0.6,
+              1.6
+            ],
+            "compile_guard": true,
+            "reflect_interval": 50
+          }
+        },
+        {
+          "parameters": [
+            {
+              "name": "mha.out_proj.weight",
+              "shape": [
+                256,
+                256
+              ],
+              "dtype": "torch.float32"
+            }
+          ],
+          "options": {
+            "lr": 0.0003,
+            "weight_decay": 0.01,
+            "lr_scale": 1.0,
+            "block_tag": "attn_o",
+            "rms_clip_threshold": 0.0,
+            "rms_clip_granularity": "param",
+            "agc_clip": 0.0,
+            "block_trust_chunks": 0,
+            "use_foreach": true,
+            "use_foreach_update": true,
+            "foreach_min_bucket": 4,
+            "bucket_standardize": false,
+            "bucket_standardize_source": "global",
+            "bucket_scalarless": true,
+            "use_triton_bucket_stats": false,
+            "use_triton_fused_apply": false,
+            "betas": [
+              0.9,
+              0.98
+            ],
+            "eps": 1e-08,
+            "factored": true,
+            "precond_alpha": 1.0,
+            "sign_mode": "softsign",
+            "sign_tau": 0.001,
+            "sign_blend": 0.2,
+            "blend_to": 0.6,
+            "blend_steps": 0,
+            "blend_schedule": "cosine",
+            "use_trust_ratio": true,
+            "trust_clip": 10.0,
+            "trust_space": "precond",
+            "trust_ema_beta": 0.9,
+            "agc_eps": 1e-12,
+            "update_buffer_dtype": "param",
+            "mom_dtype": "fp32",
+            "state_prune_threshold": 0.0,
+            "state_prune_interval": 100,
+            "skip_if_nonfinite": true,
+            "auto_lr": true,
+            "lr_decay": 0.5,
+            "lr_min": 1e-06,
+            "plateau_patience": 200,
+            "plateau_tol": 0.0001,
+            "auto_blend": true,
+            "auto_blend_gain": 0.05,
+            "auto_blend_bounds": [
+              0.1,
+              0.8
+            ],
+            "auto_ffn_asym": false,
+            "ffn_asym_target": 1.0,
+            "ffn_asym_gain": 0.05,
+            "ffn_asym_beta": 0.9,
+            "ffn_asym_interval": 10,
+            "ffn_lr_min": 0.5,
+            "ffn_lr_max": 1.5,
+            "qkv_rules": {},
+            "qkv_trust_split": false,
+            "qkv_lr_scales": null,
+            "lora_density_adapt": true,
+            "lora_density_k": 0.25,
+            "lora_density_beta": 0.9,
+            "lora_sb_bounds": [
+              0.1,
+              0.5
+            ],
+            "lora_agc_bounds": [
+              0.01,
+              0.05
+            ],
+            "lora_pid_kp": 0.6,
+            "lora_pid_ki": 0.05,
+            "lora_pid_kd": 0.1,
+            "lora_interval": 20,
+            "lora_int_clip_sb": 0.5,
+            "lora_int_clip_agc": 0.5,
+            "lora_aw_reset_on_saturation": true,
+            "lora_aw_eps": 0.001,
+            "lora_dwell_decay": 0.9,
+            "lora_dwell_gain": 0.05,
+            "lora_errflip_damp_sb": 0.5,
+            "lora_errflip_damp_agc": 0.5,
+            "lora_pid_mode": "auto",
+            "lora_inertia_beta": 0.9,
+            "lora_inertia_strength": 1.5,
+            "lora_flip_ema_beta": 0.8,
+            "lora_ki_min": 0.01,
+            "lora_kd_min": 0.005,
+            "lora_recover_rate": 0.15,
+            "lora_cross_adapt": true,
+            "lora_cross_beta": 0.6,
+            "lora_cross_sync": 0.25,
+            "lora_cross_gain": 0.1,
+            "lora_cross_attn_tags": [
+              "attn_qkv"
+            ],
+            "lora_cross_ffn_tags": [
+              "ffn_up",
+              "ffn_down"
+            ],
+            "lora_bridge": true,
+            "lora_bridge_gain": 0.25,
+            "lora_bridge_bounds": [
+              0.6,
+              1.4
+            ],
+            "lora_bridge_beta": 0.8,
+            "qkv_lr_autoadapt": true,
+            "qkv_w_rms": 0.7,
+            "qkv_w_trust": 0.3,
+            "qkv_lr_gain": 0.02,
+            "qkv_lr_bounds": [
+              0.7,
+              1.3
+            ],
+            "qkv_lr_interval": 25,
+            "qkv_lr_ema_beta": 0.8,
+            "qkv_gain_shrink_gamma": 1.2,
+            "qkv_lr_step_clip": 0.08,
+            "qkv_disp_ema_beta": 0.8,
+            "qkv_gamma_rate": 0.6,
+            "qkv_gamma_min": 0.2,
+            "qkv_gamma_max": 5.0,
+            "qkv_clip_shrink_k": 0.6,
+            "qkv_clip_min": 0.02,
+            "qkv_clip_max": 0.2,
+            "qkv_spectral_adapt": true,
+            "qkv_spectral_low_band": 0.2,
+            "qkv_spectral_high_band": 0.25,
+            "qkv_spectral_beta": 0.7,
+            "qkv_spectral_eps": 1e-09,
+            "qkv_gamma_spectral_gain": 0.75,
+            "qkv_gamma_spectral_clip": [
+              0.5,
+              1.5
+            ],
+            "qkv_phase_boost_gain": 0.4,
+            "qkv_phase_target": 0.6,
+            "qkv_phase_boost_clip": [
+              0.6,
+              1.6
+            ],
+            "compile_guard": true,
+            "reflect_interval": 50
+          }
+        },
+        {
+          "parameters": [
+            {
+              "name": "mha.out_proj.bias",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "up.bias",
+              "shape": [
+                512
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "down.bias",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "ln.bias",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            }
+          ],
+          "options": {
+            "lr": 0.0003,
+            "weight_decay": 0.0,
+            "lr_scale": 0.5,
+            "block_tag": "bias",
+            "rms_clip_threshold": 0.0,
+            "rms_clip_granularity": "param",
+            "agc_clip": 0.0,
+            "block_trust_chunks": 0,
+            "use_foreach": true,
+            "use_foreach_update": true,
+            "foreach_min_bucket": 4,
+            "bucket_standardize": false,
+            "bucket_standardize_source": "global",
+            "bucket_scalarless": true,
+            "use_triton_bucket_stats": false,
+            "use_triton_fused_apply": false,
+            "betas": [
+              0.9,
+              0.98
+            ],
+            "eps": 1e-08,
+            "factored": true,
+            "precond_alpha": 1.0,
+            "sign_mode": "softsign",
+            "sign_tau": 0.001,
+            "sign_blend": 0.2,
+            "blend_to": 0.6,
+            "blend_steps": 0,
+            "blend_schedule": "cosine",
+            "use_trust_ratio": true,
+            "trust_clip": 10.0,
+            "trust_space": "precond",
+            "trust_ema_beta": 0.9,
+            "agc_eps": 1e-12,
+            "update_buffer_dtype": "param",
+            "mom_dtype": "fp32",
+            "state_prune_threshold": 0.0,
+            "state_prune_interval": 100,
+            "skip_if_nonfinite": true,
+            "auto_lr": true,
+            "lr_decay": 0.5,
+            "lr_min": 1e-06,
+            "plateau_patience": 200,
+            "plateau_tol": 0.0001,
+            "auto_blend": true,
+            "auto_blend_gain": 0.05,
+            "auto_blend_bounds": [
+              0.1,
+              0.8
+            ],
+            "auto_ffn_asym": false,
+            "ffn_asym_target": 1.0,
+            "ffn_asym_gain": 0.05,
+            "ffn_asym_beta": 0.9,
+            "ffn_asym_interval": 10,
+            "ffn_lr_min": 0.5,
+            "ffn_lr_max": 1.5,
+            "qkv_rules": {},
+            "qkv_trust_split": false,
+            "qkv_lr_scales": null,
+            "lora_density_adapt": true,
+            "lora_density_k": 0.25,
+            "lora_density_beta": 0.9,
+            "lora_sb_bounds": [
+              0.1,
+              0.5
+            ],
+            "lora_agc_bounds": [
+              0.01,
+              0.05
+            ],
+            "lora_pid_kp": 0.6,
+            "lora_pid_ki": 0.05,
+            "lora_pid_kd": 0.1,
+            "lora_interval": 20,
+            "lora_int_clip_sb": 0.5,
+            "lora_int_clip_agc": 0.5,
+            "lora_aw_reset_on_saturation": true,
+            "lora_aw_eps": 0.001,
+            "lora_dwell_decay": 0.9,
+            "lora_dwell_gain": 0.05,
+            "lora_errflip_damp_sb": 0.5,
+            "lora_errflip_damp_agc": 0.5,
+            "lora_pid_mode": "auto",
+            "lora_inertia_beta": 0.9,
+            "lora_inertia_strength": 1.5,
+            "lora_flip_ema_beta": 0.8,
+            "lora_ki_min": 0.01,
+            "lora_kd_min": 0.005,
+            "lora_recover_rate": 0.15,
+            "lora_cross_adapt": true,
+            "lora_cross_beta": 0.6,
+            "lora_cross_sync": 0.25,
+            "lora_cross_gain": 0.1,
+            "lora_cross_attn_tags": [
+              "attn_qkv"
+            ],
+            "lora_cross_ffn_tags": [
+              "ffn_up",
+              "ffn_down"
+            ],
+            "lora_bridge": true,
+            "lora_bridge_gain": 0.25,
+            "lora_bridge_bounds": [
+              0.6,
+              1.4
+            ],
+            "lora_bridge_beta": 0.8,
+            "qkv_lr_autoadapt": true,
+            "qkv_w_rms": 0.7,
+            "qkv_w_trust": 0.3,
+            "qkv_lr_gain": 0.02,
+            "qkv_lr_bounds": [
+              0.7,
+              1.3
+            ],
+            "qkv_lr_interval": 25,
+            "qkv_lr_ema_beta": 0.8,
+            "qkv_gain_shrink_gamma": 1.2,
+            "qkv_lr_step_clip": 0.08,
+            "qkv_disp_ema_beta": 0.8,
+            "qkv_gamma_rate": 0.6,
+            "qkv_gamma_min": 0.2,
+            "qkv_gamma_max": 5.0,
+            "qkv_clip_shrink_k": 0.6,
+            "qkv_clip_min": 0.02,
+            "qkv_clip_max": 0.2,
+            "qkv_spectral_adapt": true,
+            "qkv_spectral_low_band": 0.2,
+            "qkv_spectral_high_band": 0.25,
+            "qkv_spectral_beta": 0.7,
+            "qkv_spectral_eps": 1e-09,
+            "qkv_gamma_spectral_gain": 0.75,
+            "qkv_gamma_spectral_clip": [
+              0.5,
+              1.5
+            ],
+            "qkv_phase_boost_gain": 0.4,
+            "qkv_phase_target": 0.6,
+            "qkv_phase_boost_clip": [
+              0.6,
+              1.6
+            ],
+            "compile_guard": true,
+            "reflect_interval": 50
+          }
+        },
+        {
+          "parameters": [
+            {
+              "name": "up.weight",
+              "shape": [
+                512,
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "down.weight",
+              "shape": [
+                256,
+                512
+              ],
+              "dtype": "torch.float32"
+            }
+          ],
+          "options": {
+            "lr": 0.0003,
+            "weight_decay": 0.01,
+            "lr_scale": 1.0,
+            "block_tag": "mlp",
+            "rms_clip_threshold": 0.0,
+            "rms_clip_granularity": "param",
+            "agc_clip": 0.0,
+            "block_trust_chunks": 0,
+            "use_foreach": true,
+            "use_foreach_update": true,
+            "foreach_min_bucket": 4,
+            "bucket_standardize": false,
+            "bucket_standardize_source": "global",
+            "bucket_scalarless": true,
+            "use_triton_bucket_stats": false,
+            "use_triton_fused_apply": false,
+            "betas": [
+              0.9,
+              0.98
+            ],
+            "eps": 1e-08,
+            "factored": true,
+            "precond_alpha": 1.0,
+            "sign_mode": "softsign",
+            "sign_tau": 0.001,
+            "sign_blend": 0.2,
+            "blend_to": 0.6,
+            "blend_steps": 0,
+            "blend_schedule": "cosine",
+            "use_trust_ratio": true,
+            "trust_clip": 10.0,
+            "trust_space": "precond",
+            "trust_ema_beta": 0.9,
+            "agc_eps": 1e-12,
+            "update_buffer_dtype": "param",
+            "mom_dtype": "fp32",
+            "state_prune_threshold": 0.0,
+            "state_prune_interval": 100,
+            "skip_if_nonfinite": true,
+            "auto_lr": true,
+            "lr_decay": 0.5,
+            "lr_min": 1e-06,
+            "plateau_patience": 200,
+            "plateau_tol": 0.0001,
+            "auto_blend": true,
+            "auto_blend_gain": 0.05,
+            "auto_blend_bounds": [
+              0.1,
+              0.8
+            ],
+            "auto_ffn_asym": false,
+            "ffn_asym_target": 1.0,
+            "ffn_asym_gain": 0.05,
+            "ffn_asym_beta": 0.9,
+            "ffn_asym_interval": 10,
+            "ffn_lr_min": 0.5,
+            "ffn_lr_max": 1.5,
+            "qkv_rules": {},
+            "qkv_trust_split": false,
+            "qkv_lr_scales": null,
+            "lora_density_adapt": true,
+            "lora_density_k": 0.25,
+            "lora_density_beta": 0.9,
+            "lora_sb_bounds": [
+              0.1,
+              0.5
+            ],
+            "lora_agc_bounds": [
+              0.01,
+              0.05
+            ],
+            "lora_pid_kp": 0.6,
+            "lora_pid_ki": 0.05,
+            "lora_pid_kd": 0.1,
+            "lora_interval": 20,
+            "lora_int_clip_sb": 0.5,
+            "lora_int_clip_agc": 0.5,
+            "lora_aw_reset_on_saturation": true,
+            "lora_aw_eps": 0.001,
+            "lora_dwell_decay": 0.9,
+            "lora_dwell_gain": 0.05,
+            "lora_errflip_damp_sb": 0.5,
+            "lora_errflip_damp_agc": 0.5,
+            "lora_pid_mode": "auto",
+            "lora_inertia_beta": 0.9,
+            "lora_inertia_strength": 1.5,
+            "lora_flip_ema_beta": 0.8,
+            "lora_ki_min": 0.01,
+            "lora_kd_min": 0.005,
+            "lora_recover_rate": 0.15,
+            "lora_cross_adapt": true,
+            "lora_cross_beta": 0.6,
+            "lora_cross_sync": 0.25,
+            "lora_cross_gain": 0.1,
+            "lora_cross_attn_tags": [
+              "attn_qkv"
+            ],
+            "lora_cross_ffn_tags": [
+              "ffn_up",
+              "ffn_down"
+            ],
+            "lora_bridge": true,
+            "lora_bridge_gain": 0.25,
+            "lora_bridge_bounds": [
+              0.6,
+              1.4
+            ],
+            "lora_bridge_beta": 0.8,
+            "qkv_lr_autoadapt": true,
+            "qkv_w_rms": 0.7,
+            "qkv_w_trust": 0.3,
+            "qkv_lr_gain": 0.02,
+            "qkv_lr_bounds": [
+              0.7,
+              1.3
+            ],
+            "qkv_lr_interval": 25,
+            "qkv_lr_ema_beta": 0.8,
+            "qkv_gain_shrink_gamma": 1.2,
+            "qkv_lr_step_clip": 0.08,
+            "qkv_disp_ema_beta": 0.8,
+            "qkv_gamma_rate": 0.6,
+            "qkv_gamma_min": 0.2,
+            "qkv_gamma_max": 5.0,
+            "qkv_clip_shrink_k": 0.6,
+            "qkv_clip_min": 0.02,
+            "qkv_clip_max": 0.2,
+            "qkv_spectral_adapt": true,
+            "qkv_spectral_low_band": 0.2,
+            "qkv_spectral_high_band": 0.25,
+            "qkv_spectral_beta": 0.7,
+            "qkv_spectral_eps": 1e-09,
+            "qkv_gamma_spectral_gain": 0.75,
+            "qkv_gamma_spectral_clip": [
+              0.5,
+              1.5
+            ],
+            "qkv_phase_boost_gain": 0.4,
+            "qkv_phase_target": 0.6,
+            "qkv_phase_boost_clip": [
+              0.6,
+              1.6
+            ],
+            "compile_guard": true,
+            "reflect_interval": 50
+          }
+        },
+        {
+          "parameters": [
+            {
+              "name": "ln.weight",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            }
+          ],
+          "options": {
+            "lr": 0.0003,
+            "weight_decay": 0.0,
+            "lr_scale": 0.5,
+            "block_tag": "norm",
+            "rms_clip_threshold": 0.0,
+            "rms_clip_granularity": "param",
+            "agc_clip": 0.0,
+            "block_trust_chunks": 0,
+            "use_foreach": true,
+            "use_foreach_update": true,
+            "foreach_min_bucket": 4,
+            "bucket_standardize": false,
+            "bucket_standardize_source": "global",
+            "bucket_scalarless": true,
+            "use_triton_bucket_stats": false,
+            "use_triton_fused_apply": false,
+            "betas": [
+              0.9,
+              0.98
+            ],
+            "eps": 1e-08,
+            "factored": true,
+            "precond_alpha": 1.0,
+            "sign_mode": "softsign",
+            "sign_tau": 0.001,
+            "sign_blend": 0.2,
+            "blend_to": 0.6,
+            "blend_steps": 0,
+            "blend_schedule": "cosine",
+            "use_trust_ratio": true,
+            "trust_clip": 10.0,
+            "trust_space": "precond",
+            "trust_ema_beta": 0.9,
+            "agc_eps": 1e-12,
+            "update_buffer_dtype": "param",
+            "mom_dtype": "fp32",
+            "state_prune_threshold": 0.0,
+            "state_prune_interval": 100,
+            "skip_if_nonfinite": true,
+            "auto_lr": true,
+            "lr_decay": 0.5,
+            "lr_min": 1e-06,
+            "plateau_patience": 200,
+            "plateau_tol": 0.0001,
+            "auto_blend": true,
+            "auto_blend_gain": 0.05,
+            "auto_blend_bounds": [
+              0.1,
+              0.8
+            ],
+            "auto_ffn_asym": false,
+            "ffn_asym_target": 1.0,
+            "ffn_asym_gain": 0.05,
+            "ffn_asym_beta": 0.9,
+            "ffn_asym_interval": 10,
+            "ffn_lr_min": 0.5,
+            "ffn_lr_max": 1.5,
+            "qkv_rules": {},
+            "qkv_trust_split": false,
+            "qkv_lr_scales": null,
+            "lora_density_adapt": true,
+            "lora_density_k": 0.25,
+            "lora_density_beta": 0.9,
+            "lora_sb_bounds": [
+              0.1,
+              0.5
+            ],
+            "lora_agc_bounds": [
+              0.01,
+              0.05
+            ],
+            "lora_pid_kp": 0.6,
+            "lora_pid_ki": 0.05,
+            "lora_pid_kd": 0.1,
+            "lora_interval": 20,
+            "lora_int_clip_sb": 0.5,
+            "lora_int_clip_agc": 0.5,
+            "lora_aw_reset_on_saturation": true,
+            "lora_aw_eps": 0.001,
+            "lora_dwell_decay": 0.9,
+            "lora_dwell_gain": 0.05,
+            "lora_errflip_damp_sb": 0.5,
+            "lora_errflip_damp_agc": 0.5,
+            "lora_pid_mode": "auto",
+            "lora_inertia_beta": 0.9,
+            "lora_inertia_strength": 1.5,
+            "lora_flip_ema_beta": 0.8,
+            "lora_ki_min": 0.01,
+            "lora_kd_min": 0.005,
+            "lora_recover_rate": 0.15,
+            "lora_cross_adapt": true,
+            "lora_cross_beta": 0.6,
+            "lora_cross_sync": 0.25,
+            "lora_cross_gain": 0.1,
+            "lora_cross_attn_tags": [
+              "attn_qkv"
+            ],
+            "lora_cross_ffn_tags": [
+              "ffn_up",
+              "ffn_down"
+            ],
+            "lora_bridge": true,
+            "lora_bridge_gain": 0.25,
+            "lora_bridge_bounds": [
+              0.6,
+              1.4
+            ],
+            "lora_bridge_beta": 0.8,
+            "qkv_lr_autoadapt": true,
+            "qkv_w_rms": 0.7,
+            "qkv_w_trust": 0.3,
+            "qkv_lr_gain": 0.02,
+            "qkv_lr_bounds": [
+              0.7,
+              1.3
+            ],
+            "qkv_lr_interval": 25,
+            "qkv_lr_ema_beta": 0.8,
+            "qkv_gain_shrink_gamma": 1.2,
+            "qkv_lr_step_clip": 0.08,
+            "qkv_disp_ema_beta": 0.8,
+            "qkv_gamma_rate": 0.6,
+            "qkv_gamma_min": 0.2,
+            "qkv_gamma_max": 5.0,
+            "qkv_clip_shrink_k": 0.6,
+            "qkv_clip_min": 0.02,
+            "qkv_clip_max": 0.2,
+            "qkv_spectral_adapt": true,
+            "qkv_spectral_low_band": 0.2,
+            "qkv_spectral_high_band": 0.25,
+            "qkv_spectral_beta": 0.7,
+            "qkv_spectral_eps": 1e-09,
+            "qkv_gamma_spectral_gain": 0.75,
+            "qkv_gamma_spectral_clip": [
+              0.5,
+              1.5
+            ],
+            "qkv_phase_boost_gain": 0.4,
+            "qkv_phase_target": 0.6,
+            "qkv_phase_boost_clip": [
+              0.6,
+              1.6
+            ],
+            "compile_guard": true,
+            "reflect_interval": 50
+          }
+        }
+      ]
+    },
+    "timing_scope": {
+      "ms": "zero_grad + forward + loss + backward + opt.step + synchronization",
+      "ms_forward_backward": "zero_grad + forward + loss + backward + synchronization",
+      "ms_optimizer": "opt.step + synchronization",
+      "excluded": "loss.item + report_metrics between timed sections"
+    },
+    "optimizer_config_final": {
+      "class": "tiger_optim.tiger.Tiger",
+      "defaults": {
+        "lr": 0.0002,
+        "betas": [
+          0.9,
+          0.98
+        ],
+        "eps": 1e-08,
+        "weight_decay": 0.0,
+        "factored": true,
+        "precond_alpha": 1.0,
+        "sign_mode": "softsign",
+        "sign_tau": 0.001,
+        "sign_blend": 0.2,
+        "blend_to": 0.6,
+        "blend_steps": 0,
+        "blend_schedule": "cosine",
+        "use_trust_ratio": true,
+        "trust_clip": 10.0,
+        "trust_space": "precond",
+        "trust_ema_beta": 0.9,
+        "agc_clip": 0.0,
+        "agc_eps": 1e-12,
+        "use_foreach": true,
+        "use_foreach_update": true,
+        "foreach_min_bucket": 4,
+        "update_buffer_dtype": "param",
+        "bucket_standardize": true,
+        "bucket_standardize_source": "global",
+        "bucket_scalarless": true,
+        "use_triton_bucket_stats": false,
+        "use_triton_fused_apply": false,
+        "mom_dtype": "fp32",
+        "state_prune_threshold": 0.0,
+        "state_prune_interval": 100,
+        "skip_if_nonfinite": true,
+        "auto_lr": true,
+        "lr_decay": 0.5,
+        "lr_min": 1e-06,
+        "plateau_patience": 200,
+        "plateau_tol": 0.0001,
+        "auto_blend": true,
+        "auto_blend_gain": 0.05,
+        "auto_blend_bounds": [
+          0.1,
+          0.8
+        ],
+        "auto_ffn_asym": false,
+        "ffn_asym_target": 1.0,
+        "ffn_asym_gain": 0.05,
+        "ffn_asym_beta": 0.9,
+        "ffn_asym_interval": 10,
+        "ffn_lr_min": 0.5,
+        "ffn_lr_max": 1.5,
+        "lr_scale": 1.0,
+        "block_tag": "default",
+        "rms_clip_threshold": 0.0,
+        "rms_clip_granularity": "param",
+        "qkv_rules": {},
+        "qkv_trust_split": false,
+        "qkv_lr_scales": null,
+        "block_trust_chunks": 0,
+        "lora_density_adapt": true,
+        "lora_density_k": 0.25,
+        "lora_density_beta": 0.9,
+        "lora_sb_bounds": [
+          0.1,
+          0.5
+        ],
+        "lora_agc_bounds": [
+          0.01,
+          0.05
+        ],
+        "lora_pid_kp": 0.6,
+        "lora_pid_ki": 0.05,
+        "lora_pid_kd": 0.1,
+        "lora_interval": 20,
+        "lora_int_clip_sb": 0.5,
+        "lora_int_clip_agc": 0.5,
+        "lora_aw_reset_on_saturation": true,
+        "lora_aw_eps": 0.001,
+        "lora_dwell_decay": 0.9,
+        "lora_dwell_gain": 0.05,
+        "lora_errflip_damp_sb": 0.5,
+        "lora_errflip_damp_agc": 0.5,
+        "lora_pid_mode": "auto",
+        "lora_inertia_beta": 0.9,
+        "lora_inertia_strength": 1.5,
+        "lora_flip_ema_beta": 0.8,
+        "lora_ki_min": 0.01,
+        "lora_kd_min": 0.005,
+        "lora_recover_rate": 0.15,
+        "lora_cross_adapt": true,
+        "lora_cross_beta": 0.6,
+        "lora_cross_sync": 0.25,
+        "lora_cross_gain": 0.1,
+        "lora_cross_attn_tags": [
+          "attn_qkv"
+        ],
+        "lora_cross_ffn_tags": [
+          "ffn_up",
+          "ffn_down"
+        ],
+        "lora_bridge": true,
+        "lora_bridge_gain": 0.25,
+        "lora_bridge_bounds": [
+          0.6,
+          1.4
+        ],
+        "lora_bridge_beta": 0.8,
+        "qkv_lr_autoadapt": true,
+        "qkv_w_rms": 0.7,
+        "qkv_w_trust": 0.3,
+        "qkv_lr_gain": 0.02,
+        "qkv_lr_bounds": [
+          0.7,
+          1.3
+        ],
+        "qkv_lr_interval": 25,
+        "qkv_lr_ema_beta": 0.8,
+        "qkv_gain_shrink_gamma": 1.2,
+        "qkv_lr_step_clip": 0.08,
+        "qkv_disp_ema_beta": 0.8,
+        "qkv_gamma_rate": 0.6,
+        "qkv_gamma_min": 0.2,
+        "qkv_gamma_max": 5.0,
+        "qkv_clip_shrink_k": 0.6,
+        "qkv_clip_min": 0.02,
+        "qkv_clip_max": 0.2,
+        "qkv_spectral_adapt": true,
+        "qkv_spectral_low_band": 0.2,
+        "qkv_spectral_high_band": 0.25,
+        "qkv_spectral_beta": 0.7,
+        "qkv_spectral_eps": 1e-09,
+        "qkv_gamma_spectral_gain": 0.75,
+        "qkv_gamma_spectral_clip": [
+          0.5,
+          1.5
+        ],
+        "qkv_phase_boost_gain": 0.4,
+        "qkv_phase_target": 0.6,
+        "qkv_phase_boost_clip": [
+          0.6,
+          1.6
+        ],
+        "compile_guard": true,
+        "reflect_interval": 50
+      },
+      "param_groups": [
+        {
+          "parameters": [
+            {
+              "name": "mha.in_proj_weight",
+              "shape": [
+                768,
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "mha.in_proj_bias",
+              "shape": [
+                768
+              ],
+              "dtype": "torch.float32"
+            }
+          ],
+          "options": {
+            "lr": 0.0003,
+            "weight_decay": 0.01,
+            "lr_scale": 1.0,
+            "block_tag": "attn_qkv",
+            "rms_clip_threshold": 0.0,
+            "rms_clip_granularity": "param",
+            "agc_clip": 0.0,
+            "block_trust_chunks": 0,
+            "use_foreach": true,
+            "use_foreach_update": true,
+            "foreach_min_bucket": 4,
+            "bucket_standardize": false,
+            "bucket_standardize_source": "global",
+            "bucket_scalarless": true,
+            "use_triton_bucket_stats": false,
+            "use_triton_fused_apply": false,
+            "qkv_rules": {
+              "mha.in_proj_weight": [
+                0,
+                3
+              ],
+              "mha.in_proj_bias": [
+                0,
+                3
+              ]
+            },
+            "qkv_trust_split": true,
+            "qkv_lr_scales": {
+              "q": 0.8988407986929419,
+              "k": 0.8,
+              "v": 1.1001564260217453
+            },
+            "betas": [
+              0.9,
+              0.98
+            ],
+            "eps": 1e-08,
+            "factored": true,
+            "precond_alpha": 1.0,
+            "sign_mode": "softsign",
+            "sign_tau": 0.001,
+            "sign_blend": 0.2,
+            "blend_to": 0.6,
+            "blend_steps": 0,
+            "blend_schedule": "cosine",
+            "use_trust_ratio": true,
+            "trust_clip": 10.0,
+            "trust_space": "precond",
+            "trust_ema_beta": 0.9,
+            "agc_eps": 1e-12,
+            "update_buffer_dtype": "param",
+            "mom_dtype": "fp32",
+            "state_prune_threshold": 0.0,
+            "state_prune_interval": 100,
+            "skip_if_nonfinite": true,
+            "auto_lr": true,
+            "lr_decay": 0.5,
+            "lr_min": 1e-06,
+            "plateau_patience": 200,
+            "plateau_tol": 0.0001,
+            "auto_blend": true,
+            "auto_blend_gain": 0.05,
+            "auto_blend_bounds": [
+              0.1,
+              0.8
+            ],
+            "auto_ffn_asym": false,
+            "ffn_asym_target": 1.0,
+            "ffn_asym_gain": 0.05,
+            "ffn_asym_beta": 0.9,
+            "ffn_asym_interval": 10,
+            "ffn_lr_min": 0.5,
+            "ffn_lr_max": 1.5,
+            "lora_density_adapt": true,
+            "lora_density_k": 0.25,
+            "lora_density_beta": 0.9,
+            "lora_sb_bounds": [
+              0.1,
+              0.5
+            ],
+            "lora_agc_bounds": [
+              0.01,
+              0.05
+            ],
+            "lora_pid_kp": 0.6,
+            "lora_pid_ki": 0.05,
+            "lora_pid_kd": 0.1,
+            "lora_interval": 20,
+            "lora_int_clip_sb": 0.5,
+            "lora_int_clip_agc": 0.5,
+            "lora_aw_reset_on_saturation": true,
+            "lora_aw_eps": 0.001,
+            "lora_dwell_decay": 0.9,
+            "lora_dwell_gain": 0.05,
+            "lora_errflip_damp_sb": 0.5,
+            "lora_errflip_damp_agc": 0.5,
+            "lora_pid_mode": "auto",
+            "lora_inertia_beta": 0.9,
+            "lora_inertia_strength": 1.5,
+            "lora_flip_ema_beta": 0.8,
+            "lora_ki_min": 0.01,
+            "lora_kd_min": 0.005,
+            "lora_recover_rate": 0.15,
+            "lora_cross_adapt": true,
+            "lora_cross_beta": 0.6,
+            "lora_cross_sync": 0.25,
+            "lora_cross_gain": 0.1,
+            "lora_cross_attn_tags": [
+              "attn_qkv"
+            ],
+            "lora_cross_ffn_tags": [
+              "ffn_up",
+              "ffn_down"
+            ],
+            "lora_bridge": true,
+            "lora_bridge_gain": 0.25,
+            "lora_bridge_bounds": [
+              0.6,
+              1.4
+            ],
+            "lora_bridge_beta": 0.8,
+            "qkv_lr_autoadapt": true,
+            "qkv_w_rms": 0.7,
+            "qkv_w_trust": 0.3,
+            "qkv_lr_gain": 0.02,
+            "qkv_lr_bounds": [
+              0.7,
+              1.3
+            ],
+            "qkv_lr_interval": 25,
+            "qkv_lr_ema_beta": 0.8,
+            "qkv_gain_shrink_gamma": 1.2,
+            "qkv_lr_step_clip": 0.08,
+            "qkv_disp_ema_beta": 0.8,
+            "qkv_gamma_rate": 0.6,
+            "qkv_gamma_min": 0.2,
+            "qkv_gamma_max": 5.0,
+            "qkv_clip_shrink_k": 0.6,
+            "qkv_clip_min": 0.02,
+            "qkv_clip_max": 0.2,
+            "qkv_spectral_adapt": true,
+            "qkv_spectral_low_band": 0.2,
+            "qkv_spectral_high_band": 0.25,
+            "qkv_spectral_beta": 0.7,
+            "qkv_spectral_eps": 1e-09,
+            "qkv_gamma_spectral_gain": 0.75,
+            "qkv_gamma_spectral_clip": [
+              0.5,
+              1.5
+            ],
+            "qkv_phase_boost_gain": 0.4,
+            "qkv_phase_target": 0.6,
+            "qkv_phase_boost_clip": [
+              0.6,
+              1.6
+            ],
+            "compile_guard": true,
+            "reflect_interval": 50
+          }
+        },
+        {
+          "parameters": [
+            {
+              "name": "mha.out_proj.weight",
+              "shape": [
+                256,
+                256
+              ],
+              "dtype": "torch.float32"
+            }
+          ],
+          "options": {
+            "lr": 0.0003,
+            "weight_decay": 0.01,
+            "lr_scale": 1.0,
+            "block_tag": "attn_o",
+            "rms_clip_threshold": 0.0,
+            "rms_clip_granularity": "param",
+            "agc_clip": 0.0,
+            "block_trust_chunks": 0,
+            "use_foreach": true,
+            "use_foreach_update": true,
+            "foreach_min_bucket": 4,
+            "bucket_standardize": false,
+            "bucket_standardize_source": "global",
+            "bucket_scalarless": true,
+            "use_triton_bucket_stats": false,
+            "use_triton_fused_apply": false,
+            "betas": [
+              0.9,
+              0.98
+            ],
+            "eps": 1e-08,
+            "factored": true,
+            "precond_alpha": 1.0,
+            "sign_mode": "softsign",
+            "sign_tau": 0.001,
+            "sign_blend": 0.2,
+            "blend_to": 0.6,
+            "blend_steps": 0,
+            "blend_schedule": "cosine",
+            "use_trust_ratio": true,
+            "trust_clip": 10.0,
+            "trust_space": "precond",
+            "trust_ema_beta": 0.9,
+            "agc_eps": 1e-12,
+            "update_buffer_dtype": "param",
+            "mom_dtype": "fp32",
+            "state_prune_threshold": 0.0,
+            "state_prune_interval": 100,
+            "skip_if_nonfinite": true,
+            "auto_lr": true,
+            "lr_decay": 0.5,
+            "lr_min": 1e-06,
+            "plateau_patience": 200,
+            "plateau_tol": 0.0001,
+            "auto_blend": true,
+            "auto_blend_gain": 0.05,
+            "auto_blend_bounds": [
+              0.1,
+              0.8
+            ],
+            "auto_ffn_asym": false,
+            "ffn_asym_target": 1.0,
+            "ffn_asym_gain": 0.05,
+            "ffn_asym_beta": 0.9,
+            "ffn_asym_interval": 10,
+            "ffn_lr_min": 0.5,
+            "ffn_lr_max": 1.5,
+            "qkv_rules": {},
+            "qkv_trust_split": false,
+            "qkv_lr_scales": null,
+            "lora_density_adapt": true,
+            "lora_density_k": 0.25,
+            "lora_density_beta": 0.9,
+            "lora_sb_bounds": [
+              0.1,
+              0.5
+            ],
+            "lora_agc_bounds": [
+              0.01,
+              0.05
+            ],
+            "lora_pid_kp": 0.6,
+            "lora_pid_ki": 0.05,
+            "lora_pid_kd": 0.1,
+            "lora_interval": 20,
+            "lora_int_clip_sb": 0.5,
+            "lora_int_clip_agc": 0.5,
+            "lora_aw_reset_on_saturation": true,
+            "lora_aw_eps": 0.001,
+            "lora_dwell_decay": 0.9,
+            "lora_dwell_gain": 0.05,
+            "lora_errflip_damp_sb": 0.5,
+            "lora_errflip_damp_agc": 0.5,
+            "lora_pid_mode": "auto",
+            "lora_inertia_beta": 0.9,
+            "lora_inertia_strength": 1.5,
+            "lora_flip_ema_beta": 0.8,
+            "lora_ki_min": 0.01,
+            "lora_kd_min": 0.005,
+            "lora_recover_rate": 0.15,
+            "lora_cross_adapt": true,
+            "lora_cross_beta": 0.6,
+            "lora_cross_sync": 0.25,
+            "lora_cross_gain": 0.1,
+            "lora_cross_attn_tags": [
+              "attn_qkv"
+            ],
+            "lora_cross_ffn_tags": [
+              "ffn_up",
+              "ffn_down"
+            ],
+            "lora_bridge": true,
+            "lora_bridge_gain": 0.25,
+            "lora_bridge_bounds": [
+              0.6,
+              1.4
+            ],
+            "lora_bridge_beta": 0.8,
+            "qkv_lr_autoadapt": true,
+            "qkv_w_rms": 0.7,
+            "qkv_w_trust": 0.3,
+            "qkv_lr_gain": 0.02,
+            "qkv_lr_bounds": [
+              0.7,
+              1.3
+            ],
+            "qkv_lr_interval": 25,
+            "qkv_lr_ema_beta": 0.8,
+            "qkv_gain_shrink_gamma": 1.2,
+            "qkv_lr_step_clip": 0.08,
+            "qkv_disp_ema_beta": 0.8,
+            "qkv_gamma_rate": 0.6,
+            "qkv_gamma_min": 0.2,
+            "qkv_gamma_max": 5.0,
+            "qkv_clip_shrink_k": 0.6,
+            "qkv_clip_min": 0.02,
+            "qkv_clip_max": 0.2,
+            "qkv_spectral_adapt": true,
+            "qkv_spectral_low_band": 0.2,
+            "qkv_spectral_high_band": 0.25,
+            "qkv_spectral_beta": 0.7,
+            "qkv_spectral_eps": 1e-09,
+            "qkv_gamma_spectral_gain": 0.75,
+            "qkv_gamma_spectral_clip": [
+              0.5,
+              1.5
+            ],
+            "qkv_phase_boost_gain": 0.4,
+            "qkv_phase_target": 0.6,
+            "qkv_phase_boost_clip": [
+              0.6,
+              1.6
+            ],
+            "compile_guard": true,
+            "reflect_interval": 50
+          }
+        },
+        {
+          "parameters": [
+            {
+              "name": "mha.out_proj.bias",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "up.bias",
+              "shape": [
+                512
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "down.bias",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "ln.bias",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            }
+          ],
+          "options": {
+            "lr": 0.0003,
+            "weight_decay": 0.0,
+            "lr_scale": 0.5,
+            "block_tag": "bias",
+            "rms_clip_threshold": 0.0,
+            "rms_clip_granularity": "param",
+            "agc_clip": 0.0,
+            "block_trust_chunks": 0,
+            "use_foreach": true,
+            "use_foreach_update": true,
+            "foreach_min_bucket": 4,
+            "bucket_standardize": false,
+            "bucket_standardize_source": "global",
+            "bucket_scalarless": true,
+            "use_triton_bucket_stats": false,
+            "use_triton_fused_apply": false,
+            "betas": [
+              0.9,
+              0.98
+            ],
+            "eps": 1e-08,
+            "factored": true,
+            "precond_alpha": 1.0,
+            "sign_mode": "softsign",
+            "sign_tau": 0.001,
+            "sign_blend": 0.2,
+            "blend_to": 0.6,
+            "blend_steps": 0,
+            "blend_schedule": "cosine",
+            "use_trust_ratio": true,
+            "trust_clip": 10.0,
+            "trust_space": "precond",
+            "trust_ema_beta": 0.9,
+            "agc_eps": 1e-12,
+            "update_buffer_dtype": "param",
+            "mom_dtype": "fp32",
+            "state_prune_threshold": 0.0,
+            "state_prune_interval": 100,
+            "skip_if_nonfinite": true,
+            "auto_lr": true,
+            "lr_decay": 0.5,
+            "lr_min": 1e-06,
+            "plateau_patience": 200,
+            "plateau_tol": 0.0001,
+            "auto_blend": true,
+            "auto_blend_gain": 0.05,
+            "auto_blend_bounds": [
+              0.1,
+              0.8
+            ],
+            "auto_ffn_asym": false,
+            "ffn_asym_target": 1.0,
+            "ffn_asym_gain": 0.05,
+            "ffn_asym_beta": 0.9,
+            "ffn_asym_interval": 10,
+            "ffn_lr_min": 0.5,
+            "ffn_lr_max": 1.5,
+            "qkv_rules": {},
+            "qkv_trust_split": false,
+            "qkv_lr_scales": null,
+            "lora_density_adapt": true,
+            "lora_density_k": 0.25,
+            "lora_density_beta": 0.9,
+            "lora_sb_bounds": [
+              0.1,
+              0.5
+            ],
+            "lora_agc_bounds": [
+              0.01,
+              0.05
+            ],
+            "lora_pid_kp": 0.6,
+            "lora_pid_ki": 0.05,
+            "lora_pid_kd": 0.1,
+            "lora_interval": 20,
+            "lora_int_clip_sb": 0.5,
+            "lora_int_clip_agc": 0.5,
+            "lora_aw_reset_on_saturation": true,
+            "lora_aw_eps": 0.001,
+            "lora_dwell_decay": 0.9,
+            "lora_dwell_gain": 0.05,
+            "lora_errflip_damp_sb": 0.5,
+            "lora_errflip_damp_agc": 0.5,
+            "lora_pid_mode": "auto",
+            "lora_inertia_beta": 0.9,
+            "lora_inertia_strength": 1.5,
+            "lora_flip_ema_beta": 0.8,
+            "lora_ki_min": 0.01,
+            "lora_kd_min": 0.005,
+            "lora_recover_rate": 0.15,
+            "lora_cross_adapt": true,
+            "lora_cross_beta": 0.6,
+            "lora_cross_sync": 0.25,
+            "lora_cross_gain": 0.1,
+            "lora_cross_attn_tags": [
+              "attn_qkv"
+            ],
+            "lora_cross_ffn_tags": [
+              "ffn_up",
+              "ffn_down"
+            ],
+            "lora_bridge": true,
+            "lora_bridge_gain": 0.25,
+            "lora_bridge_bounds": [
+              0.6,
+              1.4
+            ],
+            "lora_bridge_beta": 0.8,
+            "qkv_lr_autoadapt": true,
+            "qkv_w_rms": 0.7,
+            "qkv_w_trust": 0.3,
+            "qkv_lr_gain": 0.02,
+            "qkv_lr_bounds": [
+              0.7,
+              1.3
+            ],
+            "qkv_lr_interval": 25,
+            "qkv_lr_ema_beta": 0.8,
+            "qkv_gain_shrink_gamma": 1.2,
+            "qkv_lr_step_clip": 0.08,
+            "qkv_disp_ema_beta": 0.8,
+            "qkv_gamma_rate": 0.6,
+            "qkv_gamma_min": 0.2,
+            "qkv_gamma_max": 5.0,
+            "qkv_clip_shrink_k": 0.6,
+            "qkv_clip_min": 0.02,
+            "qkv_clip_max": 0.2,
+            "qkv_spectral_adapt": true,
+            "qkv_spectral_low_band": 0.2,
+            "qkv_spectral_high_band": 0.25,
+            "qkv_spectral_beta": 0.7,
+            "qkv_spectral_eps": 1e-09,
+            "qkv_gamma_spectral_gain": 0.75,
+            "qkv_gamma_spectral_clip": [
+              0.5,
+              1.5
+            ],
+            "qkv_phase_boost_gain": 0.4,
+            "qkv_phase_target": 0.6,
+            "qkv_phase_boost_clip": [
+              0.6,
+              1.6
+            ],
+            "compile_guard": true,
+            "reflect_interval": 50
+          }
+        },
+        {
+          "parameters": [
+            {
+              "name": "up.weight",
+              "shape": [
+                512,
+                256
+              ],
+              "dtype": "torch.float32"
+            },
+            {
+              "name": "down.weight",
+              "shape": [
+                256,
+                512
+              ],
+              "dtype": "torch.float32"
+            }
+          ],
+          "options": {
+            "lr": 0.0003,
+            "weight_decay": 0.01,
+            "lr_scale": 1.0,
+            "block_tag": "mlp",
+            "rms_clip_threshold": 0.0,
+            "rms_clip_granularity": "param",
+            "agc_clip": 0.0,
+            "block_trust_chunks": 0,
+            "use_foreach": true,
+            "use_foreach_update": true,
+            "foreach_min_bucket": 4,
+            "bucket_standardize": false,
+            "bucket_standardize_source": "global",
+            "bucket_scalarless": true,
+            "use_triton_bucket_stats": false,
+            "use_triton_fused_apply": false,
+            "betas": [
+              0.9,
+              0.98
+            ],
+            "eps": 1e-08,
+            "factored": true,
+            "precond_alpha": 1.0,
+            "sign_mode": "softsign",
+            "sign_tau": 0.001,
+            "sign_blend": 0.2,
+            "blend_to": 0.6,
+            "blend_steps": 0,
+            "blend_schedule": "cosine",
+            "use_trust_ratio": true,
+            "trust_clip": 10.0,
+            "trust_space": "precond",
+            "trust_ema_beta": 0.9,
+            "agc_eps": 1e-12,
+            "update_buffer_dtype": "param",
+            "mom_dtype": "fp32",
+            "state_prune_threshold": 0.0,
+            "state_prune_interval": 100,
+            "skip_if_nonfinite": true,
+            "auto_lr": true,
+            "lr_decay": 0.5,
+            "lr_min": 1e-06,
+            "plateau_patience": 200,
+            "plateau_tol": 0.0001,
+            "auto_blend": true,
+            "auto_blend_gain": 0.05,
+            "auto_blend_bounds": [
+              0.1,
+              0.8
+            ],
+            "auto_ffn_asym": false,
+            "ffn_asym_target": 1.0,
+            "ffn_asym_gain": 0.05,
+            "ffn_asym_beta": 0.9,
+            "ffn_asym_interval": 10,
+            "ffn_lr_min": 0.5,
+            "ffn_lr_max": 1.5,
+            "qkv_rules": {},
+            "qkv_trust_split": false,
+            "qkv_lr_scales": null,
+            "lora_density_adapt": true,
+            "lora_density_k": 0.25,
+            "lora_density_beta": 0.9,
+            "lora_sb_bounds": [
+              0.1,
+              0.5
+            ],
+            "lora_agc_bounds": [
+              0.01,
+              0.05
+            ],
+            "lora_pid_kp": 0.6,
+            "lora_pid_ki": 0.05,
+            "lora_pid_kd": 0.1,
+            "lora_interval": 20,
+            "lora_int_clip_sb": 0.5,
+            "lora_int_clip_agc": 0.5,
+            "lora_aw_reset_on_saturation": true,
+            "lora_aw_eps": 0.001,
+            "lora_dwell_decay": 0.9,
+            "lora_dwell_gain": 0.05,
+            "lora_errflip_damp_sb": 0.5,
+            "lora_errflip_damp_agc": 0.5,
+            "lora_pid_mode": "auto",
+            "lora_inertia_beta": 0.9,
+            "lora_inertia_strength": 1.5,
+            "lora_flip_ema_beta": 0.8,
+            "lora_ki_min": 0.01,
+            "lora_kd_min": 0.005,
+            "lora_recover_rate": 0.15,
+            "lora_cross_adapt": true,
+            "lora_cross_beta": 0.6,
+            "lora_cross_sync": 0.25,
+            "lora_cross_gain": 0.1,
+            "lora_cross_attn_tags": [
+              "attn_qkv"
+            ],
+            "lora_cross_ffn_tags": [
+              "ffn_up",
+              "ffn_down"
+            ],
+            "lora_bridge": true,
+            "lora_bridge_gain": 0.25,
+            "lora_bridge_bounds": [
+              0.6,
+              1.4
+            ],
+            "lora_bridge_beta": 0.8,
+            "qkv_lr_autoadapt": true,
+            "qkv_w_rms": 0.7,
+            "qkv_w_trust": 0.3,
+            "qkv_lr_gain": 0.02,
+            "qkv_lr_bounds": [
+              0.7,
+              1.3
+            ],
+            "qkv_lr_interval": 25,
+            "qkv_lr_ema_beta": 0.8,
+            "qkv_gain_shrink_gamma": 1.2,
+            "qkv_lr_step_clip": 0.08,
+            "qkv_disp_ema_beta": 0.8,
+            "qkv_gamma_rate": 0.6,
+            "qkv_gamma_min": 0.2,
+            "qkv_gamma_max": 5.0,
+            "qkv_clip_shrink_k": 0.6,
+            "qkv_clip_min": 0.02,
+            "qkv_clip_max": 0.2,
+            "qkv_spectral_adapt": true,
+            "qkv_spectral_low_band": 0.2,
+            "qkv_spectral_high_band": 0.25,
+            "qkv_spectral_beta": 0.7,
+            "qkv_spectral_eps": 1e-09,
+            "qkv_gamma_spectral_gain": 0.75,
+            "qkv_gamma_spectral_clip": [
+              0.5,
+              1.5
+            ],
+            "qkv_phase_boost_gain": 0.4,
+            "qkv_phase_target": 0.6,
+            "qkv_phase_boost_clip": [
+              0.6,
+              1.6
+            ],
+            "compile_guard": true,
+            "reflect_interval": 50
+          }
+        },
+        {
+          "parameters": [
+            {
+              "name": "ln.weight",
+              "shape": [
+                256
+              ],
+              "dtype": "torch.float32"
+            }
+          ],
+          "options": {
+            "lr": 0.0003,
+            "weight_decay": 0.0,
+            "lr_scale": 0.5,
+            "block_tag": "norm",
+            "rms_clip_threshold": 0.0,
+            "rms_clip_granularity": "param",
+            "agc_clip": 0.0,
+            "block_trust_chunks": 0,
+            "use_foreach": true,
+            "use_foreach_update": true,
+            "foreach_min_bucket": 4,
+            "bucket_standardize": false,
+            "bucket_standardize_source": "global",
+            "bucket_scalarless": true,
+            "use_triton_bucket_stats": false,
+            "use_triton_fused_apply": false,
+            "betas": [
+              0.9,
+              0.98
+            ],
+            "eps": 1e-08,
+            "factored": true,
+            "precond_alpha": 1.0,
+            "sign_mode": "softsign",
+            "sign_tau": 0.001,
+            "sign_blend": 0.2,
+            "blend_to": 0.6,
+            "blend_steps": 0,
+            "blend_schedule": "cosine",
+            "use_trust_ratio": true,
+            "trust_clip": 10.0,
+            "trust_space": "precond",
+            "trust_ema_beta": 0.9,
+            "agc_eps": 1e-12,
+            "update_buffer_dtype": "param",
+            "mom_dtype": "fp32",
+            "state_prune_threshold": 0.0,
+            "state_prune_interval": 100,
+            "skip_if_nonfinite": true,
+            "auto_lr": true,
+            "lr_decay": 0.5,
+            "lr_min": 1e-06,
+            "plateau_patience": 200,
+            "plateau_tol": 0.0001,
+            "auto_blend": true,
+            "auto_blend_gain": 0.05,
+            "auto_blend_bounds": [
+              0.1,
+              0.8
+            ],
+            "auto_ffn_asym": false,
+            "ffn_asym_target": 1.0,
+            "ffn_asym_gain": 0.05,
+            "ffn_asym_beta": 0.9,
+            "ffn_asym_interval": 10,
+            "ffn_lr_min": 0.5,
+            "ffn_lr_max": 1.5,
+            "qkv_rules": {},
+            "qkv_trust_split": false,
+            "qkv_lr_scales": null,
+            "lora_density_adapt": true,
+            "lora_density_k": 0.25,
+            "lora_density_beta": 0.9,
+            "lora_sb_bounds": [
+              0.1,
+              0.5
+            ],
+            "lora_agc_bounds": [
+              0.01,
+              0.05
+            ],
+            "lora_pid_kp": 0.6,
+            "lora_pid_ki": 0.05,
+            "lora_pid_kd": 0.1,
+            "lora_interval": 20,
+            "lora_int_clip_sb": 0.5,
+            "lora_int_clip_agc": 0.5,
+            "lora_aw_reset_on_saturation": true,
+            "lora_aw_eps": 0.001,
+            "lora_dwell_decay": 0.9,
+            "lora_dwell_gain": 0.05,
+            "lora_errflip_damp_sb": 0.5,
+            "lora_errflip_damp_agc": 0.5,
+            "lora_pid_mode": "auto",
+            "lora_inertia_beta": 0.9,
+            "lora_inertia_strength": 1.5,
+            "lora_flip_ema_beta": 0.8,
+            "lora_ki_min": 0.01,
+            "lora_kd_min": 0.005,
+            "lora_recover_rate": 0.15,
+            "lora_cross_adapt": true,
+            "lora_cross_beta": 0.6,
+            "lora_cross_sync": 0.25,
+            "lora_cross_gain": 0.1,
+            "lora_cross_attn_tags": [
+              "attn_qkv"
+            ],
+            "lora_cross_ffn_tags": [
+              "ffn_up",
+              "ffn_down"
+            ],
+            "lora_bridge": true,
+            "lora_bridge_gain": 0.25,
+            "lora_bridge_bounds": [
+              0.6,
+              1.4
+            ],
+            "lora_bridge_beta": 0.8,
+            "qkv_lr_autoadapt": true,
+            "qkv_w_rms": 0.7,
+            "qkv_w_trust": 0.3,
+            "qkv_lr_gain": 0.02,
+            "qkv_lr_bounds": [
+              0.7,
+              1.3
+            ],
+            "qkv_lr_interval": 25,
+            "qkv_lr_ema_beta": 0.8,
+            "qkv_gain_shrink_gamma": 1.2,
+            "qkv_lr_step_clip": 0.08,
+            "qkv_disp_ema_beta": 0.8,
+            "qkv_gamma_rate": 0.6,
+            "qkv_gamma_min": 0.2,
+            "qkv_gamma_max": 5.0,
+            "qkv_clip_shrink_k": 0.6,
+            "qkv_clip_min": 0.02,
+            "qkv_clip_max": 0.2,
+            "qkv_spectral_adapt": true,
+            "qkv_spectral_low_band": 0.2,
+            "qkv_spectral_high_band": 0.25,
+            "qkv_spectral_beta": 0.7,
+            "qkv_spectral_eps": 1e-09,
+            "qkv_gamma_spectral_gain": 0.75,
+            "qkv_gamma_spectral_clip": [
+              0.5,
+              1.5
+            ],
+            "qkv_phase_boost_gain": 0.4,
+            "qkv_phase_target": 0.6,
+            "qkv_phase_boost_clip": [
+              0.6,
+              1.6
+            ],
+            "compile_guard": true,
+            "reflect_interval": 50
+          }
+        }
+      ]
+    }
+  },
+  "series": {
+    "ms": [
+      15.699207993748132,
+      16.10916699428344,
+      15.773541002999991,
+      15.944999999192078,
+      15.931248999550007,
+      15.994207991752774,
+      15.822916997421999,
+      15.776042004290503,
+      15.693208995799068,
+      15.69162499072263,
+      15.520500994171016,
+      15.574042001389898,
+      15.996916001313366,
+      15.919542005576659,
+      41.24579199560685,
+      16.3029999966966,
+      15.731416002381593,
+      16.162916996108834,
+      16.43095799954608,
+      15.651751004043035,
+      16.336624998075422,
+      16.38891699985834,
+      15.874291006184649,
+      15.338208002503961,
+      15.294915996491909,
+      15.401666001707781,
+      15.70124999852851,
+      15.293001000827644,
+      15.412124004797079,
+      15.430333005497232
+    ],
+    "ms_forward_backward": [
+      1.5671669971197844,
+      1.6013339991332032,
+      1.6662080015521497,
+      1.5850830022827722,
+      1.5867909969529137,
+      1.5836249949643388,
+      1.59200000052806,
+      1.5684169993619435,
+      1.628375001018867,
+      1.5553329940303229,
+      1.6010839972295798,
+      1.538958000310231,
+      1.6815409981063567,
+      1.5585000001010485,
+      1.5481669979635626,
+      1.7512499980512075,
+      1.6020830007619224,
+      1.673749997280538,
+      1.6430830000899732,
+      1.6315840039169416,
+      1.5907499982859008,
+      1.7452920001232997,
+      1.6322500014211982,
+      1.5984580022632144,
+      1.6163749969564378,
+      1.5952079993439838,
+      1.638708999962546,
+      1.5642090002074838,
+      1.5641660065739416,
+      1.5615420052199624
+    ],
+    "ms_optimizer": [
+      14.132040996628348,
+      14.507832995150238,
+      14.107333001447842,
+      14.359916996909305,
+      14.344458002597094,
+      14.410582996788435,
+      14.230916996893939,
+      14.207625004928559,
+      14.064833994780201,
+      14.136291996692307,
+      13.919416996941436,
+      14.035084001079667,
+      14.31537500320701,
+      14.36104200547561,
+      39.69762499764329,
+      14.551749998645391,
+      14.12933300161967,
+      14.489166998828296,
+      14.787874999456108,
+      14.020167000126094,
+      14.745874999789521,
+      14.643624999735039,
+      14.24204100476345,
+      13.739750000240747,
+      13.678540999535471,
+      13.806458002363797,
+      14.062540998565964,
+      13.72879200062016,
+      13.847957998223137,
+      13.86879100027727
+    ],
+    "loss": [
+      1.0462071895599365,
+      1.0763888359069824,
+      1.100209355354309,
+      1.1053531169891357,
+      1.0869134664535522,
+      1.060445785522461,
+      1.0371921062469482,
+      1.0211338996887207,
+      1.0126583576202393,
+      1.0106194019317627,
+      1.0135760307312012,
+      1.0198171138763428,
+      1.02622652053833,
+      1.0296785831451416,
+      1.0276048183441162,
+      1.0209230184555054,
+      1.0138309001922607,
+      1.0098992586135864,
+      1.0099198818206787,
+      1.0128910541534424,
+      1.0150341987609863,
+      1.0135927200317383,
+      1.0097010135650635,
+      1.0065237283706665,
+      1.0067636966705322,
+      1.0098154544830322,
+      1.0083527565002441,
+      1.004164218902588,
+      1.0073957443237305,
+      1.0066518783569336
+    ]
+  }
+}

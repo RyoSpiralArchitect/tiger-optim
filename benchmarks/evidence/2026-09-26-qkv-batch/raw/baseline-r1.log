@@ -1,0 +1,20 @@
+/private/tmp/tiger-optim-fft-baseline-20260926/src/tiger_optim/tiger.py:247: UserWarning: An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)
+  spec = torch.fft.rfft(y)
+/private/tmp/tiger-optim-fft-baseline-20260926/src/tiger_optim/tiger.py:247: UserWarning: An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)
+  spec = torch.fft.rfft(y)
+{
+  "mode": "tiger_v21_full",
+  "device": "mps",
+  "steps": 30,
+  "warmup": 10,
+  "ms_median": 15.412832995934878,
+  "ms_mean": 17.59203186520608,
+  "ms_forward_backward_median": 1.5686875012761448,
+  "ms_forward_backward_mean": 1.6736096998405021,
+  "ms_optimizer_median": 13.807249997626059,
+  "ms_optimizer_mean": 15.918422165365579,
+  "loss_last": 1.0066518783569336,
+  "loss_min": 1.004164218902588,
+  "loss_mean": 1.027649470170339
+}
+Saved: benchmarks/results/compare-tiger_v21_full-mps-e5aa699a-20260925-172804.json

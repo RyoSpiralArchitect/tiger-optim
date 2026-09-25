@@ -244,7 +244,13 @@ def _spectral_dispersion_tensors(
     # remove mean so DC energy does not dominate the dispersion metric
     y = y - y.mean()
 
-    spec = torch.fft.rfft(y)
+    if y.device.type == "mps":
+        # MPS's rfft wrapper resizes an internal scalar output and warns on
+        # every call unless its known complex64 result shape is supplied.
+        spectrum = torch.empty(y.numel() // 2 + 1, dtype=torch.complex64, device=y.device)
+        spec = torch.fft.rfft(y, out=spectrum)
+    else:
+        spec = torch.fft.rfft(y)
     power = spec.abs().pow(2)
     if power.numel() == 0:
         return zero, zero, zero
@@ -281,6 +287,50 @@ def _spectral_dispersion_tensors(
     return low_energy, high_energy, phase_spread
 
 
+def _spectral_dispersion_chunks(
+    chunks: Sequence[torch.Tensor], low_band: float, high_band: float
+) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+    """Measure equal-length Q/K/V chunks with one FFT; preserve other layouts."""
+
+    if (
+        len(chunks) != 3
+        or any(chunk.numel() <= 1 for chunk in chunks)
+        or len({chunk.numel() for chunk in chunks}) != 1
+        or len({chunk.device for chunk in chunks}) != 1
+    ):
+        return [_spectral_dispersion_tensors(chunk, low_band, high_band) for chunk in chunks]
+
+    rows = torch.stack([chunk.reshape(-1).detach().to(torch.float32) for chunk in chunks])
+    rows = rows - rows.mean(dim=-1, keepdim=True)
+    if rows.device.type == "mps":
+        spectrum = torch.empty(
+            (len(chunks), rows.shape[-1] // 2 + 1),
+            dtype=torch.complex64,
+            device=rows.device,
+        )
+        spec = torch.fft.rfft(rows, dim=-1, out=spectrum)
+    else:
+        spec = torch.fft.rfft(rows, dim=-1)
+
+    power = spec.abs().pow(2)
+    side = power[:, 1:]
+    n_eff = side.shape[-1]
+    low_band = float(max(0.0, min(1.0, low_band)))
+    high_band = float(max(0.0, min(1.0, high_band)))
+    low_len = max(1, min(n_eff, int(math.ceil(low_band * n_eff))))
+    high_len = max(1, min(n_eff, int(math.ceil(high_band * n_eff))))
+    low_energy = side[:, :low_len].mean(dim=-1)
+    high_energy = side[:, -high_len:].mean(dim=-1)
+    phase = torch.angle(spec[:, 1:])
+    phase_vector = torch.polar(torch.ones_like(phase), phase)
+    phase_coherence = torch.abs(phase_vector.mean(dim=-1))
+    phase_spread = 1.0 - phase_coherence.clamp(0.0, 1.0)
+    return [
+        (low_energy[i].reshape(()), high_energy[i].reshape(()), phase_spread[i].reshape(()))
+        for i in range(len(chunks))
+    ]
+
+
 def _spectral_dispersion(x: torch.Tensor, low_band: float, high_band: float) -> Tuple[float, float, float]:
     """Estimate mean spectral energy for low/high bands and the phase spread."""
 
@@ -305,10 +355,14 @@ def _chunk_scalar_norms(x: torch.Tensor, dim: int, parts: int) -> torch.Tensor:
 
     moved = x.detach().movedim(dim, 0)
     chunk_size = size // parts
+    if moved.numel() == 0:
+        return torch.zeros(parts, dtype=torch.float32, device=x.device)
     flat = moved.reshape(parts, chunk_size, -1)
     if not flat.is_floating_point() or flat.dtype != torch.float32:
         flat = flat.to(torch.float32)
-    return flat.square().sum(dim=(1, 2)).sqrt()
+    scale = flat.abs().amax(dim=(1, 2), keepdim=True)
+    safe_scale = torch.where(scale > 0, scale, torch.ones_like(scale))
+    return scale.reshape(parts) * torch.linalg.vector_norm(flat / safe_scale, dim=(1, 2))
 
 
 def _scalars_to_host(
@@ -751,7 +805,12 @@ class Tiger(Optimizer):
         if not updates:
             ref_device = ref_tensor.device if ref_tensor is not None else None
             return _scalar_like(ref_tensor, 1.0, dtype=torch.float32, device=ref_device)
-        ups32 = [u.to(torch.float32) for u in updates]
+        # An empty update has no RMS and must not turn the mean/median bucket
+        # scale into NaN for its nonempty peers.
+        ups32 = [u.to(torch.float32) for u in updates if u.numel()]
+        if not ups32:
+            return _scalar_like(ref_tensor, 1.0, dtype=torch.float32,
+                                device=ref_tensor.device if ref_tensor is not None else None)
         if source == "global":
             ss = torch.stack([torch.sum(u*u) for u in ups32]).sum()
             ne = _scalar_like(ups32[0], float(sum(int(u.numel()) for u in ups32)), dtype=torch.float32)
@@ -1205,15 +1264,22 @@ class Tiger(Optimizer):
                     d_sign = torch.sign(m32) * P
                 d_mag = (m32 / (_rms(m32)+eps)) * P
                 d = (1.0 - sblend) * d_sign + sblend * d_mag
+                precond_preview = None
                 if self.defaults["skip_if_nonfinite"]:
                     # Keep one host decision for candidate state and direction.
                     # No moment, parameter, or weight-decay update occurs before it.
+                    direction_max = d.abs().amax() if d.numel() else scalar_zero
                     if d.numel():
-                        finite_magnitudes.append(d.abs().amax())
+                        finite_magnitudes.append(direction_max)
                     checks.append(
                         torch.isfinite(torch.stack(finite_magnitudes).amax())
                         if finite_magnitudes else torch.ones_like(scalar_zero, dtype=torch.bool)
                     )
+                    # Cheap max-based bounds cover ordinary magnitudes. Only
+                    # when a loose norm bound fails do we compute the exact
+                    # stable norm for a sparse near-limit tensor.
+                    norm_checks = []
+                    norm_probes = []
                     if p.dtype in (torch.float16, torch.bfloat16):
                         # Preview the final parameter value before committing
                         # moments or weight decay. A finite FP32 direction can
@@ -1305,24 +1371,81 @@ class Tiger(Optimizer):
                             (preview_value.abs() <= storage_max).all(),
                         ))
                     elif (p.dtype == torch.float32
-                          and not (qkv_rules.get(id(p)) is not None and (qkv_lr is not None or (qkv_split and use_trust)))
-                          and not (blk_chunks and p.ndim == 2 and p.shape[0] % blk_chunks == 0)
-                          and not (use_foreach_upd and bucket_std and hasattr(torch, "_foreach_add_")
-                                   and len(active_params) >= foreach_min_bucket)
                           and rms_thr >= 0.0
                           and (not agc_clip or agc_eps >= 0.0)
                           and (not use_trust or (trust_clip >= 0.0 and 0.0 <= trust_beta <= 1.0))):
-                        # For ordinary scalar/foreach updates, AGC and RMS
-                        # clipping can only shrink the direction; trust is
-                        # capped. Catch FP32 overflow before committing state.
+                        # Bound all FP32 update routes before committing state.
+                        # AGC and RMS clipping only shrink the direction; trust
+                        # is capped. Include the unstandardized foreach input,
+                        # which must be finite even if bucket RMS later shrinks it.
                         param_max = p.detach().abs().amax() if p.numel() else scalar_zero
-                        direction_max = d.abs().amax() if d.numel() else scalar_zero
-                        decay_growth = 1.0 + abs(lr * lr_scale * float(group["weight_decay"]))
+                        decay_rate = lr * lr_scale * float(group["weight_decay"])
+                        # Decoupled decay is p <- p * (1 - rate), so positive
+                        # decay may make a large but finite parameter safer.
+                        # Allow for FP32 multiply/add rounding in the bound.
+                        decay_growth = abs(1.0 - decay_rate) + (
+                            8.0 * torch.finfo(torch.float32).eps * abs(decay_rate)
+                        )
                         trust_growth = max(1.0, trust_clip) if use_trust else 1.0
-                        output_bound = param_max * decay_growth + direction_max * (abs(lr * lr_scale) * trust_growth)
+                        route_lrs = [abs(lr * lr_scale)]
+                        qkv_route = qkv_rules.get(id(p)) is not None and (qkv_lr is not None or (qkv_split and use_trust))
+                        if qkv_route and qkv_lr is not None:
+                            route_lrs.extend(abs(lr * float(qkv_lr.get(key, lr_scale))) for key in ("q", "k", "v"))
+                        route_lr = max(route_lrs) if all(math.isfinite(value) for value in route_lrs) else math.inf
+                        scaled_direction_bound = direction_max * trust_growth
+                        raw_update_bound = scaled_direction_bound * route_lr
+                        bucket_route = (
+                            not qkv_route
+                            and not (blk_chunks and p.ndim == 2 and p.shape[0] % blk_chunks == 0)
+                            and use_foreach_upd and bucket_std and hasattr(torch, "_foreach_add_")
+                            and len(active_params) >= foreach_min_bucket
+                        )
+                        if bucket_route:
+                            if bucket_src == "median" and not use_triton_stats:
+                                # The median may be at the 1e-12 floor even
+                                # when this update is much larger than its peers.
+                                update_bound = raw_update_bound * 1e12
+                            elif use_triton_stats or bucket_src == "global":
+                                update_bound = math.sqrt(sum(item.numel() for item in active_params))
+                            else:
+                                update_bound = len(active_params) * math.sqrt(p.numel())
+                        else:
+                            update_bound = raw_update_bound
+                        output_bound = param_max * decay_growth + update_bound
                         fp32_limit = torch.finfo(torch.float32).max * (1.0 - 8.0 * torch.finfo(torch.float32).eps)
-                        checks.append(output_bound <= fp32_limit)
-                    if not bool(torch.stack(checks).all().item()):
+                        checks.extend((
+                            scaled_direction_bound <= fp32_limit,
+                            raw_update_bound <= fp32_limit,
+                            output_bound <= fp32_limit,
+                        ))
+                        if use_trust or (agc_clip and agc_clip > 0.0):
+                            norm_checks.append(param_max * (decay_growth * math.sqrt(p.numel())) <= fp32_limit)
+                            norm_checks.append(direction_max * math.sqrt(d.numel()) <= fp32_limit)
+                            norm_probes.extend(((p.detach(), decay_growth), (d, 1.0)))
+                        if use_trust and trust_space == "precond":
+                            precond_preview = m32 * P
+                            precond_max = precond_preview.abs().amax() if precond_preview.numel() else scalar_zero
+                            norm_checks.append(precond_max * math.sqrt(precond_preview.numel()) <= fp32_limit)
+                            norm_probes.append((precond_preview, 1.0))
+                        if use_trust and trust_beta > 0.0:
+                            trust_key = (gi, pi)
+                            old_trust = (
+                                self._qkv_trust_ema.get(trust_key)
+                                if qkv_route and qkv_split else self._trust_ema.get(trust_key)
+                            )
+                            if old_trust is not None:
+                                if isinstance(old_trust, torch.Tensor):
+                                    checks.append((torch.isfinite(old_trust) & (old_trust >= 0)).all())
+                                else:
+                                    checks.append(_scalar_like(p, math.isfinite(float(old_trust)) and float(old_trust) >= 0,
+                                                               dtype=torch.bool))
+                    guard_ok = bool(torch.stack(checks + norm_checks).all().item())
+                    if not guard_ok and norm_probes and bool(torch.stack(checks).all().item()):
+                        guard_ok = bool(torch.stack([
+                            _scalar_tensor(_norm(tensor), p) * factor <= fp32_limit
+                            for tensor, factor in norm_probes
+                        ]).all().item())
+                    if not guard_ok:
                         prof_c["nonfinite_skips"] += 1
                         for key in created_keys:
                             st.pop(key, None)
@@ -1390,7 +1513,7 @@ class Tiger(Optimizer):
 
                 precond_norm_t: Optional[torch.Tensor] = None
                 if use_trust and trust_space == "precond":
-                    precond_norm_t = _scalar_tensor(_norm(m32 * P), p)
+                    precond_norm_t = _scalar_tensor(_norm(precond_preview if precond_preview is not None else m32 * P), p)
 
                 # trust
                 def eff_trust_for(_p, _d):
@@ -1467,6 +1590,10 @@ class Tiger(Optimizer):
                             trust = eff_trust_for(p, d) if use_trust else scalar_one
                             chunk_trust_t = trust.expand(parts)
                         chunk_rms_t = d_chunk_norms_t / math.sqrt(max(1, d.numel() // parts))
+                        spectral_by_chunk = (
+                            _spectral_dispersion_chunks(d_chunks[:len(keys)], spec_low_band, spec_high_band)
+                            if collect_qkv_spectral else None
+                        )
                         for i, (pc, dc) in enumerate(zip(p_chunks, d_chunks)):
                             tr = chunk_trust_t[i]
                             eff_lr = base_lr
@@ -1474,7 +1601,7 @@ class Tiger(Optimizer):
                                 eff_lr = lr * float(qkv_lr.get(keys[i], lr_scale))
                             low_raw_t = high_raw_t = phase_raw_t = None
                             if collect_qkv_spectral and i < len(keys):
-                                low_raw_t, high_raw_t, phase_raw_t = _spectral_dispersion_tensors(dc, spec_low_band, spec_high_band)
+                                low_raw_t, high_raw_t, phase_raw_t = spectral_by_chunk[i]
                             if qkv_observations is not None and i < len(keys):
                                 qkv_observations[keys[i]].append((
                                     tr.detach(), chunk_rms_t[i].detach(),

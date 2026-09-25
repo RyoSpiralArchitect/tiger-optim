@@ -1,0 +1,527 @@
+{
+  "bench_source_sha256_after": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+  "bench_source_sha256_before": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+  "default_device": "cpu",
+  "device": "mps",
+  "git_head": "a4dd249cbfb0d4b1caed4fa9fd292d6cee83de9f",
+  "machine": "macOS-26.4.1-arm64-arm-64bit",
+  "optimizer_defaults": {
+    "profiler_enabled": false,
+    "qkv_lr_autoadapt": true,
+    "qkv_lr_interval": 25,
+    "qkv_spectral_adapt": true
+  },
+  "pid": 17281,
+  "python": "3.12.6 (v3.12.6:a4a2d2b0d85, Sep  6 2024, 16:08:03) [Clang 13.0.0 (clang-1300.0.29.30)]",
+  "rows": [
+    {
+      "global_step": 1,
+      "global_step_before": 0,
+      "loss": 1.9913370609283447,
+      "optimizer_ms": 185.25800000497838,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 2,
+      "global_step_before": 1,
+      "loss": 1.805966854095459,
+      "optimizer_ms": 20.202708001306746,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 3,
+      "global_step_before": 2,
+      "loss": 1.423424482345581,
+      "optimizer_ms": 17.84225000301376,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 4,
+      "global_step_before": 3,
+      "loss": 1.2651643753051758,
+      "optimizer_ms": 16.795124996860977,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 5,
+      "global_step_before": 4,
+      "loss": 1.1445648670196533,
+      "optimizer_ms": 15.287458001694176,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 6,
+      "global_step_before": 5,
+      "loss": 1.062314510345459,
+      "optimizer_ms": 14.240415999665856,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 7,
+      "global_step_before": 6,
+      "loss": 1.0160791873931885,
+      "optimizer_ms": 14.032792001671623,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 8,
+      "global_step_before": 7,
+      "loss": 0.9971423745155334,
+      "optimizer_ms": 13.901165999413934,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 9,
+      "global_step_before": 8,
+      "loss": 1.000056505203247,
+      "optimizer_ms": 13.986625002871733,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 10,
+      "global_step_before": 9,
+      "loss": 1.0183703899383545,
+      "optimizer_ms": 14.88075000088429,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 11,
+      "global_step_before": 10,
+      "loss": 1.0462071895599365,
+      "optimizer_ms": 13.818334002280608,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 12,
+      "global_step_before": 11,
+      "loss": 1.0763888359069824,
+      "optimizer_ms": 13.919750002969522,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 13,
+      "global_step_before": 12,
+      "loss": 1.100209355354309,
+      "optimizer_ms": 14.020083006471395,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 14,
+      "global_step_before": 13,
+      "loss": 1.1053531169891357,
+      "optimizer_ms": 13.856708006642293,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 15,
+      "global_step_before": 14,
+      "loss": 1.0869134664535522,
+      "optimizer_ms": 14.058959000976756,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 16,
+      "global_step_before": 15,
+      "loss": 1.060445785522461,
+      "optimizer_ms": 14.135625002381857,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 17,
+      "global_step_before": 16,
+      "loss": 1.0371921062469482,
+      "optimizer_ms": 15.02125000115484,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 18,
+      "global_step_before": 17,
+      "loss": 1.0211338996887207,
+      "optimizer_ms": 14.428832997509744,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 19,
+      "global_step_before": 18,
+      "loss": 1.0126583576202393,
+      "optimizer_ms": 14.02816700283438,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 20,
+      "global_step_before": 19,
+      "loss": 1.0106194019317627,
+      "optimizer_ms": 14.062207999813836,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 21,
+      "global_step_before": 20,
+      "loss": 1.0135760307312012,
+      "optimizer_ms": 14.292749998276122,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 22,
+      "global_step_before": 21,
+      "loss": 1.0198171138763428,
+      "optimizer_ms": 13.658916999702342,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 23,
+      "global_step_before": 22,
+      "loss": 1.02622652053833,
+      "optimizer_ms": 13.9364580027177,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 24,
+      "global_step_before": 23,
+      "loss": 1.0296785831451416,
+      "optimizer_ms": 13.989457998832222,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 25,
+      "global_step_before": 24,
+      "loss": 1.0276048183441162,
+      "optimizer_ms": 66.58199999947101,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.8988407986929419,
+        "v": 1.1001564260217453
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 26,
+      "global_step_before": 25,
+      "loss": 1.0209230184555054,
+      "optimizer_ms": 19.17887500167126,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.8988407986929419,
+        "v": 1.1001564260217453
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.8988407986929419,
+        "v": 1.1001564260217453
+      }
+    },
+    {
+      "global_step": 27,
+      "global_step_before": 26,
+      "loss": 1.0138309001922607,
+      "optimizer_ms": 14.466957996774,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.8988407986929419,
+        "v": 1.1001564260217453
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.8988407986929419,
+        "v": 1.1001564260217453
+      }
+    },
+    {
+      "global_step": 28,
+      "global_step_before": 27,
+      "loss": 1.0098992586135864,
+      "optimizer_ms": 14.615374995628372,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.8988407986929419,
+        "v": 1.1001564260217453
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.8988407986929419,
+        "v": 1.1001564260217453
+      }
+    },
+    {
+      "global_step": 29,
+      "global_step_before": 28,
+      "loss": 1.0099198818206787,
+      "optimizer_ms": 14.334291998238768,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.8988407986929419,
+        "v": 1.1001564260217453
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.8988407986929419,
+        "v": 1.1001564260217453
+      }
+    }
+  ],
+  "schema": 1,
+  "source_stable_during_run": true,
+  "steps": 29,
+  "tiger_source_sha256_after": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e",
+  "tiger_source_sha256_before": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e",
+  "torch": "2.12.1",
+  "variant": "full",
+  "warnings": [
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "python": "3.12.6 (v3.12.6:a4a2d2b0d85, Sep  6 2024, 16:08:03) [Clang 13.0.0 (clang-1300.0.29.30)]",
+  "rows": [
+    {
+      "length": 256,
+      "max_abs_error_vs_cpu_rfft": 1.325744506175397e-05,
+      "max_abs_error_vs_plain_mps_rfft": null,
+      "method": "rfft",
+      "ms_cold": 45.35483299696352,
+      "output_dtype": "torch.complex64",
+      "output_shape": [
+        129
+      ],
+      "warnings": [
+        {
+          "category": "UserWarning",
+          "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+        }
+      ]
+    },
+    {
+      "length": 256,
+      "max_abs_error_vs_cpu_rfft": 1.325744506175397e-05,
+      "max_abs_error_vs_plain_mps_rfft": 0.0,
+      "method": "rfft_out",
+      "ms_cold": 0.6573339996975847,
+      "output_dtype": "torch.complex64",
+      "output_shape": [
+        129
+      ],
+      "warnings": []
+    },
+    {
+      "length": 256,
+      "max_abs_error_vs_cpu_rfft": 1.3486991520039737e-05,
+      "max_abs_error_vs_plain_mps_rfft": null,
+      "method": "fft_slice",
+      "ms_cold": 3.3170420065289363,
+      "output_dtype": "torch.complex64",
+      "output_shape": [
+        129
+      ],
+      "warnings": [
+        {
+          "category": "UserWarning",
+          "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [256]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+        }
+      ]
+    },
+    {
+      "length": 256,
+      "max_abs_error_vs_cpu_rfft": 0.0,
+      "max_abs_error_vs_plain_mps_rfft": null,
+      "method": "cpu_rfft",
+      "ms_cold": 0.011167001503054053,
+      "output_dtype": "torch.complex64",
+      "output_shape": [
+        129
+      ],
+      "warnings": []
+    },
+    {
+      "length": 65536,
+      "max_abs_error_vs_cpu_rfft": 0.00041508395224809647,
+      "max_abs_error_vs_plain_mps_rfft": null,
+      "method": "rfft",
+      "ms_cold": 2.98175000352785,
+      "output_dtype": "torch.complex64",
+      "output_shape": [
+        32769
+      ],
+      "warnings": [
+        {
+          "category": "UserWarning",
+          "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+        }
+      ]
+    },
+    {
+      "length": 65536,
+      "max_abs_error_vs_cpu_rfft": 0.00041508395224809647,
+      "max_abs_error_vs_plain_mps_rfft": 0.0,
+      "method": "rfft_out",
+      "ms_cold": 0.4497499976423569,
+      "output_dtype": "torch.complex64",
+      "output_shape": [
+        32769
+      ],
+      "warnings": []
+    },
+    {
+      "length": 65536,
+      "max_abs_error_vs_cpu_rfft": 0.00041508395224809647,
+      "max_abs_error_vs_plain_mps_rfft": null,
+      "method": "fft_slice",
+      "ms_cold": 2.4124999981722794,
+      "output_dtype": "torch.complex64",
+      "output_shape": [
+        32769
+      ],
+      "warnings": [
+        {
+          "category": "UserWarning",
+          "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [65536]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+        }
+      ]
+    },
+    {
+      "length": 65536,
+      "max_abs_error_vs_cpu_rfft": 0.0,
+      "max_abs_error_vs_plain_mps_rfft": null,
+      "method": "cpu_rfft",
+      "ms_cold": 0.2177499991375953,
+      "output_dtype": "torch.complex64",
+      "output_shape": [
+        32769
+      ],
+      "warnings": []
+    }
+  ],
+  "schema": 1,
+  "torch": "2.12.1"
+}

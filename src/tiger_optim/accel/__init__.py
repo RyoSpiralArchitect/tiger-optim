@@ -32,6 +32,8 @@ from typing import Callable, Dict, Iterator, Optional, Tuple
 
 import torch
 
+from .torch_backend import _scaled_l2
+
 __all__ = [
     "fast_softsign",
     "fast_rms",
@@ -571,13 +573,18 @@ def fast_softsign(x: torch.Tensor, tau: float) -> torch.Tensor:
 def fast_rms(x: torch.Tensor) -> torch.Tensor:
     """Compute RMS using optional acceleration backends when available."""
 
+    reference = (
+        x.real if x.is_complex() else
+        x if x.is_floating_point() else
+        x.to(torch.float64 if x.device.type == "cpu" and x.dtype == torch.int64 else torch.float32)
+    )
     if x.numel() == 0:
-        return torch.zeros((), dtype=x.dtype, device=x.device)
+        return reference.new_zeros(())
     if x.requires_grad and torch.is_grad_enabled():
-        return x.square().sum().div(float(x.numel())).sqrt()
+        return _scaled_l2(x, rms=True)
 
     def _validate(result: object) -> torch.Tensor:
-        tensor = _coerce_backend_value(x, result)
+        tensor = _coerce_backend_value(reference, result)
         if tensor.dim() != 0:
             raise ValueError("rms backend must return a scalar tensor")
         return tensor
@@ -585,19 +592,24 @@ def fast_rms(x: torch.Tensor) -> torch.Tensor:
     result = _accelerated_result("rms", _validate, x)
     if result is not None:
         return result
-    return x.square().sum().div(float(x.numel())).sqrt()
+    return _scaled_l2(x, rms=True)
 
 
 def fast_norm(x: torch.Tensor) -> torch.Tensor:
     """Compute the vector norm with optional accelerator support."""
 
+    reference = (
+        x.real if x.is_complex() else
+        x if x.is_floating_point() else
+        x.to(torch.float64 if x.device.type == "cpu" and x.dtype == torch.int64 else torch.float32)
+    )
     if x.numel() == 0:
-        return torch.zeros((), dtype=x.dtype, device=x.device)
+        return reference.new_zeros(())
     if x.requires_grad and torch.is_grad_enabled():
-        return x.mul(x).sum().sqrt()
+        return _scaled_l2(x)
 
     def _validate(result: object) -> torch.Tensor:
-        tensor = _coerce_backend_value(x, result)
+        tensor = _coerce_backend_value(reference, result)
         if tensor.dim() != 0:
             raise ValueError("norm backend must return a scalar tensor")
         return tensor
@@ -605,7 +617,7 @@ def fast_norm(x: torch.Tensor) -> torch.Tensor:
     result = _accelerated_result("norm", _validate, x)
     if result is not None:
         return result
-    return x.mul(x).sum().sqrt()
+    return _scaled_l2(x)
 
 
 def current_backend_priority() -> Tuple[str, ...]:

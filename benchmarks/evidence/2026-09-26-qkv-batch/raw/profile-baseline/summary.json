@@ -1,0 +1,68 @@
+{
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "python": "3.12.6 (v3.12.6:a4a2d2b0d85, Sep  6 2024, 16:08:03) [Clang 13.0.0 (clang-1300.0.29.30)]",
+  "schema": 1,
+  "source_root": "/private/tmp/tiger-optim-fft-baseline-20260926",
+  "source_sha256_after": {
+    "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+    "src/tiger_optim/accel/__init__.py": "e02a830073e35ad5bf824be5aa071dc6bea1f47a94e101f84e4da0e826e28d3a",
+    "src/tiger_optim/accel/torch_backend.py": "e38bf5af473112c73718ce59b2187ba3a779ba74c02d8f3542b78c4050c82bb5",
+    "src/tiger_optim/tiger.py": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e"
+  },
+  "source_sha256_before": {
+    "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+    "src/tiger_optim/accel/__init__.py": "e02a830073e35ad5bf824be5aa071dc6bea1f47a94e101f84e4da0e826e28d3a",
+    "src/tiger_optim/accel/torch_backend.py": "e38bf5af473112c73718ce59b2187ba3a779ba74c02d8f3542b78c4050c82bb5",
+    "src/tiger_optim/tiger.py": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e"
+  },
+  "source_stable_during_run": true,
+  "steps": [
+    {
+      "fft_r2c": 0,
+      "fft_rfft": 0,
+      "step": 24
+    },
+    {
+      "fft_r2c": 6,
+      "fft_rfft": 6,
+      "step": 25
+    },
+    {
+      "fft_r2c": 0,
+      "fft_rfft": 0,
+      "step": 26
+    }
+  ],
+  "torch": "2.12.1",
+  "trace_sha256_uncompressed": "aae43b8a5d6876c14582a23ff1bf67101c16cba03f92d770a1f127e37e25850e",
+  "warnings": [
+    {
+      "category": "UserWarning",
+      "message": "Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True."
+    },
+    {
+      "category": "UserWarning",
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    }
+  ]
+}
