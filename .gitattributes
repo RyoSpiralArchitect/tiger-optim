@@ -1,0 +1,2 @@
+# Preserve profiler tables byte-for-byte so their recorded hashes remain valid.
+benchmarks/evidence/*/profile*/table.txt whitespace=-blank-at-eol,-blank-at-eof

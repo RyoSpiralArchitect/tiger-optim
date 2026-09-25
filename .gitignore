@@ -194,6 +194,14 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# Local benchmark outputs
+benchmarks/results/
+benchmarks/plots/
+benchmarks/profiles/
+
+# macOS Finder metadata
+.DS_Store
+
 # Cursor
 #  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data

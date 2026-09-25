@@ -1,0 +1,161 @@
+{
+  "condition_met_for_other_seeds": true,
+  "config": {
+    "agc_clip": 0.0,
+    "auto_blend": false,
+    "auto_lr": false,
+    "factored": true,
+    "precond_alpha": 1.0,
+    "rms_clip_granularity": "param",
+    "rms_clip_threshold": 1.0,
+    "trust_clip": 5.0,
+    "trust_space": "precond",
+    "update_buffer_dtype": "fp32",
+    "weight_decay": 0.01
+  },
+  "label": "exploratory one-dimensional LR check; no superiority claim",
+  "previous_lr_results_sha256": "1daff69b56775aea0c893afebf27c2b562196d7a7589222477732533272a019a",
+  "previous_seed11_lr3e-3_heldout_mse": 0.32387250661849976,
+  "quality_probe_sha256": "83827a7211c7338fa82f23c27835e6e2d5bc359331ec490c7f515f206aa72354",
+  "runs": [
+    {
+      "elapsed_seconds": 0.21980750000147964,
+      "lr": 0.01,
+      "seed": 11,
+      "status": "complete",
+      "stopped_at_step": null,
+      "trace": [
+        {
+          "heldout_mse": 1.5034139156341553,
+          "step": 0,
+          "train_mse": 1.3643838167190552
+        },
+        {
+          "heldout_mse": 0.6556332111358643,
+          "step": 50,
+          "train_mse": 0.5889637470245361
+        },
+        {
+          "heldout_mse": 0.1965194046497345,
+          "step": 100,
+          "train_mse": 0.21788175404071808
+        },
+        {
+          "heldout_mse": 0.07734231650829315,
+          "step": 150,
+          "train_mse": 0.08273855596780777
+        },
+        {
+          "heldout_mse": 0.2798212468624115,
+          "step": 200,
+          "train_mse": 0.20790795981884003
+        }
+      ]
+    },
+    {
+      "elapsed_seconds": 0.17852812500132131,
+      "lr": 0.03,
+      "seed": 11,
+      "status": "complete",
+      "stopped_at_step": null,
+      "trace": [
+        {
+          "heldout_mse": 1.5034139156341553,
+          "step": 0,
+          "train_mse": 1.3643838167190552
+        },
+        {
+          "heldout_mse": 0.11780533939599991,
+          "step": 50,
+          "train_mse": 0.14791977405548096
+        },
+        {
+          "heldout_mse": 6.587810516357422,
+          "step": 100,
+          "train_mse": 19.853952407836914
+        },
+        {
+          "heldout_mse": 28523.97265625,
+          "step": 150,
+          "train_mse": 26037.9765625
+        },
+        {
+          "heldout_mse": 24155.673828125,
+          "step": 200,
+          "train_mse": 23427.544921875
+        }
+      ]
+    },
+    {
+      "elapsed_seconds": 0.18173849999948288,
+      "lr": 0.01,
+      "seed": 23,
+      "status": "complete",
+      "stopped_at_step": null,
+      "trace": [
+        {
+          "heldout_mse": 1.6868082284927368,
+          "step": 0,
+          "train_mse": 1.448326587677002
+        },
+        {
+          "heldout_mse": 0.8464824557304382,
+          "step": 50,
+          "train_mse": 0.7256739139556885
+        },
+        {
+          "heldout_mse": 0.11130359023809433,
+          "step": 100,
+          "train_mse": 0.10686225444078445
+        },
+        {
+          "heldout_mse": 0.1616295725107193,
+          "step": 150,
+          "train_mse": 0.17793674767017365
+        },
+        {
+          "heldout_mse": 0.6616772413253784,
+          "step": 200,
+          "train_mse": 0.4780772030353546
+        }
+      ]
+    },
+    {
+      "elapsed_seconds": 0.17870908300028532,
+      "lr": 0.01,
+      "seed": 37,
+      "status": "complete",
+      "stopped_at_step": null,
+      "trace": [
+        {
+          "heldout_mse": 1.2614563703536987,
+          "step": 0,
+          "train_mse": 1.3680917024612427
+        },
+        {
+          "heldout_mse": 0.5063616633415222,
+          "step": 50,
+          "train_mse": 0.5874561667442322
+        },
+        {
+          "heldout_mse": 0.08003678172826767,
+          "step": 100,
+          "train_mse": 0.08849388360977173
+        },
+        {
+          "heldout_mse": 0.20099060237407684,
+          "step": 150,
+          "train_mse": 0.21028052270412445
+        },
+        {
+          "heldout_mse": 0.2308368682861328,
+          "step": 200,
+          "train_mse": 0.3064480721950531
+        }
+      ]
+    }
+  ],
+  "task": "same synthetic task, model, data, minibatches and 200-step budget as quality_probe.py",
+  "tiger_py_sha256": "d65f3f078d2a4230040b96b81dbd0785f8c0fb71ba018077fcf4500ce37cf2cf",
+  "torch_default_device": "cpu"
+}

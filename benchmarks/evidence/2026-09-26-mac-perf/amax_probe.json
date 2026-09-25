@@ -1,0 +1,105 @@
+{
+  "torch": "2.12.1",
+  "os": "macOS-26.4.1-arm64-arm-64bit",
+  "device": "mps",
+  "cases": {
+    "torch.float32": {
+      "finite": {
+        "current": true,
+        "reduced": true
+      },
+      "nan": {
+        "current": false,
+        "reduced": false
+      },
+      "pos_inf": {
+        "current": false,
+        "reduced": false
+      },
+      "neg_inf": {
+        "current": false,
+        "reduced": false
+      }
+    },
+    "torch.float16": {
+      "finite": {
+        "current": true,
+        "reduced": true
+      },
+      "nan": {
+        "current": false,
+        "reduced": false
+      },
+      "pos_inf": {
+        "current": false,
+        "reduced": false
+      },
+      "neg_inf": {
+        "current": false,
+        "reduced": false
+      }
+    },
+    "torch.bfloat16": {
+      "finite": {
+        "current": true,
+        "reduced": true
+      },
+      "nan": {
+        "current": false,
+        "reduced": false
+      },
+      "pos_inf": {
+        "current": false,
+        "reduced": false
+      },
+      "neg_inf": {
+        "current": false,
+        "reduced": false
+      }
+    }
+  },
+  "profile": {
+    "torch.float32": {
+      "current": {
+        "aten::_local_scalar_dense": 15,
+        "aten::isfinite": 12,
+        "aten::amax": 0,
+        "aten::all": 15
+      },
+      "reduced": {
+        "aten::_local_scalar_dense": 6,
+        "aten::isfinite": 3,
+        "aten::amax": 15,
+        "aten::all": 0
+      }
+    },
+    "torch.float16": {
+      "current": {
+        "aten::_local_scalar_dense": 15,
+        "aten::isfinite": 12,
+        "aten::amax": 0,
+        "aten::all": 15
+      },
+      "reduced": {
+        "aten::_local_scalar_dense": 6,
+        "aten::isfinite": 3,
+        "aten::amax": 15,
+        "aten::all": 0
+      }
+    },
+    "torch.bfloat16": {
+      "current": {
+        "aten::_local_scalar_dense": 15,
+        "aten::isfinite": 12,
+        "aten::amax": 0,
+        "aten::all": 15
+      },
+      "reduced": {
+        "aten::_local_scalar_dense": 6,
+        "aten::isfinite": 3,
+        "aten::amax": 15,
+        "aten::all": 0
+      }
+    }
+  }
+}

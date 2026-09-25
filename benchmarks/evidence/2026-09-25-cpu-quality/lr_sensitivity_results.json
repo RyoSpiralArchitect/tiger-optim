@@ -1,0 +1,78 @@
+{
+  "agc_clip": 0.0,
+  "label": "exploratory seed-11 LR-scale sensitivity; no tuning or superiority claim",
+  "quality_probe_sha256": "83827a7211c7338fa82f23c27835e6e2d5bc359331ec490c7f515f206aa72354",
+  "runs": [
+    {
+      "elapsed_seconds": 0.18145725000067614,
+      "lr": 0.001,
+      "trace": [
+        {
+          "heldout_mse": 1.5034139156341553,
+          "step": 0,
+          "train_mse": 1.3643838167190552
+        },
+        {
+          "heldout_mse": 1.415401577949524,
+          "step": 50,
+          "train_mse": 1.281609296798706
+        },
+        {
+          "heldout_mse": 1.3118478059768677,
+          "step": 100,
+          "train_mse": 1.1846853494644165
+        },
+        {
+          "heldout_mse": 1.209951639175415,
+          "step": 150,
+          "train_mse": 1.0889978408813477
+        },
+        {
+          "heldout_mse": 1.1018668413162231,
+          "step": 200,
+          "train_mse": 0.986544668674469
+        }
+      ]
+    },
+    {
+      "elapsed_seconds": 0.17648958299832884,
+      "lr": 0.003,
+      "trace": [
+        {
+          "heldout_mse": 1.5034139156341553,
+          "step": 0,
+          "train_mse": 1.3643838167190552
+        },
+        {
+          "heldout_mse": 1.2418513298034668,
+          "step": 50,
+          "train_mse": 1.1180342435836792
+        },
+        {
+          "heldout_mse": 0.9448016881942749,
+          "step": 100,
+          "train_mse": 0.8409102559089661
+        },
+        {
+          "heldout_mse": 0.6327059268951416,
+          "step": 150,
+          "train_mse": 0.5754465460777283
+        },
+        {
+          "heldout_mse": 0.32387250661849976,
+          "step": 200,
+          "train_mse": 0.2838303744792938
+        }
+      ]
+    }
+  ],
+  "seed": 11,
+  "sole_change_from_no_agc_ablation": "lr",
+  "steps": 200,
+  "tested_lrs": [
+    0.001,
+    0.003
+  ],
+  "tiger_py_sha256": "d65f3f078d2a4230040b96b81dbd0785f8c0fb71ba018077fcf4500ce37cf2cf",
+  "torch_default_device": "cpu"
+}

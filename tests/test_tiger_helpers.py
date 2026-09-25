@@ -78,6 +78,71 @@ def test_reference_tensor_scans_nested_iterables():
     assert tiger._reference_tensor(None) is None
 
 
+def test_spectral_dispersion_tensors_return_device_scalars():
+    x = torch.linspace(-1.0, 1.0, steps=16)
+
+    low, high, phase = tiger._spectral_dispersion_tensors(x, 0.25, 0.25)
+
+    assert all(isinstance(value, torch.Tensor) for value in (low, high, phase))
+    assert all(value.ndim == 0 for value in (low, high, phase))
+    assert all(value.device == x.device for value in (low, high, phase))
+    assert all(torch.isfinite(value) for value in (low, high, phase))
+
+
+def test_foreach_all_finite_reports_expected_result():
+    good = [torch.ones(4), torch.full((4,), 2.0)]
+    bad = [torch.ones(4), torch.tensor([1.0, float("nan"), 2.0, 3.0])]
+
+    assert tiger._foreach_all_finite(good) is True
+    assert tiger._foreach_all_finite(bad) is False
+
+
+def test_chunk_scalar_norms_match_manual_equal_split():
+    x = torch.arange(24, dtype=torch.float32).reshape(6, 4)
+
+    norms_dim0 = tiger._chunk_scalar_norms(x, 0, 3)
+    manual_dim0 = torch.stack([chunk.square().sum().sqrt() for chunk in torch.chunk(x, 3, dim=0)])
+    assert torch.allclose(norms_dim0, manual_dim0)
+
+    y = torch.arange(36, dtype=torch.float32).reshape(3, 12)
+    norms_dim1 = tiger._chunk_scalar_norms(y, 1, 3)
+    manual_dim1 = torch.stack([chunk.square().sum().sqrt() for chunk in torch.chunk(y, 3, dim=1)])
+    assert torch.allclose(norms_dim1, manual_dim1)
+
+
+def test_scalars_to_host_batches_scalar_conversion():
+    values = tiger._scalars_to_host([torch.tensor(1.25), 2, 3.5])
+    assert values == pytest.approx([1.25, 2.0, 3.5])
+
+
+def test_step_skips_only_nonfinite_param_when_group_probe_fails():
+    good = torch.nn.Parameter(torch.ones(4))
+    bad = torch.nn.Parameter(torch.ones(4))
+    optimizer = tiger.Tiger(
+        [{"params": [good, bad]}],
+        lr=1e-1,
+        betas=(0.0, 0.0),
+        weight_decay=0.0,
+        factored=False,
+        precond_alpha=0.0,
+        sign_mode="sign",
+        sign_blend=1.0,
+        use_foreach=False,
+        use_foreach_update=False,
+        skip_if_nonfinite=True,
+    )
+
+    good_before = good.detach().clone()
+    bad_before = bad.detach().clone()
+    good.grad = torch.ones_like(good)
+    bad.grad = torch.tensor([1.0, float("nan"), 1.0, 1.0])
+
+    optimizer.step()
+
+    assert not torch.equal(good.detach(), good_before)
+    assert torch.equal(bad.detach(), bad_before)
+
+
 def test_fused_apply_triton_records_kernel_result(monkeypatch):
     param = torch.nn.Parameter(torch.zeros(4))
     opt = tiger.Tiger([param], lr=1e-3)
@@ -140,6 +205,127 @@ def test_step_profiler_includes_triton_failures(tmp_path):
     assert failures is None or isinstance(failures, list)
     if failures:
         assert all(isinstance(item, str) for item in failures)
+
+
+def test_factored_step_keeps_preconditioner_finite():
+    torch.manual_seed(0)
+    param = torch.nn.Parameter(torch.randn(6, 4))
+    opt = tiger.Tiger(
+        [param],
+        lr=1e-3,
+        factored=True,
+        precond_alpha=1.0,
+        use_foreach=False,
+        use_foreach_update=False,
+    )
+
+    for _ in range(2):
+        param.grad = torch.randn_like(param)
+        opt.step()
+        state = opt.state[param]
+        assert torch.isfinite(param).all()
+        assert torch.isfinite(state["m"]).all()
+        assert torch.isfinite(state["vr"]).all()
+        assert torch.isfinite(state["vc"]).all()
+
+
+def test_qkv_spectral_collection_skips_when_not_due(monkeypatch):
+    param = torch.nn.Parameter(torch.randn(6, 4))
+    calls = []
+
+    def _spy(*args, **kwargs):
+        calls.append(1)
+        return (
+            torch.tensor(0.1, dtype=torch.float32),
+            torch.tensor(0.2, dtype=torch.float32),
+            torch.tensor(0.3, dtype=torch.float32),
+        )
+
+    monkeypatch.setattr(tiger, "_spectral_dispersion_tensors", _spy)
+    opt = tiger.Tiger(
+        [{
+            "params": [param],
+            "block_tag": "attn_qkv",
+            "qkv_rules": {id(param): (0, 3)},
+            "qkv_trust_split": True,
+            "qkv_lr_scales": {"q": 1.0, "k": 1.0, "v": 1.0},
+        }],
+        lr=1e-3,
+        factored=False,
+        precond_alpha=0.0,
+        qkv_spectral_adapt=True,
+        qkv_lr_autoadapt=True,
+        qkv_lr_interval=10,
+        profiler_enabled=False,
+    )
+
+    param.grad = torch.randn_like(param)
+    opt.step()
+
+    assert calls == []
+
+
+def test_qkv_spectral_collection_runs_when_adapt_due(monkeypatch):
+    param = torch.nn.Parameter(torch.randn(6, 4))
+    calls = []
+
+    def _spy(*args, **kwargs):
+        calls.append(1)
+        return (
+            torch.tensor(0.1, dtype=torch.float32),
+            torch.tensor(0.2, dtype=torch.float32),
+            torch.tensor(0.3, dtype=torch.float32),
+        )
+
+    monkeypatch.setattr(tiger, "_spectral_dispersion_tensors", _spy)
+    opt = tiger.Tiger(
+        [{
+            "params": [param],
+            "block_tag": "attn_qkv",
+            "qkv_rules": {id(param): (0, 3)},
+            "qkv_trust_split": True,
+            "qkv_lr_scales": {"q": 1.0, "k": 1.0, "v": 1.0},
+        }],
+        lr=1e-3,
+        factored=False,
+        precond_alpha=0.0,
+        qkv_spectral_adapt=True,
+        qkv_lr_autoadapt=True,
+        qkv_lr_interval=1,
+        profiler_enabled=False,
+    )
+
+    param.grad = torch.randn_like(param)
+    opt.step()
+
+    assert len(calls) == 3
+
+
+def test_loaded_dense_state_is_sanitized_once_before_update():
+    param = torch.nn.Parameter(torch.ones(4))
+    opt = tiger.Tiger(
+        [param],
+        lr=1e-3,
+        factored=False,
+        precond_alpha=0.0,
+        skip_if_nonfinite=True,
+        use_foreach=False,
+        use_foreach_update=False,
+        mom_dtype="fp32",
+    )
+
+    opt.state[param]["m"] = torch.tensor([float("nan"), 1.0, float("-inf"), 2.0], dtype=torch.float32)
+    opt.state[param]["v"] = torch.tensor([float("nan"), -1.0, float("inf"), 2.0], dtype=torch.float32)
+    opt.state[param]["_state_sane"] = False
+    param.grad = torch.ones_like(param)
+
+    opt.step()
+
+    state = opt.state[param]
+    assert state["_state_sane"] is True
+    assert torch.isfinite(state["m"]).all()
+    assert torch.isfinite(state["v"]).all()
+    assert torch.all(state["v"] >= 0)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")

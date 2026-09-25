@@ -45,7 +45,7 @@ __all__ = [
 ]
 
 _BACKEND_MODULES: Dict[str, Optional[ModuleType]] = {}
-_BACKEND_ORDER: Tuple[str, ...] = ("julia",)
+_BACKEND_ORDER: Tuple[str, ...] = ("julia", "torch")
 _CONFIG_LOCK = threading.RLock()
 _METRICS_LOCK = threading.RLock()
 _PROFILE_LOCK = threading.RLock()
@@ -414,7 +414,22 @@ def _get_metrics(name: str) -> _BackendMetrics:
         if metrics is None:
             metrics = _BackendMetrics(name=name)
             _BACKEND_METRICS[name] = metrics
-        return metrics
+    return metrics
+
+
+def _supports_call(module: ModuleType, attr: str, *args) -> bool:
+    supports = getattr(module, "supports", None)
+    if supports is None:
+        return True
+    try:
+        return bool(supports(attr, *args))
+    except TypeError:
+        try:
+            return bool(supports(*args))
+        except Exception:
+            return False
+    except Exception:
+        return False
 
 
 def _handle_failure(name: str, metrics: _BackendMetrics, error: Exception | str) -> None:
@@ -444,6 +459,13 @@ def _iter_backends() -> Iterator[Tuple[str, ModuleType]]:
         yield name, module
 
 
+def _profile_backend_names() -> Tuple[str, ...]:
+    preferred = _current_preferred()
+    if preferred:
+        return preferred
+    return _ordered_backend_names()
+
+
 def _dispatch(
     name: str,
     module: ModuleType,
@@ -453,6 +475,8 @@ def _dispatch(
 ) -> Optional[object]:
     func = getattr(module, attr, None)
     if func is None:
+        return None
+    if not _supports_call(module, attr, *args):
         return None
     metrics = _get_metrics(name)
     start = perf_counter()
@@ -475,7 +499,12 @@ def _dispatch(
 
 
 def _profile_backends(attr: str, validator: Callable[[object], object], *args) -> Optional[object]:
-    available = list(_iter_backends())
+    candidates = _profile_backend_names()
+    available = [
+        (name, module)
+        for name, module in _iter_backends()
+        if name in candidates
+    ]
     if len(available) <= 1:
         _mark_profiled(attr)
         return None
@@ -522,20 +551,20 @@ def fast_softsign(x: torch.Tensor, tau: float) -> torch.Tensor:
 
     if x.numel() == 0:
         return x.clone()
-    if x.requires_grad:
+    if x.requires_grad and torch.is_grad_enabled():
         return x / (x.abs() + tau)
-    if x.device.type == "cpu":
-        def _validate(result: object) -> torch.Tensor:
-            tensor = _coerce_backend_value(x, result)
-            if tensor.shape != x.shape:
-                raise ValueError(
-                    "softsign backend must return a tensor matching the input shape"
-                )
-            return tensor
 
-        result = _accelerated_result("softsign", _validate, x, tau)
-        if result is not None:
-            return result
+    def _validate(result: object) -> torch.Tensor:
+        tensor = _coerce_backend_value(x, result)
+        if tensor.shape != x.shape:
+            raise ValueError(
+                "softsign backend must return a tensor matching the input shape"
+            )
+        return tensor
+
+    result = _accelerated_result("softsign", _validate, x, tau)
+    if result is not None:
+        return result
     return x / (x.abs() + tau)
 
 
@@ -544,19 +573,19 @@ def fast_rms(x: torch.Tensor) -> torch.Tensor:
 
     if x.numel() == 0:
         return torch.zeros((), dtype=x.dtype, device=x.device)
-    if x.requires_grad:
-        return x.pow(2).mean().sqrt()
-    if x.device.type == "cpu":
-        def _validate(result: object) -> torch.Tensor:
-            tensor = _coerce_backend_value(x, result)
-            if tensor.dim() != 0:
-                raise ValueError("rms backend must return a scalar tensor")
-            return tensor
+    if x.requires_grad and torch.is_grad_enabled():
+        return x.square().sum().div(float(x.numel())).sqrt()
 
-        result = _accelerated_result("rms", _validate, x)
-        if result is not None:
-            return result
-    return x.pow(2).mean().sqrt()
+    def _validate(result: object) -> torch.Tensor:
+        tensor = _coerce_backend_value(x, result)
+        if tensor.dim() != 0:
+            raise ValueError("rms backend must return a scalar tensor")
+        return tensor
+
+    result = _accelerated_result("rms", _validate, x)
+    if result is not None:
+        return result
+    return x.square().sum().div(float(x.numel())).sqrt()
 
 
 def fast_norm(x: torch.Tensor) -> torch.Tensor:
@@ -564,19 +593,19 @@ def fast_norm(x: torch.Tensor) -> torch.Tensor:
 
     if x.numel() == 0:
         return torch.zeros((), dtype=x.dtype, device=x.device)
-    if x.requires_grad:
-        return torch.linalg.vector_norm(x)
-    if x.device.type == "cpu":
-        def _validate(result: object) -> torch.Tensor:
-            tensor = _coerce_backend_value(x, result)
-            if tensor.dim() != 0:
-                raise ValueError("norm backend must return a scalar tensor")
-            return tensor
+    if x.requires_grad and torch.is_grad_enabled():
+        return x.mul(x).sum().sqrt()
 
-        result = _accelerated_result("norm", _validate, x)
-        if result is not None:
-            return result
-    return torch.linalg.vector_norm(x)
+    def _validate(result: object) -> torch.Tensor:
+        tensor = _coerce_backend_value(x, result)
+        if tensor.dim() != 0:
+            raise ValueError("norm backend must return a scalar tensor")
+        return tensor
+
+    result = _accelerated_result("norm", _validate, x)
+    if result is not None:
+        return result
+    return x.mul(x).sum().sqrt()
 
 
 def current_backend_priority() -> Tuple[str, ...]:
@@ -611,4 +640,8 @@ def backend_diagnostics() -> Dict[str, Dict[str, object]]:
 def available_backends() -> Dict[str, bool]:
     """Return a dictionary describing which high-performance backends are usable."""
 
-    return {name: _is_available(name) for name in _BACKEND_MODULES}
+    disabled = set(_current_disabled()) | set(_current_suppressed())
+    return {
+        name: (name not in disabled and _is_available(name))
+        for name in _BACKEND_MODULES
+    }

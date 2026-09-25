@@ -1,0 +1,114 @@
+{
+  "baseline_results_sha256": "7a50189d7aba4bb541b9c248a4a78f523515fa717cdd31c719f9da2810d32153",
+  "baseline_script_sha256": "83827a7211c7338fa82f23c27835e6e2d5bc359331ec490c7f515f206aa72354",
+  "label": "single AGC ablation; preliminary CPU-only evidence",
+  "seeds": [
+    {
+      "adamw_final_heldout_mse": 0.12178730219602585,
+      "baseline_tiger_final_heldout_mse": 1.5032286643981934,
+      "elapsed_seconds": 0.18473845799962874,
+      "seed": 11,
+      "trace": [
+        {
+          "heldout_mse": 1.5034139156341553,
+          "step": 0,
+          "train_mse": 1.3643838167190552
+        },
+        {
+          "heldout_mse": 1.4854189157485962,
+          "step": 50,
+          "train_mse": 1.34747314453125
+        },
+        {
+          "heldout_mse": 1.4644956588745117,
+          "step": 100,
+          "train_mse": 1.3279021978378296
+        },
+        {
+          "heldout_mse": 1.443007230758667,
+          "step": 150,
+          "train_mse": 1.3079253435134888
+        },
+        {
+          "heldout_mse": 1.4203743934631348,
+          "step": 200,
+          "train_mse": 1.2866299152374268
+        }
+      ]
+    },
+    {
+      "adamw_final_heldout_mse": 0.07630322873592377,
+      "baseline_tiger_final_heldout_mse": 1.6866941452026367,
+      "elapsed_seconds": 0.17750470799728646,
+      "seed": 23,
+      "trace": [
+        {
+          "heldout_mse": 1.6868082284927368,
+          "step": 0,
+          "train_mse": 1.448326587677002
+        },
+        {
+          "heldout_mse": 1.671945571899414,
+          "step": 50,
+          "train_mse": 1.4344457387924194
+        },
+        {
+          "heldout_mse": 1.6554296016693115,
+          "step": 100,
+          "train_mse": 1.419072151184082
+        },
+        {
+          "heldout_mse": 1.637151837348938,
+          "step": 150,
+          "train_mse": 1.402097225189209
+        },
+        {
+          "heldout_mse": 1.6178416013717651,
+          "step": 200,
+          "train_mse": 1.384267807006836
+        }
+      ]
+    },
+    {
+      "adamw_final_heldout_mse": 0.08221199363470078,
+      "baseline_tiger_final_heldout_mse": 1.2614147663116455,
+      "elapsed_seconds": 0.17494333300055587,
+      "seed": 37,
+      "trace": [
+        {
+          "heldout_mse": 1.2614563703536987,
+          "step": 0,
+          "train_mse": 1.3680917024612427
+        },
+        {
+          "heldout_mse": 1.246498465538025,
+          "step": 50,
+          "train_mse": 1.3524991273880005
+        },
+        {
+          "heldout_mse": 1.2296297550201416,
+          "step": 100,
+          "train_mse": 1.334986686706543
+        },
+        {
+          "heldout_mse": 1.2108795642852783,
+          "step": 150,
+          "train_mse": 1.3156260251998901
+        },
+        {
+          "heldout_mse": 1.191300630569458,
+          "step": 200,
+          "train_mse": 1.2954169511795044
+        }
+      ]
+    }
+  ],
+  "sole_config_change": {
+    "agc_clip": {
+      "ablation": 0.0,
+      "baseline": 0.02
+    }
+  },
+  "tiger_py_sha256": "d65f3f078d2a4230040b96b81dbd0785f8c0fb71ba018077fcf4500ce37cf2cf",
+  "torch_default_device": "cpu"
+}

@@ -1,0 +1,4 @@
+{"adamw_final_heldout_mse": 0.12178730219602585, "seed": 11, "tiger_baseline_final_heldout_mse": 1.5032286643981934, "tiger_no_agc_final_heldout_mse": 1.4203743934631348}
+{"adamw_final_heldout_mse": 0.07630322873592377, "seed": 23, "tiger_baseline_final_heldout_mse": 1.6866941452026367, "tiger_no_agc_final_heldout_mse": 1.6178416013717651}
+{"adamw_final_heldout_mse": 0.08221199363470078, "seed": 37, "tiger_baseline_final_heldout_mse": 1.2614147663116455, "tiger_no_agc_final_heldout_mse": 1.191300630569458}
+results=/tmp/tiger-optim-20260925-quality/ablation_results.json

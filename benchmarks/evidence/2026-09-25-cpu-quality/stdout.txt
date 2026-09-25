@@ -1,0 +1,4 @@
+{"final_heldout_mse": {"AdamW": 0.12178730219602585, "Tiger": 1.5032286643981934}, "seed": 11}
+{"final_heldout_mse": {"AdamW": 0.07630322873592377, "Tiger": 1.6866941452026367}, "seed": 23}
+{"final_heldout_mse": {"AdamW": 0.08221199363470078, "Tiger": 1.2614147663116455}, "seed": 37}
+results=/tmp/tiger-optim-20260925-quality/results.json
