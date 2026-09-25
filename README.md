@@ -3,7 +3,7 @@ Tiger is a PyTorch optimizer exploring sign-aware updates, trust ratios, and
 LoRA/QKV adaptation. 🐅
 
 <p align="center">
-  <a href="LICENSE.txt"><img src="https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg" alt="AGPL-3.0-or-later"></a>
+  <a href="LICENSE.txt"><img src="https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg" alt="AGPL-3.0-only"></a>
   <img src="https://img.shields.io/badge/Commercial%20License-Available-orange.svg" alt="Commercial License Available">
   <img src="https://img.shields.io/badge/PyTorch-2.x-lightgrey.svg" alt="PyTorch 2.x">
   <a href="issues?q=label%3Abenchmark"><img src="https://img.shields.io/badge/Benchmarks-help%20wanted-brightgreen.svg" alt="Benchmarks: help wanted"></a>
@@ -49,7 +49,7 @@ pip install -e ".[dev,julia,bench]"
 # pip install "tiger-optim[julia,bench]"
 ```
 
-> The public Tiger Optimizer distribution is licensed under **GNU AGPL‑3.0 or later**.
+> The public Tiger Optimizer distribution is licensed under **GNU AGPL‑3.0 only**.
 >
 > **Commercial licenses** (OEM/Enterprise) are available for proprietary integration.
 
