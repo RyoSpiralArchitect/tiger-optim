@@ -1,0 +1,16 @@
+{
+  "mode": "tiger_v21_full",
+  "device": "mps",
+  "steps": 30,
+  "warmup": 10,
+  "ms_median": 15.774791503645247,
+  "ms_mean": 16.648144399368903,
+  "ms_forward_backward_median": 1.5968330008035991,
+  "ms_forward_backward_mean": 1.6090430663704562,
+  "ms_optimizer_median": 14.171958500810433,
+  "ms_optimizer_mean": 15.039101332998447,
+  "loss_last": 1.0066518783569336,
+  "loss_min": 1.004164218902588,
+  "loss_mean": 1.027649470170339
+}
+Saved: benchmarks/results/compare-tiger_v21_full-mps-b9842339-20260925-172810.json

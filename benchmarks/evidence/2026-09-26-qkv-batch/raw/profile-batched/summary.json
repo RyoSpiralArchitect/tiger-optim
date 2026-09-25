@@ -1,0 +1,44 @@
+{
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "python": "3.12.6 (v3.12.6:a4a2d2b0d85, Sep  6 2024, 16:08:03) [Clang 13.0.0 (clang-1300.0.29.30)]",
+  "schema": 1,
+  "source_root": "/private/tmp/tiger-optim-batched-fft-20260926",
+  "source_sha256_after": {
+    "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+    "src/tiger_optim/accel/__init__.py": "e02a830073e35ad5bf824be5aa071dc6bea1f47a94e101f84e4da0e826e28d3a",
+    "src/tiger_optim/accel/torch_backend.py": "e38bf5af473112c73718ce59b2187ba3a779ba74c02d8f3542b78c4050c82bb5",
+    "src/tiger_optim/tiger.py": "aced6939c263899502a4e6f8b67af5fbada3aee94c566adc63e0f6a53f949db7"
+  },
+  "source_sha256_before": {
+    "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+    "src/tiger_optim/accel/__init__.py": "e02a830073e35ad5bf824be5aa071dc6bea1f47a94e101f84e4da0e826e28d3a",
+    "src/tiger_optim/accel/torch_backend.py": "e38bf5af473112c73718ce59b2187ba3a779ba74c02d8f3542b78c4050c82bb5",
+    "src/tiger_optim/tiger.py": "aced6939c263899502a4e6f8b67af5fbada3aee94c566adc63e0f6a53f949db7"
+  },
+  "source_stable_during_run": true,
+  "steps": [
+    {
+      "fft_r2c": 0,
+      "fft_rfft": 0,
+      "step": 24
+    },
+    {
+      "fft_r2c": 2,
+      "fft_rfft": 2,
+      "step": 25
+    },
+    {
+      "fft_r2c": 0,
+      "fft_rfft": 0,
+      "step": 26
+    }
+  ],
+  "torch": "2.12.1",
+  "trace_sha256_uncompressed": "83fdf59d72f1470a86023282789da9ebfa141b974e55b1272f652509750ce8b4",
+  "warnings": [
+    {
+      "category": "UserWarning",
+      "message": "Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True."
+    }
+  ]
+}

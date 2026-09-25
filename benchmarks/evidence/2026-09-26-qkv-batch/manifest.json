@@ -1,0 +1,200 @@
+{
+  "date_local": "2026-09-26",
+  "machine": "Apple M4, macOS 26.4.1 arm64, Python 3.12.6, PyTorch 2.12.1",
+  "origin_main_commit": "a4dd249cbfb0d4b1caed4fa9fd292d6cee83de9f",
+  "profile_script_sha256": "9f708c30b2a6ea3b70db1f38de94b9935ca41bd8388cacdadf76dc2213d619fb",
+  "profiles": [
+    {
+      "artifact_dir": "raw/profile-baseline",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-qkv-batch/profile_fft_counts.py",
+        "--source-root",
+        "/tmp/tiger-optim-fft-baseline-20260926",
+        "--output-dir",
+        "benchmarks/evidence/2026-09-26-qkv-batch/raw/profile-baseline"
+      ],
+      "phase": "baseline",
+      "source_sha256": {
+        "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+        "src/tiger_optim/accel/__init__.py": "e02a830073e35ad5bf824be5aa071dc6bea1f47a94e101f84e4da0e826e28d3a",
+        "src/tiger_optim/accel/torch_backend.py": "e38bf5af473112c73718ce59b2187ba3a779ba74c02d8f3542b78c4050c82bb5",
+        "src/tiger_optim/tiger.py": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e"
+      },
+      "trace_sha256_uncompressed": "aae43b8a5d6876c14582a23ff1bf67101c16cba03f92d770a1f127e37e25850e"
+    },
+    {
+      "artifact_dir": "raw/profile-batched",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-qkv-batch/profile_fft_counts.py",
+        "--source-root",
+        "/tmp/tiger-optim-fft-batched-20260926",
+        "--output-dir",
+        "benchmarks/evidence/2026-09-26-qkv-batch/raw/profile-batched"
+      ],
+      "phase": "batched",
+      "source_sha256": {
+        "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+        "src/tiger_optim/accel/__init__.py": "e02a830073e35ad5bf824be5aa071dc6bea1f47a94e101f84e4da0e826e28d3a",
+        "src/tiger_optim/accel/torch_backend.py": "e38bf5af473112c73718ce59b2187ba3a779ba74c02d8f3542b78c4050c82bb5",
+        "src/tiger_optim/tiger.py": "aced6939c263899502a4e6f8b67af5fbada3aee94c566adc63e0f6a53f949db7"
+      },
+      "trace_sha256_uncompressed": "83fdf59d72f1470a86023282789da9ebfa141b974e55b1272f652509750ce8b4"
+    }
+  ],
+  "pythonpath": "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages:src",
+  "raw_artifacts_sha256": {
+    "raw/baseline-r1.json": "0a7bd12f503323e205f575a1785f9763441d0a799df4e70cb071f05ca40e7403",
+    "raw/baseline-r1.log": "81d3525ded64a5314598146960ef78fe7682a7b2a0e8f12e99524dddd37ab27b",
+    "raw/baseline-r2.json": "f8ebeddaa6c7a3a332dceeded5ad5769c1751f16e4585e1a897cfd1e92b4dbdd",
+    "raw/baseline-r2.log": "8ca6ab6a3e428a89bf3d511f7a9efc0a68e592537d091be1750509c42d8b455d",
+    "raw/batched-r1.json": "0ecb07bc49e559a5f18649f463e4ca723df917719a67d04f86329d7102aa4c73",
+    "raw/batched-r1.log": "90f892774beb1ee808c28f68a3b814d6b544c7437a432eb174c8244f987d7910",
+    "raw/batched-r2.json": "f956590cf8fb7a74ac23e194fc157f3b0ef60fc65c29fe6ada847d7159933b4a",
+    "raw/batched-r2.log": "d9dcac837b899d52f9a5669a97411e38e456879d562f2e9cd80f6041e349f6c1",
+    "raw/profile-baseline/summary.json": "9a4d32b5eec4434440afbe69277f6fd9d55b0161c4f5bb299f95c874e8870eff",
+    "raw/profile-baseline/trace.json.gz": "094b88fd907bd8609606c5ab5aeed807594baf1a1746a96be49f3af7f0e0adb0",
+    "raw/profile-batched/summary.json": "24f98958d05adaeb0f03b5f7749c30000378dfc32d06595b13114f9bf48c9d3b",
+    "raw/profile-batched/trace.json.gz": "c2cb99311e83ca9ea438fac42b06b6f453344c2c095542b7abe953fb27d6b818"
+  },
+  "run_order": [
+    {
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/bench_compare_optim.py",
+        "--device",
+        "mps",
+        "--steps",
+        "30",
+        "--warmup",
+        "10",
+        "--seed",
+        "0",
+        "--modes",
+        "tiger_v21_full"
+      ],
+      "comparison_id": "01716ae99e7545008c3676cd61c3a9bc",
+      "json": "raw/baseline-r1.json",
+      "label": "baseline-r1",
+      "log": "raw/baseline-r1.log",
+      "phase": "baseline",
+      "run_id": "e5aa699a41a24542bf63d6bc5d9ad143",
+      "source_sha256_before_and_after": {
+        "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+        "src/tiger_optim/accel/__init__.py": "e02a830073e35ad5bf824be5aa071dc6bea1f47a94e101f84e4da0e826e28d3a",
+        "src/tiger_optim/accel/torch_backend.py": "e38bf5af473112c73718ce59b2187ba3a779ba74c02d8f3542b78c4050c82bb5",
+        "src/tiger_optim/tiger.py": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e"
+      },
+      "timestamp_utc": "2026-09-25T17:28:03.399128+00:00"
+    },
+    {
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/bench_compare_optim.py",
+        "--device",
+        "mps",
+        "--steps",
+        "30",
+        "--warmup",
+        "10",
+        "--seed",
+        "0",
+        "--modes",
+        "tiger_v21_full"
+      ],
+      "comparison_id": "35bf57895ee5413195853b429c15ea0b",
+      "json": "raw/batched-r1.json",
+      "label": "batched-r1",
+      "log": "raw/batched-r1.log",
+      "phase": "batched",
+      "run_id": "101a15795eba4f6b85722fdec23b441d",
+      "source_sha256_before_and_after": {
+        "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+        "src/tiger_optim/accel/__init__.py": "e02a830073e35ad5bf824be5aa071dc6bea1f47a94e101f84e4da0e826e28d3a",
+        "src/tiger_optim/accel/torch_backend.py": "e38bf5af473112c73718ce59b2187ba3a779ba74c02d8f3542b78c4050c82bb5",
+        "src/tiger_optim/tiger.py": "aced6939c263899502a4e6f8b67af5fbada3aee94c566adc63e0f6a53f949db7"
+      },
+      "timestamp_utc": "2026-09-25T17:28:05.575273+00:00"
+    },
+    {
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/bench_compare_optim.py",
+        "--device",
+        "mps",
+        "--steps",
+        "30",
+        "--warmup",
+        "10",
+        "--seed",
+        "0",
+        "--modes",
+        "tiger_v21_full"
+      ],
+      "comparison_id": "241fa0fab972463daea8d0883028da34",
+      "json": "raw/baseline-r2.json",
+      "label": "baseline-r2",
+      "log": "raw/baseline-r2.log",
+      "phase": "baseline",
+      "run_id": "c206c35434e944a7a02b7de2da473d2d",
+      "source_sha256_before_and_after": {
+        "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+        "src/tiger_optim/accel/__init__.py": "e02a830073e35ad5bf824be5aa071dc6bea1f47a94e101f84e4da0e826e28d3a",
+        "src/tiger_optim/accel/torch_backend.py": "e38bf5af473112c73718ce59b2187ba3a779ba74c02d8f3542b78c4050c82bb5",
+        "src/tiger_optim/tiger.py": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e"
+      },
+      "timestamp_utc": "2026-09-25T17:28:07.582088+00:00"
+    },
+    {
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/bench_compare_optim.py",
+        "--device",
+        "mps",
+        "--steps",
+        "30",
+        "--warmup",
+        "10",
+        "--seed",
+        "0",
+        "--modes",
+        "tiger_v21_full"
+      ],
+      "comparison_id": "4441501f5f85414085b7a4769a50af1b",
+      "json": "raw/batched-r2.json",
+      "label": "batched-r2",
+      "log": "raw/batched-r2.log",
+      "phase": "batched",
+      "run_id": "b9842339b09f488589742c75c365b2c0",
+      "source_sha256_before_and_after": {
+        "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+        "src/tiger_optim/accel/__init__.py": "e02a830073e35ad5bf824be5aa071dc6bea1f47a94e101f84e4da0e826e28d3a",
+        "src/tiger_optim/accel/torch_backend.py": "e38bf5af473112c73718ce59b2187ba3a779ba74c02d8f3542b78c4050c82bb5",
+        "src/tiger_optim/tiger.py": "aced6939c263899502a4e6f8b67af5fbada3aee94c566adc63e0f6a53f949db7"
+      },
+      "timestamp_utc": "2026-09-25T17:28:09.598835+00:00"
+    }
+  ],
+  "schema": 1,
+  "source_sha256": {
+    "baseline": {
+      "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+      "src/tiger_optim/accel/__init__.py": "e02a830073e35ad5bf824be5aa071dc6bea1f47a94e101f84e4da0e826e28d3a",
+      "src/tiger_optim/accel/torch_backend.py": "e38bf5af473112c73718ce59b2187ba3a779ba74c02d8f3542b78c4050c82bb5",
+      "src/tiger_optim/tiger.py": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e"
+    },
+    "batched": {
+      "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+      "src/tiger_optim/accel/__init__.py": "e02a830073e35ad5bf824be5aa071dc6bea1f47a94e101f84e4da0e826e28d3a",
+      "src/tiger_optim/accel/torch_backend.py": "e38bf5af473112c73718ce59b2187ba3a779ba74c02d8f3542b78c4050c82bb5",
+      "src/tiger_optim/tiger.py": "aced6939c263899502a4e6f8b67af5fbada3aee94c566adc63e0f6a53f949db7"
+    }
+  }
+}

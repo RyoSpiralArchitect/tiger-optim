@@ -1,0 +1,635 @@
+{
+  "bench_source_sha256_after": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+  "bench_source_sha256_before": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+  "default_device": "cpu",
+  "device": "mps",
+  "git_head": "a4dd249cbfb0d4b1caed4fa9fd292d6cee83de9f",
+  "machine": "macOS-26.4.1-arm64-arm-64bit",
+  "optimizer_defaults": {
+    "profiler_enabled": false,
+    "qkv_lr_autoadapt": true,
+    "qkv_lr_interval": 7,
+    "qkv_spectral_adapt": true
+  },
+  "pid": 17350,
+  "python": "3.12.6 (v3.12.6:a4a2d2b0d85, Sep  6 2024, 16:08:03) [Clang 13.0.0 (clang-1300.0.29.30)]",
+  "rows": [
+    {
+      "global_step": 1,
+      "global_step_before": 0,
+      "loss": 1.9913370609283447,
+      "optimizer_ms": 145.34083300532075,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 2,
+      "global_step_before": 1,
+      "loss": 1.805966854095459,
+      "optimizer_ms": 18.803584003762808,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 3,
+      "global_step_before": 2,
+      "loss": 1.423424482345581,
+      "optimizer_ms": 14.814458998444024,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 4,
+      "global_step_before": 3,
+      "loss": 1.2651643753051758,
+      "optimizer_ms": 14.562791999196634,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 5,
+      "global_step_before": 4,
+      "loss": 1.1445648670196533,
+      "optimizer_ms": 15.152583000599407,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 6,
+      "global_step_before": 5,
+      "loss": 1.062314510345459,
+      "optimizer_ms": 14.22616600029869,
+      "qkv_scales_after": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 7,
+      "global_step_before": 6,
+      "loss": 1.0160791873931885,
+      "optimizer_ms": 58.83704200095963,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8990865863008473,
+        "v": 1.0978949766893504
+      },
+      "qkv_scales_before": {
+        "k": 0.8,
+        "q": 0.9,
+        "v": 1.1
+      }
+    },
+    {
+      "global_step": 8,
+      "global_step_before": 7,
+      "loss": 0.9971423745155334,
+      "optimizer_ms": 14.668832998722792,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8990865863008473,
+        "v": 1.0978949766893504
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8990865863008473,
+        "v": 1.0978949766893504
+      }
+    },
+    {
+      "global_step": 9,
+      "global_step_before": 8,
+      "loss": 1.0000563859939575,
+      "optimizer_ms": 14.526416001899634,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8990865863008473,
+        "v": 1.0978949766893504
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8990865863008473,
+        "v": 1.0978949766893504
+      }
+    },
+    {
+      "global_step": 10,
+      "global_step_before": 9,
+      "loss": 1.0183699131011963,
+      "optimizer_ms": 13.82249999733176,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8990865863008473,
+        "v": 1.0978949766893504
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8990865863008473,
+        "v": 1.0978949766893504
+      }
+    },
+    {
+      "global_step": 11,
+      "global_step_before": 10,
+      "loss": 1.0461268424987793,
+      "optimizer_ms": 14.197750002495013,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8990865863008473,
+        "v": 1.0978949766893504
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8990865863008473,
+        "v": 1.0978949766893504
+      }
+    },
+    {
+      "global_step": 12,
+      "global_step_before": 11,
+      "loss": 1.0762234926223755,
+      "optimizer_ms": 14.4235830011894,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8990865863008473,
+        "v": 1.0978949766893504
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8990865863008473,
+        "v": 1.0978949766893504
+      }
+    },
+    {
+      "global_step": 13,
+      "global_step_before": 12,
+      "loss": 1.099991798400879,
+      "optimizer_ms": 14.4646249973448,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8990865863008473,
+        "v": 1.0978949766893504
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8990865863008473,
+        "v": 1.0978949766893504
+      }
+    },
+    {
+      "global_step": 14,
+      "global_step_before": 13,
+      "loss": 1.105180263519287,
+      "optimizer_ms": 18.734749995928723,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8988226036601019,
+        "v": 1.097907088324257
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8990865863008473,
+        "v": 1.0978949766893504
+      }
+    },
+    {
+      "global_step": 15,
+      "global_step_before": 14,
+      "loss": 1.0867347717285156,
+      "optimizer_ms": 14.324499999929685,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8988226036601019,
+        "v": 1.097907088324257
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8988226036601019,
+        "v": 1.097907088324257
+      }
+    },
+    {
+      "global_step": 16,
+      "global_step_before": 15,
+      "loss": 1.0602647066116333,
+      "optimizer_ms": 14.23179200355662,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8988226036601019,
+        "v": 1.097907088324257
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8988226036601019,
+        "v": 1.097907088324257
+      }
+    },
+    {
+      "global_step": 17,
+      "global_step_before": 16,
+      "loss": 1.0369899272918701,
+      "optimizer_ms": 14.154416996461805,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8988226036601019,
+        "v": 1.097907088324257
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8988226036601019,
+        "v": 1.097907088324257
+      }
+    },
+    {
+      "global_step": 18,
+      "global_step_before": 17,
+      "loss": 1.0209060907363892,
+      "optimizer_ms": 14.071000005060341,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8988226036601019,
+        "v": 1.097907088324257
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8988226036601019,
+        "v": 1.097907088324257
+      }
+    },
+    {
+      "global_step": 19,
+      "global_step_before": 18,
+      "loss": 1.0124311447143555,
+      "optimizer_ms": 14.20479100488592,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8988226036601019,
+        "v": 1.097907088324257
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8988226036601019,
+        "v": 1.097907088324257
+      }
+    },
+    {
+      "global_step": 20,
+      "global_step_before": 19,
+      "loss": 1.0103888511657715,
+      "optimizer_ms": 13.780708999547642,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8988226036601019,
+        "v": 1.097907088324257
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8988226036601019,
+        "v": 1.097907088324257
+      }
+    },
+    {
+      "global_step": 21,
+      "global_step_before": 20,
+      "loss": 1.0133543014526367,
+      "optimizer_ms": 18.56308300193632,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8985659632571238,
+        "v": 1.0979269579956066
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8988226036601019,
+        "v": 1.097907088324257
+      }
+    },
+    {
+      "global_step": 22,
+      "global_step_before": 21,
+      "loss": 1.0196266174316406,
+      "optimizer_ms": 13.920625002356246,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8985659632571238,
+        "v": 1.0979269579956066
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8985659632571238,
+        "v": 1.0979269579956066
+      }
+    },
+    {
+      "global_step": 23,
+      "global_step_before": 22,
+      "loss": 1.0260581970214844,
+      "optimizer_ms": 13.91916599823162,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8985659632571238,
+        "v": 1.0979269579956066
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8985659632571238,
+        "v": 1.0979269579956066
+      }
+    },
+    {
+      "global_step": 24,
+      "global_step_before": 23,
+      "loss": 1.0295032262802124,
+      "optimizer_ms": 14.1513330017915,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8985659632571238,
+        "v": 1.0979269579956066
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8985659632571238,
+        "v": 1.0979269579956066
+      }
+    },
+    {
+      "global_step": 25,
+      "global_step_before": 24,
+      "loss": 1.027382254600525,
+      "optimizer_ms": 31.329459001426585,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8985659632571238,
+        "v": 1.0979269579956066
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8985659632571238,
+        "v": 1.0979269579956066
+      }
+    },
+    {
+      "global_step": 26,
+      "global_step_before": 25,
+      "loss": 1.0206243991851807,
+      "optimizer_ms": 24.407166994933505,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8985659632571238,
+        "v": 1.0979269579956066
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8985659632571238,
+        "v": 1.0979269579956066
+      }
+    },
+    {
+      "global_step": 27,
+      "global_step_before": 26,
+      "loss": 1.01349937915802,
+      "optimizer_ms": 14.975666999816895,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8985659632571238,
+        "v": 1.0979269579956066
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8985659632571238,
+        "v": 1.0979269579956066
+      }
+    },
+    {
+      "global_step": 28,
+      "global_step_before": 27,
+      "loss": 1.0095784664154053,
+      "optimizer_ms": 17.925708001712337,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8983126433421229,
+        "v": 1.097949760395083
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8985659632571238,
+        "v": 1.0979269579956066
+      }
+    },
+    {
+      "global_step": 29,
+      "global_step_before": 28,
+      "loss": 1.0096582174301147,
+      "optimizer_ms": 13.778832995740231,
+      "qkv_scales_after": {
+        "k": 0.8010026070213503,
+        "q": 0.8983126433421229,
+        "v": 1.097949760395083
+      },
+      "qkv_scales_before": {
+        "k": 0.8010026070213503,
+        "q": 0.8983126433421229,
+        "v": 1.097949760395083
+      }
+    }
+  ],
+  "schema": 1,
+  "source_stable_during_run": true,
+  "steps": 29,
+  "tiger_source_sha256_after": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e",
+  "tiger_source_sha256_before": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e",
+  "torch": "2.12.1",
+  "variant": "interval_7",
+  "warnings": [
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [32769]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    },
+    {
+      "category": "UserWarning",
+      "filename": "/Users/ryospiralarchitect/\ud83c\udf00SpiralReality\ud83c\udf00/tiger-optim/src/tiger_optim/tiger.py",
+      "lineno": 247,
+      "message": "An output with one or more elements was resized since it had shape [], which does not match the required output shape [129]. This behavior is deprecated, and in a future PyTorch release outputs will not be resized unless they have zero elements. You can explicitly reuse an out tensor t by resizing it, inplace, to zero elements with t.resize_(0). (Triggered internally at /Users/runner/work/pytorch/pytorch/aten/src/ATen/native/Resize.cpp:38.)"
+    }
+  ]
+}

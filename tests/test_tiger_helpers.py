@@ -89,6 +89,38 @@ def test_spectral_dispersion_tensors_return_device_scalars():
     assert all(torch.isfinite(value) for value in (low, high, phase))
 
 
+@pytest.mark.parametrize("device", ["cpu", "mps"])
+@pytest.mark.parametrize("split_dim", [0, 1])
+def test_spectral_dispersion_chunks_matches_per_chunk(device, split_dim):
+    if device == "mps" and not (hasattr(torch.backends, "mps") and torch.backends.mps.is_available()):
+        pytest.skip("requires MPS")
+    torch.manual_seed(4)
+    shape = (9, 16) if split_dim == 0 else (16, 9)
+    source = torch.randn(shape, device=device)
+    chunks = torch.chunk(source, 3, dim=split_dim)
+    expected = [tiger._spectral_dispersion_tensors(chunk, 0.2, 0.25) for chunk in chunks]
+    actual = tiger._spectral_dispersion_chunks(chunks, 0.2, 0.25)
+    assert len(actual) == 3
+    for expected_chunk, actual_chunk in zip(expected, actual):
+        for expected_metric, actual_metric in zip(expected_chunk, actual_chunk):
+            torch.testing.assert_close(actual_metric, expected_metric, rtol=1e-5, atol=1e-6)
+
+
+def test_spectral_dispersion_chunks_falls_back_for_unequal_lengths(monkeypatch):
+    chunks = torch.chunk(torch.arange(5, dtype=torch.float32), 3)
+    original = tiger._spectral_dispersion_tensors
+    calls = []
+
+    def spy(chunk, low_band, high_band):
+        calls.append(chunk.numel())
+        return original(chunk, low_band, high_band)
+
+    monkeypatch.setattr(tiger, "_spectral_dispersion_tensors", spy)
+    output = tiger._spectral_dispersion_chunks(chunks, 0.2, 0.25)
+    assert len(output) == 3
+    assert calls == [2, 2, 1]
+
+
 def test_foreach_all_finite_reports_expected_result():
     good = [torch.ones(4), torch.full((4,), 2.0)]
     bad = [torch.ones(4), torch.tensor([1.0, float("nan"), 2.0, 3.0])]
@@ -241,7 +273,7 @@ def test_qkv_spectral_collection_skips_when_not_due(monkeypatch):
             torch.tensor(0.3, dtype=torch.float32),
         )
 
-    monkeypatch.setattr(tiger, "_spectral_dispersion_tensors", _spy)
+    monkeypatch.setattr(tiger, "_spectral_dispersion_chunks", _spy)
     opt = tiger.Tiger(
         [{
             "params": [param],
@@ -269,15 +301,13 @@ def test_qkv_spectral_collection_runs_when_adapt_due(monkeypatch):
     param = torch.nn.Parameter(torch.randn(6, 4))
     calls = []
 
+    original = tiger._spectral_dispersion_chunks
+
     def _spy(*args, **kwargs):
         calls.append(1)
-        return (
-            torch.tensor(0.1, dtype=torch.float32),
-            torch.tensor(0.2, dtype=torch.float32),
-            torch.tensor(0.3, dtype=torch.float32),
-        )
+        return original(*args, **kwargs)
 
-    monkeypatch.setattr(tiger, "_spectral_dispersion_tensors", _spy)
+    monkeypatch.setattr(tiger, "_spectral_dispersion_chunks", _spy)
     opt = tiger.Tiger(
         [{
             "params": [param],
@@ -298,7 +328,57 @@ def test_qkv_spectral_collection_runs_when_adapt_due(monkeypatch):
     param.grad = torch.randn_like(param)
     opt.step()
 
-    assert len(calls) == 3
+    assert len(calls) == 1
+
+
+def test_qkv_batched_spectral_preserves_adaptation_scales(monkeypatch):
+    torch.manual_seed(8)
+    weight = torch.randn(12, 7)
+    bias = torch.randn(12)
+    grad_weight = torch.randn_like(weight) * 0.01
+    grad_bias = torch.randn_like(bias) * 0.01
+
+    def build():
+        w = torch.nn.Parameter(weight.clone())
+        b = torch.nn.Parameter(bias.clone())
+        opt = tiger.Tiger(
+            [{
+                "params": [w, b],
+                "block_tag": "attn_qkv",
+                "qkv_rules": {id(w): (0, 3), id(b): (0, 3)},
+                "qkv_trust_split": True,
+                "qkv_lr_scales": {"q": 0.9, "k": 0.8, "v": 1.1},
+            }],
+            lr=1e-3,
+            factored=False,
+            precond_alpha=0.0,
+            qkv_spectral_adapt=True,
+            qkv_lr_autoadapt=True,
+            qkv_lr_interval=1,
+            profiler_enabled=False,
+        )
+        return (w, b), opt
+
+    params_baseline, baseline = build()
+    params_batched, batched = build()
+    with monkeypatch.context() as m:
+        m.setattr(
+            tiger,
+            "_spectral_dispersion_chunks",
+            lambda chunks, low, high: [tiger._spectral_dispersion_tensors(chunk, low, high) for chunk in chunks],
+        )
+        for param, grad in zip(params_baseline, (grad_weight, grad_bias)):
+            param.grad = grad.clone()
+        baseline.step()
+    for param, grad in zip(params_batched, (grad_weight, grad_bias)):
+        param.grad = grad.clone()
+    batched.step()
+    for label in ("q", "k", "v"):
+        assert batched.param_groups[0]["qkv_lr_scales"][label] == pytest.approx(
+            baseline.param_groups[0]["qkv_lr_scales"][label], rel=1e-6, abs=1e-7
+        )
+    for baseline_param, batched_param in zip(params_baseline, params_batched):
+        torch.testing.assert_close(batched_param, baseline_param, rtol=1e-6, atol=1e-7)
 
 
 def test_loaded_dense_state_is_sanitized_once_before_update():

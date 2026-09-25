@@ -31,6 +31,17 @@ jobs:
       - name: Run test suite
         run: python -m pytest -q
 
+      - name: Build source and wheel distributions
+        run: |
+          python -m pip install build
+          python -m build --sdist --wheel
+
+      - name: Smoke test installed wheel
+        run: |
+          python -m pip install --no-deps --target "$RUNNER_TEMP/tiger-wheel" dist/*.whl
+          cd "$RUNNER_TEMP"
+          PYTHONPATH="$RUNNER_TEMP/tiger-wheel" python -c 'import os, pathlib, tiger_optim; root = (pathlib.Path(os.environ["RUNNER_TEMP"]) / "tiger-wheel").resolve(); assert pathlib.Path(tiger_optim.__file__).resolve().is_relative_to(root); assert tiger_optim.__version__ == "2.4.0"'
+
   benchmark-smoke:
     runs-on: ubuntu-24.04
     needs: test

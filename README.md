@@ -3,8 +3,8 @@ Tiger is a PyTorch optimizer exploring sign-aware updates, trust ratios, and
 LoRA/QKV adaptation. 🐅
 
 <p align="center">
-  <img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="AGPL-3.0">
-  <a href="#pricing--licensing"><img src="https://img.shields.io/badge/Commercial%20License-Available-orange.svg" alt="Commercial License Available"></a>
+  <a href="LICENSE.txt"><img src="https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg" alt="AGPL-3.0-or-later"></a>
+  <img src="https://img.shields.io/badge/Commercial%20License-Available-orange.svg" alt="Commercial License Available">
   <img src="https://img.shields.io/badge/PyTorch-2.x-lightgrey.svg" alt="PyTorch 2.x">
   <a href="issues?q=label%3Abenchmark"><img src="https://img.shields.io/badge/Benchmarks-help%20wanted-brightgreen.svg" alt="Benchmarks: help wanted"></a>
 </p>
@@ -23,7 +23,6 @@ results and environment records are not tracked in this repository.
 - [Benchmark and Claim Gate](#benchmark-and-claim-gate)
 - [System Info for This CUDA Run (Legacy Reference)](#system-info-for-this-cuda-run-legacy-reference)
 - [Call for Community CUDA Runs](#call-for-community-cuda-runs)
-- [Pricing & Licensing](#pricing--licensing)
 - [Experimental Starting Settings](#experimental-starting-settings)
 - [Legacy CUDA: Quick Preset](#legacy-cuda-quick-preset)
 - [Roadmap & Lessons from Legacy GPUs](#roadmap--lessons-from-legacy-gpus)
@@ -45,12 +44,13 @@ pip install -e ".[julia]"
 # or grab everything most contributors want
 pip install -e ".[dev,julia,bench]"
 
-# published package
+# after publication
 # pip install tiger-optim
 # pip install "tiger-optim[julia,bench]"
 ```
 
-> Tiger Optimizer is released under **GNU AGPL‑3.0**.  
+> The public Tiger Optimizer distribution is licensed under **GNU AGPL‑3.0 or later**.
+>
 > **Commercial licenses** (OEM/Enterprise) are available for proprietary integration.
 
 ---
@@ -242,10 +242,16 @@ The [2026-09-26 Mac diagnostic](benchmarks/evidence/2026-09-26-mac-perf/README.m
 preserves CPU/MPS raw runs, profiler traces, source hashes, and the host-load
 caveat. Consolidating finite checks reduced profiled MPS scalar reads inside
 Tiger from 68 to 30 per step at the recorded intermediate source revisions;
-the final source measured 36 per step after the FP32 overflow guard.
-In the final paired MPS smoke, Tiger's optimizer median was 23.95 ms versus
-0.998 ms for AdamW. The Tiger global-step-25 spike remains unresolved, and
-these runs do not establish a wall-clock speedup or a convergence comparison.
+the last PR #46 source (`387600e0…`) measured 36 per step after its FP32
+overflow guard. The 23.95 ms Tiger and 0.998 ms AdamW optimizer medians came
+from the earlier `4ef12be8…` paired MPS smoke; no paired run measured the
+current source. The [step-25 diagnosis](benchmarks/evidence/2026-09-26-mac-step25/README.md)
+isolates QKV spectral adaptation as the recurring spike. The
+[batched QKV check](benchmarks/evidence/2026-09-26-qkv-batch/README.md)
+records two FFT calls in place of six for the synthetic fused weight and bias,
+with equal final QKV scales and loss in its bounded A/B runs. Host-load drift
+prevents a wall-clock speed claim; these runs also do not establish a
+convergence comparison.
 
 Run `python benchmarks/bench_quality_smoke.py` for a separate CPU toy task with
 held-out data and three seeds. Its Tiger recipe uses a cosine LR schedule while

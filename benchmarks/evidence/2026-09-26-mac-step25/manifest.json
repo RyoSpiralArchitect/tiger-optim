@@ -1,0 +1,357 @@
+{
+  "date_local": "2026-09-26",
+  "fft_probes": [
+    {
+      "artifact": "raw/fft-probe.json",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/fft_probe.py",
+        "--output",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/fft-probe.json"
+      ]
+    },
+    {
+      "artifact": "raw/fft-batch-probe.json",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/fft_batch_probe.py",
+        "--output",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/fft-batch-probe.json",
+        "--warmup",
+        "5",
+        "--repeats",
+        "20"
+      ]
+    }
+  ],
+  "head_at_unprofiled_runs": "a4dd249cbfb0d4b1caed4fa9fd292d6cee83de9f",
+  "machine": "Apple M4, macOS 26.4.1 arm64, Python 3.12.6, PyTorch 2.12.1",
+  "profile_runs": [
+    {
+      "artifact_dir": "raw/profile-full",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/profile_step25.py",
+        "--variant",
+        "full",
+        "--output-dir",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/profile-full"
+      ],
+      "source_sha256": {
+        "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+        "src/tiger_optim/accel/__init__.py": "c4e5b868eed28aaaa91f335e6a5535f247880dda271d255e5151f7a62e851813",
+        "src/tiger_optim/accel/torch_backend.py": "937155d30df12dd4ef1d780c218a738a36060b6ebb95e3232ba53abfd3522da0",
+        "src/tiger_optim/tiger.py": "1a976375fd2f1a0f3c309fef3ce5a8c39624314e300b7a91f6dc350530cfdd77"
+      },
+      "trace_sha256_uncompressed": "d4888b3f1f64b9789aaac750116eb38c85093090e1a58bf435fa05a478663741",
+      "variant": "full"
+    },
+    {
+      "artifact_dir": "raw/profile-no_spectral",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/profile_step25.py",
+        "--variant",
+        "no_spectral",
+        "--output-dir",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/profile-no_spectral"
+      ],
+      "source_sha256": {
+        "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+        "src/tiger_optim/accel/__init__.py": "c4e5b868eed28aaaa91f335e6a5535f247880dda271d255e5151f7a62e851813",
+        "src/tiger_optim/accel/torch_backend.py": "937155d30df12dd4ef1d780c218a738a36060b6ebb95e3232ba53abfd3522da0",
+        "src/tiger_optim/tiger.py": "1a976375fd2f1a0f3c309fef3ce5a8c39624314e300b7a91f6dc350530cfdd77"
+      },
+      "trace_sha256_uncompressed": "fb9abe08e5bf9c5d81d4eff50eb01985261fbb2205f1be02b0eb7bb62b2cee75",
+      "variant": "no_spectral"
+    },
+    {
+      "artifact_dir": "raw/profile-integrated-pre-fix-0eb49c9e",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/profile_step25.py",
+        "--variant",
+        "full",
+        "--output-dir",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/profile-integrated-pre-fix-0eb49c9e"
+      ],
+      "label": "integrated_pre_fix_0eb49c9e",
+      "source_sha256": {
+        "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+        "src/tiger_optim/accel/__init__.py": "e94689fb383a4e342795b0db111ffbb08e520ddeb3a2997ebcff4f63a1526ef5",
+        "src/tiger_optim/accel/torch_backend.py": "85087acab0a5b06dc11d57f99c7509d91d0d6854a83837f4b49624ad12ae169b",
+        "src/tiger_optim/tiger.py": "0eb49c9e3aba2bb79c86fb0733f9c00d13e5732ee6882cf10c3955d476062f1f"
+      },
+      "trace_sha256_uncompressed": "f95d9f3d44dbaef1ff913668bb98dbbc4eea3bc1fb4dd8e26b3456f7f15bc186",
+      "variant": "full"
+    },
+    {
+      "artifact_dir": "raw/profile-pre-final-92cde1bf",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/profile_step25.py",
+        "--variant",
+        "full",
+        "--output-dir",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/profile-pre-final-92cde1bf"
+      ],
+      "label": "pre_final_92cde1bf",
+      "source_sha256": {
+        "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+        "src/tiger_optim/accel/__init__.py": "e94689fb383a4e342795b0db111ffbb08e520ddeb3a2997ebcff4f63a1526ef5",
+        "src/tiger_optim/accel/torch_backend.py": "85087acab0a5b06dc11d57f99c7509d91d0d6854a83837f4b49624ad12ae169b",
+        "src/tiger_optim/tiger.py": "92cde1bfc4e7da9d3af2789186b2f9794bca512014f98f27c64149e270d869ed"
+      },
+      "trace_sha256_uncompressed": "10db4777f6afad777643be4b8ef9641b7715ebe3b4334a1364c58296d746536a",
+      "variant": "full"
+    },
+    {
+      "artifact_dir": "raw/profile-final-3836c212",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/profile_step25.py",
+        "--variant",
+        "full",
+        "--output-dir",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/profile-final-3836c212"
+      ],
+      "label": "final_3836c212",
+      "source_sha256": {
+        "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+        "src/tiger_optim/accel/__init__.py": "e94689fb383a4e342795b0db111ffbb08e520ddeb3a2997ebcff4f63a1526ef5",
+        "src/tiger_optim/accel/torch_backend.py": "85087acab0a5b06dc11d57f99c7509d91d0d6854a83837f4b49624ad12ae169b",
+        "src/tiger_optim/tiger.py": "3836c2121d5bd94b9a70ac2e5299d4f7e9e76578425ed2a6d17c2012bed8269b"
+      },
+      "trace_sha256_uncompressed": "6e694e8afae2fd17d6e16f53ae5d0fc9ae1fa7aebf7f5024dd15f996b63bd7a2",
+      "variant": "full"
+    }
+  ],
+  "python_invocation_env": {
+    "PYTHONPATH": "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages:src"
+  },
+  "raw_artifacts_sha256": {
+    "raw/fft-batch-probe.json": "5f3cb4dd4242adeacf378d712b755c9ba83f97ba72b3aa6b61f72d7c123de26e",
+    "raw/fft-probe.json": "e097d5927a2379295a275c6b53a47b3bc946eb185f881dc045da797f2dba7916",
+    "raw/final-3836c212.json": "790b124f891d26c3c7cf0cbd9be91e0b1ea117f2458986cdea512306a48a9e5e",
+    "raw/full-r1.json": "decd81b5a066275e6875a3f23482a571b0a87a64711880513f69e0d12f0d1b11",
+    "raw/full-r2.json": "c8b4b3f8c3f38444234566bd61153b32e28122e03b0fd29c062ca77123e026a0",
+    "raw/integrated-pre-fix-0eb49c9e.json": "0e757325e71a8e1e66d63458b89920b4c94355b5b2106dfbbe1ec90fb47c87dc",
+    "raw/interval_1000-r1.json": "322f907838bb737dca46e81bd3727e20d013882a149a73c45b70dbd717f86d4d",
+    "raw/interval_7-r1.json": "355db9019af40d878729d436ed39270802a64e11cdfe2deab9350e323a0f7043",
+    "raw/no_adapt-r1.json": "559bd823becdd91d3b967dacbfddb71286c70016933d2c8179023d31e224a565",
+    "raw/no_spectral-r1.json": "7160455c0c951135a5f3eba245729b6814caab1feceb653b37660df4644408ca",
+    "raw/pre-final-92cde1bf.json": "6b1f4361084ae897103825cbf65d16e36d5f06cab54ec3d7f7a13ae572dd232d",
+    "raw/profile-final-3836c212/summary.json": "68dbf0333b8660e614ae9403abaf8939de5074b06838a845bc1dac1f4b11dd5c",
+    "raw/profile-final-3836c212/table.txt": "9f5d8b1daa26dfb0d6ee3c3e6f69e586cab3b8fde87f409ba28a73942004b77b",
+    "raw/profile-final-3836c212/trace-summary.json": "54dd987f541d5a455ae32ec03d738df46494bdb022cba9f67607da083e944de5",
+    "raw/profile-final-3836c212/trace.json.gz": "33017dc0765b46426ca8e6173e243b018f0848c07fcdb7d1ce30c6ee51830711",
+    "raw/profile-full/summary.json": "56b54a84585a2c158937476e942d88c9221f5cd8fe15f536b36cfc1e5a1626ce",
+    "raw/profile-full/table.txt": "0ce139f491b155e4fc2235e11c50d9caa7d8f5d614aa0e3f8cec2097390239b3",
+    "raw/profile-full/trace-summary.json": "641a32029424b034ed988d38ff4d0ebca6e697a693067d106448dd183afa8a44",
+    "raw/profile-full/trace.json.gz": "881c82d510f0b77646075e2615dc6a4a4506326d8abcd711f274ee30054eb05c",
+    "raw/profile-integrated-pre-fix-0eb49c9e/summary.json": "8ac51397d885fd979f401f3d390120cf57b5be24b105e9d5687b0fca730f0693",
+    "raw/profile-integrated-pre-fix-0eb49c9e/table.txt": "5f234e3c76372a0fdaa4ffbf06572296bdb9f7fbe419c04da1f3d215d97bab35",
+    "raw/profile-integrated-pre-fix-0eb49c9e/trace-summary.json": "882051cf3cd1655a1b8968aa28211ecafc9a84d9ca2fb46bcd5dee322d94ba40",
+    "raw/profile-integrated-pre-fix-0eb49c9e/trace.json.gz": "ee1e1f60e45424ae525c97a40e0f917eb65ce946bc6416a89e24504bbe0f964e",
+    "raw/profile-no_spectral/summary.json": "23fbc024013adf66d20f7e0cd58c9ae79e03c24ac0e0a8929a821f9a70ffb51b",
+    "raw/profile-no_spectral/table.txt": "6a4a40a0abb7971db4bbfd562e086864c27e9654d0650dfd1ef76b0143c25513",
+    "raw/profile-no_spectral/trace-summary.json": "28a6208913f2d50d02ed85ec5463cba4b60f8d4793b902c5e6d68be2f946d119",
+    "raw/profile-no_spectral/trace.json.gz": "f018bf140649dbfba2f3792c63211bc440f607d096a43dfa414fbf270afef7bf",
+    "raw/profile-pre-final-92cde1bf/summary.json": "0c6a46883e25b90d887d66a77eab15b6918b6654caf207aa8071fe3f56a777c5",
+    "raw/profile-pre-final-92cde1bf/table.txt": "eff961ab5e8b49f73ea39d9f605b34ed45a56b089d583d919892d288639b91e5",
+    "raw/profile-pre-final-92cde1bf/trace-summary.json": "9ce372a5380656c117ecb66d38b21621685692cf82c521ced3599c6e2cfad697",
+    "raw/profile-pre-final-92cde1bf/trace.json.gz": "d99959d2cc566f411aa4e86cf6d027de59a68cc2b71fc03e9e5267d140ca12e5"
+  },
+  "schema": 1,
+  "scripts_sha256": {
+    "diagnose_step25.py": "d7354573515bb8fea78e722ca95e4a719845261e023e883b4e92598df2e59ab2",
+    "fft_batch_probe.py": "28a8e30fe4ae596bd972eb08e0f1108132eb16f4dbac0e6887babab494dea7ef",
+    "fft_probe.py": "efe7a0aaa3f666bc479cb6e8e87e615bd3f837114650469db45daae06aabf8df",
+    "profile_step25.py": "3f1079f7ce5c3871c2f5212693d26bf80a0940d25a58a21d28c4f9468f675411",
+    "summarize_trace.py": "0ad08a381c4d502882022b4af0fe5956118aa47a6cc4c86459728e3aeadc4da5"
+  },
+  "unprofiled_accel_origin_main_blob_hashes_inferred_not_run_captured": {
+    "src/tiger_optim/accel/__init__.py": "e02a830073e35ad5bf824be5aa071dc6bea1f47a94e101f84e4da0e826e28d3a",
+    "src/tiger_optim/accel/torch_backend.py": "e38bf5af473112c73718ce59b2187ba3a779ba74c02d8f3542b78c4050c82bb5"
+  },
+  "unprofiled_runs": [
+    {
+      "artifact": "raw/full-r1.json",
+      "bench_source_sha256": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/diagnose_step25.py",
+        "--variant",
+        "full",
+        "--steps",
+        "29",
+        "--output",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/full-r1.json"
+      ],
+      "tiger_source_sha256": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e",
+      "variant": "full"
+    },
+    {
+      "artifact": "raw/full-r2.json",
+      "bench_source_sha256": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/diagnose_step25.py",
+        "--variant",
+        "full",
+        "--steps",
+        "29",
+        "--output",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/full-r2.json"
+      ],
+      "tiger_source_sha256": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e",
+      "variant": "full"
+    },
+    {
+      "artifact": "raw/no_adapt-r1.json",
+      "bench_source_sha256": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/diagnose_step25.py",
+        "--variant",
+        "no_adapt",
+        "--steps",
+        "29",
+        "--output",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/no_adapt-r1.json"
+      ],
+      "tiger_source_sha256": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e",
+      "variant": "no_adapt"
+    },
+    {
+      "artifact": "raw/no_spectral-r1.json",
+      "bench_source_sha256": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/diagnose_step25.py",
+        "--variant",
+        "no_spectral",
+        "--steps",
+        "29",
+        "--output",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/no_spectral-r1.json"
+      ],
+      "tiger_source_sha256": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e",
+      "variant": "no_spectral"
+    },
+    {
+      "artifact": "raw/interval_1000-r1.json",
+      "bench_source_sha256": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/diagnose_step25.py",
+        "--variant",
+        "interval_1000",
+        "--steps",
+        "29",
+        "--output",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/interval_1000-r1.json"
+      ],
+      "tiger_source_sha256": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e",
+      "variant": "interval_1000"
+    },
+    {
+      "artifact": "raw/interval_7-r1.json",
+      "bench_source_sha256": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/diagnose_step25.py",
+        "--variant",
+        "interval_7",
+        "--steps",
+        "29",
+        "--output",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/interval_7-r1.json"
+      ],
+      "tiger_source_sha256": "387600e0d5e0550714bd71edeadce69e4ae66f0230d8532e4539e1f5d185216e",
+      "variant": "interval_7"
+    },
+    {
+      "artifact": "raw/integrated-pre-fix-0eb49c9e.json",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/diagnose_step25.py",
+        "--variant",
+        "full",
+        "--steps",
+        "29",
+        "--output",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/integrated-pre-fix-0eb49c9e.json"
+      ],
+      "label": "integrated_pre_fix_0eb49c9e",
+      "source_sha256_before_and_after": {
+        "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+        "src/tiger_optim/accel/__init__.py": "e94689fb383a4e342795b0db111ffbb08e520ddeb3a2997ebcff4f63a1526ef5",
+        "src/tiger_optim/accel/torch_backend.py": "85087acab0a5b06dc11d57f99c7509d91d0d6854a83837f4b49624ad12ae169b",
+        "src/tiger_optim/tiger.py": "0eb49c9e3aba2bb79c86fb0733f9c00d13e5732ee6882cf10c3955d476062f1f"
+      },
+      "tiger_source_sha256": "0eb49c9e3aba2bb79c86fb0733f9c00d13e5732ee6882cf10c3955d476062f1f",
+      "variant": "full"
+    },
+    {
+      "artifact": "raw/pre-final-92cde1bf.json",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/diagnose_step25.py",
+        "--variant",
+        "full",
+        "--steps",
+        "29",
+        "--output",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/pre-final-92cde1bf.json"
+      ],
+      "label": "pre_final_92cde1bf",
+      "source_sha256_before_and_after": {
+        "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+        "src/tiger_optim/accel/__init__.py": "e94689fb383a4e342795b0db111ffbb08e520ddeb3a2997ebcff4f63a1526ef5",
+        "src/tiger_optim/accel/torch_backend.py": "85087acab0a5b06dc11d57f99c7509d91d0d6854a83837f4b49624ad12ae169b",
+        "src/tiger_optim/tiger.py": "92cde1bfc4e7da9d3af2789186b2f9794bca512014f98f27c64149e270d869ed"
+      },
+      "tiger_source_sha256": "92cde1bfc4e7da9d3af2789186b2f9794bca512014f98f27c64149e270d869ed",
+      "variant": "full"
+    },
+    {
+      "artifact": "raw/final-3836c212.json",
+      "command": [
+        "python3",
+        "-S",
+        "benchmarks/evidence/2026-09-26-mac-step25/diagnose_step25.py",
+        "--variant",
+        "full",
+        "--steps",
+        "29",
+        "--output",
+        "benchmarks/evidence/2026-09-26-mac-step25/raw/final-3836c212.json"
+      ],
+      "label": "final_3836c212",
+      "source_sha256_before_and_after": {
+        "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+        "src/tiger_optim/accel/__init__.py": "e94689fb383a4e342795b0db111ffbb08e520ddeb3a2997ebcff4f63a1526ef5",
+        "src/tiger_optim/accel/torch_backend.py": "85087acab0a5b06dc11d57f99c7509d91d0d6854a83837f4b49624ad12ae169b",
+        "src/tiger_optim/tiger.py": "3836c2121d5bd94b9a70ac2e5299d4f7e9e76578425ed2a6d17c2012bed8269b"
+      },
+      "tiger_source_sha256": "3836c2121d5bd94b9a70ac2e5299d4f7e9e76578425ed2a6d17c2012bed8269b",
+      "variant": "full"
+    }
+  ]
+}
