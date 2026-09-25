@@ -315,35 +315,6 @@ We’d love **fresh results on modern GPUs** (Ampere/Ada/Hopper; CUDA 11.8+/12.x
 
 ---
 
-## Pricing & Licensing
-
-## License
-SpiralReality and its components are licensed under the  
-[GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)](https://www.gnu.org/licenses/agpl-3.0.html).  
-© 2025 Ryo ∴ SpiralArchitect and SpiralReality. for the public build.  
-**Commercial License** available for proprietary integration; pricing is listed below.
-
-### Pricing (Annual) — Conservative (current)
-| Tier | Rights & Scope | Price | Support |
-|---|---|---:|---|
-| Growth | Single org, ≤1 product, ≤10 seats, internal use | **$3,000** | Std (email) |
-| Pro | Single org, ≤3 products, ≤40 seats, internal + offline eval | **$9,000** | Priority |
-| Enterprise | Org‑wide, unlimited seats/products, internal | **$25,000** | Priority+ |
-| OEM | Redistribution/embedding in shipped products or SaaS | **$75,000 + royalty** | Premier |
-
-Royalty (OEM): 0.5% Tiger‑attributable GTV **or** $0.05/MAU (higher of), floor **$50k/yr**, cap **$250k/yr**.  
-
-The public build includes the experimental LoRA, QKV, and foreach paths
-described above; commercial terms cover proprietary integration rather than a
-separate feature unlock.
-
-Early adopters: first 10 customers −25% (year 1).  
-Contact: **kishkavsesvit@icloud.com**
-
-> If community CUDA runs show Tiger ≥ AdamW (median) on modern GPUs by ≥5%, we’ll switch to **Assertive** pricing (Pro=$12k / Enterprise=$30k / OEM=$90k+royalty).
-
----
-
 ## Experimental Starting Settings
 
 - **Conservative clipping experiment.** This configuration keeps the update
