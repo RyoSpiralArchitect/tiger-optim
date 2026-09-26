@@ -1413,20 +1413,23 @@ class Tiger(Optimizer):
                             update_bound = raw_update_bound
                         output_bound = param_max * decay_growth + update_bound
                         fp32_limit = torch.finfo(torch.float32).max * (1.0 - 8.0 * torch.finfo(torch.float32).eps)
-                        checks.extend((
-                            scaled_direction_bound <= fp32_limit,
-                            raw_update_bound <= fp32_limit,
-                            output_bound <= fp32_limit,
-                        ))
+                        # Compare vector-shaped bounds on MPS without reading
+                        # each scalar comparison back to the host.
+                        update_bounds = torch.stack((scaled_direction_bound, raw_update_bound, output_bound))
+                        checks.append((update_bounds <= torch.full_like(update_bounds, fp32_limit)).all())
+                        norm_bounds = []
                         if use_trust or (agc_clip and agc_clip > 0.0):
-                            norm_checks.append(param_max * (decay_growth * math.sqrt(p.numel())) <= fp32_limit)
-                            norm_checks.append(direction_max * math.sqrt(d.numel()) <= fp32_limit)
+                            norm_bounds.append(param_max * (decay_growth * math.sqrt(p.numel())))
+                            norm_bounds.append(direction_max * math.sqrt(d.numel()))
                             norm_probes.extend(((p.detach(), decay_growth), (d, 1.0)))
                         if use_trust and trust_space == "precond":
                             precond_preview = m32 * P
                             precond_max = precond_preview.abs().amax() if precond_preview.numel() else scalar_zero
-                            norm_checks.append(precond_max * math.sqrt(precond_preview.numel()) <= fp32_limit)
+                            norm_bounds.append(precond_max * math.sqrt(precond_preview.numel()))
                             norm_probes.append((precond_preview, 1.0))
+                        if norm_bounds:
+                            norm_values = torch.stack(norm_bounds)
+                            norm_checks.append((norm_values <= torch.full_like(norm_values, fp32_limit)).all())
                         if use_trust and trust_beta > 0.0:
                             trust_key = (gi, pi)
                             old_trust = (
