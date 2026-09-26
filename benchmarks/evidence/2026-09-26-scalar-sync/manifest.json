@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "date": "2026-09-26",
+  "base_commit": "98d01260eebe57de9b388f7d21b5625e969e276f",
+  "device": "mps",
+  "profile_activities": ["cpu"],
+  "torch": "2.12.1",
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "baseline_profile_provenance": "2026-09-26-mac-step25/raw/profile-final-3836c212",
+  "source_sha256": {
+    "common_tiger": "3836c2121d5bd94b9a70ac2e5299d4f7e9e76578425ed2a6d17c2012bed8269b",
+    "common_accel_init": "e94689fb383a4e342795b0db111ffbb08e520ddeb3a2997ebcff4f63a1526ef5",
+    "common_benchmark": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+    "baseline_torch_backend": "85087acab0a5b06dc11d57f99c7509d91d0d6854a83837f4b49624ad12ae169b",
+    "patched_torch_backend": "6c787b4536666446c7a33342c35b7cada1e80bb1c58d7d875db8b97772b4495e"
+  },
+  "profiled_steps": [24, 25, 26],
+  "local_scalar_dense_per_step": {"baseline": [244, 244, 244], "patched": [132, 132, 132]},
+  "unprofiled_run_order": ["base-r1", "post-r1", "post-r2", "base-r2"],
+  "outcome": "host operator count reduced; unprofiled speedup unproven; step-25 spike remains"
+}

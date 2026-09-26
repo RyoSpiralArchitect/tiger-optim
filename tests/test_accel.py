@@ -570,6 +570,35 @@ def test_large_finite_reductions_stay_finite_with_torch_and_fallback(monkeypatch
         accel.refresh_backend_state(reload=True, reset_metrics=True)
 
 
+def test_scaled_reductions_preserve_scalar_output_for_extremes():
+    from tiger_optim.accel import torch_backend
+
+    cases_by_device = [(torch.device("cpu"), torch.float32),
+                       (torch.device("cpu"), torch.float64)]
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        cases_by_device.append((torch.device("mps"), torch.float32))
+    for device, dtype in cases_by_device:
+        cases = (
+            ([0.0, 0.0], 0.0, 0.0),
+            ([1e-30, 1e-30], 1.4142135623730951e-30, 1e-30),
+            ([1e20, 1e20], 1.4142135623730951e20, 1e20),
+        )
+        for values, expected_norm, expected_rms in cases:
+            x = torch.tensor(values, dtype=dtype, device=device)
+            norm = torch_backend.norm(x)
+            rms = torch_backend.rms(x)
+            assert norm.ndim == rms.ndim == 0
+            torch.testing.assert_close(norm, x.new_tensor(expected_norm))
+            torch.testing.assert_close(rms, x.new_tensor(expected_rms))
+        for nonfinite in (float("inf"), float("nan")):
+            x = torch.tensor([nonfinite, 1.0], dtype=dtype, device=device)
+            assert not torch.isfinite(torch_backend.norm(x))
+            assert not torch.isfinite(torch_backend.rms(x))
+        zeros = torch.zeros(3, dtype=dtype, device=device, requires_grad=True)
+        (torch_backend.norm(zeros) + torch_backend.rms(zeros)).backward()
+        torch.testing.assert_close(zeros.grad, torch.zeros_like(zeros))
+
+
 def test_reduction_fallback_has_finite_zero_gradient(monkeypatch):
     accel = _reload_accel(monkeypatch, TIGER_ACCEL_DISABLE="all")
     for reduce in (accel.fast_norm, accel.fast_rms):
