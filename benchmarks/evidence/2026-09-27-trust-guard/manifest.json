@@ -1,0 +1,66 @@
+{
+  "base_commit": "fe2abf2b583de1b522c847e3f850b6d5e0123289",
+  "base_pr": 51,
+  "baseline_profile_trace_sha256": "f9171da7996d48611f0f0e88426540744de55588bd1d77ca8c7ccee6d2373de0",
+  "baseline_source_sha256": {
+    "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+    "src/tiger_optim/accel/__init__.py": "e94689fb383a4e342795b0db111ffbb08e520ddeb3a2997ebcff4f63a1526ef5",
+    "src/tiger_optim/accel/torch_backend.py": "6c787b4536666446c7a33342c35b7cada1e80bb1c58d7d875db8b97772b4495e",
+    "src/tiger_optim/tiger.py": "3836c2121d5bd94b9a70ac2e5299d4f7e9e76578425ed2a6d17c2012bed8269b"
+  },
+  "baseline_unprofiled_sha256": "d3fa54a68c49299b71591f03013927ad5ccfec9fe0255bf1ee7bf66169d2759a",
+  "comparison": {
+    "baseline_isfinite": [
+      25,
+      25,
+      25
+    ],
+    "baseline_local_scalar_dense": [
+      132,
+      132,
+      132
+    ],
+    "baseline_source_sha256": "3836c2121d5bd94b9a70ac2e5299d4f7e9e76578425ed2a6d17c2012bed8269b",
+    "baseline_warnings": 0,
+    "max_loss_abs_diff": 0.0,
+    "max_qkv_scale_abs_diff": 0.0,
+    "patched_isfinite": [
+      25,
+      25,
+      25
+    ],
+    "patched_local_scalar_dense": [
+      106,
+      106,
+      106
+    ],
+    "patched_source_sha256": "fbc5c0811c6a4bf7f5566c98f12cf1bcba4f946f8479d48afbb7b0f000ac25e7",
+    "patched_warnings": 0,
+    "profile_steps": [
+      24,
+      25,
+      26
+    ],
+    "schema": 1,
+    "steps": 29
+  },
+  "conclusion": "host scalar reads reduced; wall-time speedup unproven; step-25 spike remains",
+  "date": "2026-09-27",
+  "device": "mps",
+  "patched_profile_trace_sha256": "2f55275cc9a6cbabb9b1616c9d144c73f053fe422469de7d72c5ab88d85f62d0",
+  "patched_source_sha256": {
+    "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+    "src/tiger_optim/accel/__init__.py": "e94689fb383a4e342795b0db111ffbb08e520ddeb3a2997ebcff4f63a1526ef5",
+    "src/tiger_optim/accel/torch_backend.py": "6c787b4536666446c7a33342c35b7cada1e80bb1c58d7d875db8b97772b4495e",
+    "src/tiger_optim/tiger.py": "fbc5c0811c6a4bf7f5566c98f12cf1bcba4f946f8479d48afbb7b0f000ac25e7"
+  },
+  "patched_source_stable_during_profile": true,
+  "patched_unprofiled_sha256": "0c8e7bbcbcc70239473e3801b4be2100af16caa9e921b76b16ca7a9516a4e5ad",
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "profile_activities": [
+    "cpu"
+  ],
+  "schema": 1,
+  "test_result": "141 passed, 5 skipped",
+  "torch": "2.12.1"
+}

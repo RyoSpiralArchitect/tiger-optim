@@ -594,6 +594,32 @@ def test_trust_ema_is_independent_for_parameters_in_one_group(qkv):
     torch.testing.assert_close(small.detach(), reference.detach())
 
 
+@pytest.mark.parametrize("device", ["cpu", "mps"])
+@pytest.mark.parametrize("qkv", [False, True])
+@pytest.mark.parametrize("old_value", [-1.0, float("nan"), float("inf")])
+def test_invalid_tensor_trust_ema_skips_update_transactionally(device, qkv, old_value):
+    if device == "mps" and not torch.backends.mps.is_available():
+        pytest.skip("requires MPS")
+    param = torch.nn.Parameter(torch.ones((3, 2), device=device))
+    group = _qkv_group(param) if qkv else {"params": [param]}
+    opt = _simple_optimizer(
+        [group], use_trust_ratio=True, trust_ema_beta=0.5,
+        weight_decay=0.1, skip_if_nonfinite=True,
+    )
+    old = torch.full((3,) if qkv else (), old_value, device=device)
+    trust_state = opt._qkv_trust_ema if qkv else opt._trust_ema
+    trust_state[(0, 0)] = old
+    before = param.detach().clone()
+    param.grad = torch.ones_like(param)
+
+    opt.step()
+
+    torch.testing.assert_close(param, before, rtol=0.0, atol=0.0)
+    assert param not in opt.state
+    torch.testing.assert_close(trust_state[(0, 0)], old, rtol=0.0, atol=0.0,
+                               equal_nan=True)
+
+
 @pytest.mark.parametrize("spectral", [False, True])
 def test_qkv_adaptation_aggregates_all_group_parameters_independent_of_order(spectral):
     def run(order):
