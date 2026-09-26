@@ -1,0 +1,162 @@
+{
+  "base_commit": "b3ab1e100599d940aa7bbdd73048d9736ee99c9a",
+  "baseline_profile_trace_sha256": "c93ea78642f3a6c64d224a2fe97fea45512c5b93d3dde2b11f326e84b6efa830",
+  "baseline_source_sha256": {
+    "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+    "src/tiger_optim/accel/__init__.py": "9b9698d2c20d963014de63ac6e390f93c70942e96c2d4007fc5b73209b105bde",
+    "src/tiger_optim/accel/torch_backend.py": "e3189e8c4012f8f20f02fafd3d0aa28a597f11da497acfed7019393e6d207297",
+    "src/tiger_optim/tiger.py": "6807f7ef007fe250aca43360ccb0354b7a72c8ab2228b405c6d3d48563bc4d60"
+  },
+  "baseline_unprofiled_sha256": "3b91f4124d5ae8c5ee5e9c366b9a2757873fc49ebcdcfa086da9c1d31d461679",
+  "comparison": {
+    "baseline_source_sha256": "6807f7ef007fe250aca43360ccb0354b7a72c8ab2228b405c6d3d48563bc4d60",
+    "baseline_trace": [
+      {
+        "fft_rfft": 0,
+        "local_scalar_dense": 46,
+        "mean": 4,
+        "stack": 46,
+        "step": 24
+      },
+      {
+        "fft_rfft": 2,
+        "local_scalar_dense": 46,
+        "mean": 42,
+        "stack": 64,
+        "step": 25
+      },
+      {
+        "fft_rfft": 0,
+        "local_scalar_dense": 46,
+        "mean": 4,
+        "stack": 46,
+        "step": 26
+      }
+    ],
+    "baseline_warnings": 0,
+    "helper_runs": [
+      {
+        "chunk_length": 256,
+        "run": 1,
+        "source_bytes": 3072,
+        "stack_median_ms": 0.5415415071183816,
+        "view_median_ms": 0.43735398503486067
+      },
+      {
+        "chunk_length": 65536,
+        "run": 1,
+        "source_bytes": 786432,
+        "stack_median_ms": 0.8166875049937516,
+        "view_median_ms": 0.9476454870309681
+      },
+      {
+        "chunk_length": 262144,
+        "run": 1,
+        "source_bytes": 3145728,
+        "stack_median_ms": 1.5717919886810705,
+        "view_median_ms": 1.735625002766028
+      },
+      {
+        "chunk_length": 1048576,
+        "run": 1,
+        "source_bytes": 12582912,
+        "stack_median_ms": 5.413229504483752,
+        "view_median_ms": 5.121958500239998
+      },
+      {
+        "chunk_length": 4194304,
+        "run": 1,
+        "source_bytes": 50331648,
+        "stack_median_ms": 19.512770988512784,
+        "view_median_ms": 17.82902049308177
+      },
+      {
+        "chunk_length": 256,
+        "run": 2,
+        "source_bytes": 3072,
+        "stack_median_ms": 0.41064601100515574,
+        "view_median_ms": 0.384749990189448
+      },
+      {
+        "chunk_length": 65536,
+        "run": 2,
+        "source_bytes": 786432,
+        "stack_median_ms": 0.8611255034338683,
+        "view_median_ms": 0.7385005010291934
+      },
+      {
+        "chunk_length": 262144,
+        "run": 2,
+        "source_bytes": 3145728,
+        "stack_median_ms": 1.1285625078016892,
+        "view_median_ms": 1.1337504838593304
+      },
+      {
+        "chunk_length": 1048576,
+        "run": 2,
+        "source_bytes": 12582912,
+        "stack_median_ms": 3.642707990366034,
+        "view_median_ms": 3.263187507400289
+      },
+      {
+        "chunk_length": 4194304,
+        "run": 2,
+        "source_bytes": 50331648,
+        "stack_median_ms": 13.686416496057063,
+        "view_median_ms": 13.09374999254942
+      }
+    ],
+    "max_loss_abs_diff": 0.0,
+    "max_qkv_scale_abs_diff": 0.0,
+    "schema": 1,
+    "steps": 29,
+    "view_source_sha256": "3d46d4da43b92c7a9914f16f7bcf03b01266d92e8678bbdfc1ac9f81bc679e86",
+    "view_trace": [
+      {
+        "fft_rfft": 0,
+        "local_scalar_dense": 46,
+        "mean": 4,
+        "stack": 46,
+        "step": 24
+      },
+      {
+        "fft_rfft": 2,
+        "local_scalar_dense": 46,
+        "mean": 42,
+        "stack": 62,
+        "step": 25
+      },
+      {
+        "fft_rfft": 0,
+        "local_scalar_dense": 46,
+        "mean": 4,
+        "stack": 46,
+        "step": 26
+      }
+    ],
+    "view_warnings": 0
+  },
+  "conclusion": "FP32 QKV stack allocation removed for contiguous three-way dim-0 splits; large-helper medians lower in two probes; TinyMix wall-time speedup unproven",
+  "date": "2026-09-27",
+  "device": "mps",
+  "helper_probe_sha256": [
+    "afcdaa8f60fa0929fba9ab8d16cd33010007edeec4e9a75601c112f0978e23ab",
+    "09bc0182dad991bfe197c4ab04bcb3f9fb3ced20a6ac9a4a655bb5fc101e6ed2"
+  ],
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "profile_activities": [
+    "cpu"
+  ],
+  "python": "3.12.6 (v3.12.6:a4a2d2b0d85, Sep  6 2024, 16:08:03) [Clang 13.0.0 (clang-1300.0.29.30)]",
+  "schema": 1,
+  "test_result": "179 passed, 5 skipped",
+  "torch": "2.12.1",
+  "view_profile_trace_sha256": "d71e87bcc949f1cf870c6e7ca5538d5d9cb59fefb28a51f012522988bc0ab6e7",
+  "view_source_sha256": {
+    "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3",
+    "src/tiger_optim/accel/__init__.py": "9b9698d2c20d963014de63ac6e390f93c70942e96c2d4007fc5b73209b105bde",
+    "src/tiger_optim/accel/torch_backend.py": "e3189e8c4012f8f20f02fafd3d0aa28a597f11da497acfed7019393e6d207297",
+    "src/tiger_optim/tiger.py": "3d46d4da43b92c7a9914f16f7bcf03b01266d92e8678bbdfc1ac9f81bc679e86"
+  },
+  "view_unprofiled_sha256": "eeeff3ddaa43b969e788b8f242ac2a860470acbbbf96b14e2e0ecb2186057f38"
+}

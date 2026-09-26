@@ -365,7 +365,9 @@ def test_qkv_batched_spectral_preserves_adaptation_scales(monkeypatch):
         m.setattr(
             tiger,
             "_spectral_dispersion_chunks",
-            lambda chunks, low, high: [tiger._spectral_dispersion_tensors(chunk, low, high) for chunk in chunks],
+            lambda chunks, low, high, **_kwargs: [
+                tiger._spectral_dispersion_tensors(chunk, low, high) for chunk in chunks
+            ],
         )
         for param, grad in zip(params_baseline, (grad_weight, grad_bias)):
             param.grad = grad.clone()
