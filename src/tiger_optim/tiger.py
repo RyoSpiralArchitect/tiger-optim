@@ -1435,7 +1435,10 @@ class Tiger(Optimizer):
                             )
                             if old_trust is not None:
                                 if isinstance(old_trust, torch.Tensor):
-                                    checks.append((torch.isfinite(old_trust) & (old_trust >= 0)).all())
+                                    # MPS can read 0-D comparison results back to the host.
+                                    old_flat = old_trust.reshape(-1)
+                                    checks.append((torch.isfinite(old_flat) &
+                                                   (old_flat >= torch.zeros_like(old_flat))).all())
                                 else:
                                     checks.append(_scalar_like(p, math.isfinite(float(old_trust)) and float(old_trust) >= 0,
                                                                dtype=torch.bool))
