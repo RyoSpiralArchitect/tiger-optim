@@ -162,6 +162,28 @@ def test_fp32_finite_weight_decay_does_not_false_skip_large_parameter():
 
 
 @pytest.mark.parametrize("device", ["cpu", "mps"])
+@pytest.mark.parametrize(("side", "accepted"), [("below", True), ("at", True), ("above", False)])
+def test_fp32_update_bound_gate_keeps_threshold_decision(device, side, accepted):
+    if device == "mps" and not torch.backends.mps.is_available():
+        pytest.skip("requires MPS")
+    limit = torch.finfo(torch.float32).max * (1.0 - 8.0 * torch.finfo(torch.float32).eps)
+    at = torch.tensor(limit, dtype=torch.float32, device="cpu")
+    value = {
+        "below": torch.nextafter(at, torch.tensor(0.0, device="cpu")),
+        "at": at,
+        "above": torch.nextafter(at, torch.tensor(float("inf"), device="cpu")),
+    }[side]
+    param = torch.nn.Parameter(value.reshape(1).to(device))
+    opt = _simple_optimizer([param], use_trust_ratio=False, skip_if_nonfinite=True)
+    param.grad = torch.zeros_like(param)
+
+    opt.step()
+
+    assert (param in opt.state) is accepted
+    torch.testing.assert_close(param.detach().cpu(), value.reshape(1), rtol=0.0, atol=0.0)
+
+
+@pytest.mark.parametrize("device", ["cpu", "mps"])
 def test_fp32_sparse_large_finite_trust_norm_does_not_false_skip(device):
     if device == "mps" and not torch.backends.mps.is_available():
         pytest.skip("requires MPS")

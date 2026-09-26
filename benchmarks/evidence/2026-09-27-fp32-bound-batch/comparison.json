@@ -1,0 +1,35 @@
+{
+  "baseline_isfinite": [
+    25,
+    25,
+    25
+  ],
+  "baseline_local_scalar_dense": [
+    106,
+    106,
+    106
+  ],
+  "baseline_source_sha256": "fbc5c0811c6a4bf7f5566c98f12cf1bcba4f946f8479d48afbb7b0f000ac25e7",
+  "baseline_warnings": 0,
+  "max_loss_abs_diff": 0.0,
+  "max_qkv_scale_abs_diff": 0.0,
+  "patched_isfinite": [
+    25,
+    25,
+    25
+  ],
+  "patched_local_scalar_dense": [
+    46,
+    46,
+    46
+  ],
+  "patched_source_sha256": "e93496b55b3d5b714e24b461d0f094236fc9b72dc8393745d2bc6a54bcb88b0d",
+  "patched_warnings": 0,
+  "profile_steps": [
+    24,
+    25,
+    26
+  ],
+  "schema": 1,
+  "steps": 29
+}
