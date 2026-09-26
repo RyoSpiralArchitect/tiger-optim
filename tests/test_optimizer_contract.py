@@ -22,6 +22,51 @@ def _simple_optimizer(params, **kwargs):
     return Tiger(params, **options)
 
 
+@pytest.mark.parametrize(
+    ("policy", "value", "expected"),
+    [
+        ("replace", 0.5, 0.5),
+        ("mul", 0.5, 0.05),
+        ("add", 0.2, 0.3),
+    ],
+)
+def test_staged_group_update_applies_policy_to_plain_values(policy, value, expected):
+    param = torch.nn.Parameter(torch.zeros(1))
+    opt = _simple_optimizer([param], lr=0.1)
+
+    opt.stage_group_update(0, {"lr": value}, policy=policy)
+
+    assert opt.reflect_pending() == 1
+    assert opt.param_groups[0]["lr"] == pytest.approx(expected)
+
+
+def test_staged_group_update_merges_mapping():
+    param = torch.nn.Parameter(torch.zeros(1))
+    opt = _simple_optimizer([{"params": [param], "custom_map": {"q": 1, "k": 2}}])
+
+    opt.stage_group_update(0, {"custom_map": {"q": 4}}, policy="merge")
+
+    assert opt.reflect_pending() == 1
+    assert opt.param_groups[0]["custom_map"] == {"q": 4, "k": 2}
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        (("mul", 0.5), 0.05),
+        ([("mul", 2.0), ("add", 0.05)], 0.25),
+    ],
+)
+def test_explicit_staged_field_operation_overrides_group_policy(spec, expected):
+    param = torch.nn.Parameter(torch.zeros(1))
+    opt = _simple_optimizer([param], lr=0.1)
+
+    opt.stage_group_update(0, {"lr": spec}, policy="add")
+
+    assert opt.reflect_pending() == 1
+    assert opt.param_groups[0]["lr"] == pytest.approx(expected)
+
+
 @pytest.mark.parametrize("nonfinite", [float("nan"), float("inf"), float("-inf")])
 def test_nonfinite_gradient_skips_weight_decay_and_state(nonfinite):
     good = torch.nn.Parameter(torch.ones(2, device="cpu"))
