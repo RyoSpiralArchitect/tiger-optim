@@ -287,9 +287,14 @@ def _spectral_dispersion_tensors(
 
 
 def _spectral_dispersion_chunks(
-    chunks: Sequence[torch.Tensor], low_band: float, high_band: float
+    chunks: Sequence[torch.Tensor], low_band: float, high_band: float,
+    fused: Optional[torch.Tensor] = None,
 ) -> List[Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
-    """Measure equal-length Q/K/V chunks with one FFT; preserve other layouts."""
+    """Measure equal-length Q/K/V chunks with one FFT; preserve other layouts.
+
+    ``fused`` is the contiguous source of three equal dim-0 chunks, when
+    available. Its row view avoids copying the Q/K/V chunks into a stack.
+    """
 
     if (
         len(chunks) != 3
@@ -299,7 +304,16 @@ def _spectral_dispersion_chunks(
     ):
         return [_spectral_dispersion_tensors(chunk, low_band, high_band) for chunk in chunks]
 
-    rows = torch.stack([chunk.reshape(-1).detach().to(torch.float32) for chunk in chunks])
+    if (
+        fused is not None
+        and fused.is_contiguous()
+        and fused.numel() == 3 * chunks[0].numel()
+        and fused.device == chunks[0].device
+        and fused.dtype == chunks[0].dtype
+    ):
+        rows = fused.detach().view(3, -1).to(torch.float32)
+    else:
+        rows = torch.stack([chunk.reshape(-1).detach().to(torch.float32) for chunk in chunks])
     rows = rows - rows.mean(dim=-1, keepdim=True)
     if rows.device.type == "mps":
         spectrum = torch.empty(
@@ -1595,8 +1609,15 @@ class Tiger(Optimizer):
                             trust = eff_trust_for(p, d) if use_trust else scalar_one
                             chunk_trust_t = trust.expand(parts)
                         chunk_rms_t = d_chunk_norms_t / math.sqrt(max(1, d.numel() // parts))
+                        spectral_fused = (
+                            d if collect_qkv_spectral and dim == 0 and parts == 3 and d.is_contiguous()
+                            and d.shape[0] % 3 == 0 else None
+                        )
                         spectral_by_chunk = (
-                            _spectral_dispersion_chunks(d_chunks[:len(keys)], spec_low_band, spec_high_band)
+                            _spectral_dispersion_chunks(
+                                d_chunks[:len(keys)], spec_low_band, spec_high_band,
+                                fused=spectral_fused,
+                            )
                             if collect_qkv_spectral else None
                         )
                         for i, (pc, dc) in enumerate(zip(p_chunks, d_chunks)):

@@ -1,13 +1,14 @@
 """Behavior that must hold for training loops and checkpoint continuation."""
 
 from copy import deepcopy
+import math
 import warnings
 
 import pytest
 import torch
 
 from tiger_optim import Tiger
-from tiger_optim.tiger import _spectral_dispersion_tensors
+from tiger_optim.tiger import _spectral_dispersion_chunks, _spectral_dispersion_tensors
 
 
 def _simple_optimizer(params, **kwargs):
@@ -327,6 +328,41 @@ def test_mps_spectral_rfft_uses_preallocated_output_without_resize_warning():
     assert not any("resized" in str(item.message) for item in seen)
     for result, reference in zip(actual, expected):
         torch.testing.assert_close(result.cpu(), reference, rtol=1e-4, atol=1e-4)
+
+
+@pytest.mark.parametrize("device", ["cpu", "mps"])
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32])
+@pytest.mark.parametrize("shape", [(3, 8), (3, 4, 8)])
+@pytest.mark.parametrize("nonfinite", [False, True])
+def test_qkv_spectral_fused_view_matches_stacked_chunks(device, dtype, shape, nonfinite):
+    if device == "mps" and not torch.backends.mps.is_available():
+        pytest.skip("requires MPS")
+    fused = torch.linspace(-1.5, 2.5, math.prod(shape), device=device).reshape(shape).to(dtype)
+    if nonfinite:
+        rows = fused.view(3, -1)
+        rows[0, 0] = float("nan")
+        rows[1, 1] = float("inf")
+    chunks = torch.chunk(fused, 3, dim=0)
+    stacked = _spectral_dispersion_chunks(chunks, 0.2, 0.25)
+    viewed = _spectral_dispersion_chunks(chunks, 0.2, 0.25, fused=fused)
+
+    for actual_chunk, expected_chunk in zip(viewed, stacked):
+        for actual, expected in zip(actual_chunk, expected_chunk):
+            torch.testing.assert_close(actual, expected, rtol=0.0, atol=0.0, equal_nan=True)
+
+
+@pytest.mark.parametrize("device", ["cpu", "mps"])
+def test_qkv_spectral_noncontiguous_fused_source_keeps_chunk_results(device):
+    if device == "mps" and not torch.backends.mps.is_available():
+        pytest.skip("requires MPS")
+    fused = torch.arange(48, dtype=torch.float32, device=device).reshape(16, 3).transpose(0, 1)
+    chunks = torch.chunk(fused, 3, dim=0)
+    stacked = _spectral_dispersion_chunks(chunks, 0.2, 0.25)
+    fallback = _spectral_dispersion_chunks(chunks, 0.2, 0.25, fused=fused)
+
+    for actual_chunk, expected_chunk in zip(fallback, stacked):
+        for actual, expected in zip(actual_chunk, expected_chunk):
+            torch.testing.assert_close(actual, expected, rtol=0.0, atol=0.0, equal_nan=True)
 
 
 def test_factored_moments_avoid_reduction_and_outer_product_overflow():

@@ -1,0 +1,266 @@
+{
+  "device": "mps",
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "rows": [
+    {
+      "chunk_length": 256,
+      "metrics_exact_equal": true,
+      "shape": [
+        3,
+        256
+      ],
+      "source_bytes": 3072,
+      "stack_allocates_separate_storage": true,
+      "stack_median_ms": 0.5415415071183816,
+      "stack_ms": [
+        0.5497079982887954,
+        0.650458998279646,
+        0.44145897845737636,
+        0.5333750159479678,
+        0.5749589763581753,
+        0.4432499990798533,
+        0.44170801993459463,
+        0.8936249942053109
+      ],
+      "timing_order": [
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack"
+      ],
+      "view_median_ms": 0.43735398503486067,
+      "view_ms": [
+        0.48679200699552894,
+        0.4300419823266566,
+        0.6027079944033176,
+        1.279499992961064,
+        0.4186660225968808,
+        0.44466598774306476,
+        0.41870897985063493,
+        0.4268340126145631
+      ],
+      "view_shares_source_storage": true
+    },
+    {
+      "chunk_length": 65536,
+      "metrics_exact_equal": true,
+      "shape": [
+        3,
+        65536
+      ],
+      "source_bytes": 786432,
+      "stack_allocates_separate_storage": true,
+      "stack_median_ms": 0.8166875049937516,
+      "stack_ms": [
+        0.8902499976102263,
+        0.7766250055283308,
+        0.7426670053973794,
+        0.9531249816063792,
+        0.7408749952446669,
+        2.1444169979076833,
+        0.746333011193201,
+        0.8567500044591725
+      ],
+      "timing_order": [
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack"
+      ],
+      "view_median_ms": 0.9476454870309681,
+      "view_ms": [
+        0.8059579995460808,
+        0.7511670119129121,
+        3.268333006417379,
+        1.0893329745158553,
+        0.7955419714562595,
+        0.7768330106046051,
+        1.2015419779345393,
+        1.2310839956626296
+      ],
+      "view_shares_source_storage": true
+    },
+    {
+      "chunk_length": 262144,
+      "metrics_exact_equal": true,
+      "shape": [
+        3,
+        262144
+      ],
+      "source_bytes": 3145728,
+      "stack_allocates_separate_storage": true,
+      "stack_median_ms": 1.5717919886810705,
+      "stack_ms": [
+        1.998791005462408,
+        1.5080839802976698,
+        1.4455830096267164,
+        1.2949999945703894,
+        1.6354999970644712,
+        2.292332996148616,
+        1.4516250230371952,
+        3.5688749921973795
+      ],
+      "timing_order": [
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack"
+      ],
+      "view_median_ms": 1.735625002766028,
+      "view_ms": [
+        1.8111669924110174,
+        4.2356670019216835,
+        1.3961250078864396,
+        3.380542009836063,
+        1.6600830131210387,
+        2.5166249834001064,
+        1.2514579866547137,
+        1.2219580239616334
+      ],
+      "view_shares_source_storage": true
+    },
+    {
+      "chunk_length": 1048576,
+      "metrics_exact_equal": true,
+      "shape": [
+        3,
+        1048576
+      ],
+      "source_bytes": 12582912,
+      "stack_allocates_separate_storage": true,
+      "stack_median_ms": 5.413229504483752,
+      "stack_ms": [
+        6.118082994362339,
+        7.472041004803032,
+        4.016582999611273,
+        3.8550829922314733,
+        5.992374994093552,
+        4.334792000008747,
+        4.947417008224875,
+        5.879042000742629
+      ],
+      "timing_order": [
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack"
+      ],
+      "view_median_ms": 5.121958500239998,
+      "view_ms": [
+        3.939165995689109,
+        6.359874998452142,
+        5.538416997296736,
+        5.24495801073499,
+        3.72737500583753,
+        5.468999996082857,
+        4.998958989745006,
+        3.548999986378476
+      ],
+      "view_shares_source_storage": true
+    },
+    {
+      "chunk_length": 4194304,
+      "metrics_exact_equal": true,
+      "shape": [
+        3,
+        4194304
+      ],
+      "source_bytes": 50331648,
+      "stack_allocates_separate_storage": true,
+      "stack_median_ms": 19.512770988512784,
+      "stack_ms": [
+        19.826834002742544,
+        19.198707974283025,
+        17.01750000938773,
+        18.618333007907495,
+        16.463084000861272,
+        19.93541599949822,
+        21.47379200323485,
+        26.12725002109073
+      ],
+      "timing_order": [
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack",
+        "stack",
+        "view",
+        "view",
+        "stack"
+      ],
+      "view_median_ms": 17.82902049308177,
+      "view_ms": [
+        17.653749993769452,
+        15.846750000491738,
+        17.06862499122508,
+        15.703707991633564,
+        18.00429099239409,
+        22.55958301248029,
+        22.180583007866517,
+        23.292958998354152
+      ],
+      "view_shares_source_storage": true
+    }
+  ],
+  "schema": 1,
+  "source_sha256_after": "3d46d4da43b92c7a9914f16f7bcf03b01266d92e8678bbdfc1ac9f81bc679e86",
+  "source_sha256_before": "3d46d4da43b92c7a9914f16f7bcf03b01266d92e8678bbdfc1ac9f81bc679e86",
+  "source_stable_during_run": true,
+  "torch": "2.12.1"
+}
