@@ -23,7 +23,7 @@ from .tagged import (
     collect_param_group_stats,
     summarize_param_groups,
 )
-from .schedulers import TagWarmupDecay
+from .schedulers import TagWarmupDecay, TailCosineLR
 from .accel import (
     available_backends,
     backend_diagnostics,
@@ -42,6 +42,7 @@ __all__ = [
     "collect_param_group_stats",
     "summarize_param_groups",
     "TagWarmupDecay",
+    "TailCosineLR",
     "available_backends",
     "configure_backends",
     "reset_backend_configuration",
