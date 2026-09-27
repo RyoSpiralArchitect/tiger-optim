@@ -259,6 +259,12 @@ the AdamW reference uses a fixed LR, so its output checks learning rather than
 ranking the optimizers; the archived traces are
 [here](benchmarks/evidence/2026-09-25-cpu-quality/README.md).
 
+The [toy causal Transformer learning probe](benchmarks/evidence/2026-09-27-toy-transformer-learning/README.md)
+trains on disjoint period-3 token sequences with held-out evaluation. It
+records fused-QKV adaptation, a spectral-off ablation, and a separately
+confirmed tail learning-rate schedule on Mac CPU and MPS. Its synthetic task and
+mode-specific learning rates do not establish a general optimizer ranking.
+
 ```bash
 git rev-parse HEAD
 git status --short

@@ -1,0 +1,56 @@
+{
+  "experiment": "finite toy causal Transformer learning on disjoint period-3 token sequences",
+  "date_local": "2026-09-27",
+  "source_commit_locked_runs": "43313d86d2320dc1dc0766d91421bc9e46262c16",
+  "benchmark_sha256_locked_runs": "658b4c05bb54eeecca8553606b4acc6cb2ab99c4cf7e99860c1b2ce1d96b1a74",
+  "tiger_source_sha256_locked_runs": "3d46d4da43b92c7a9914f16f7bcf03b01266d92e8678bbdfc1ac9f81bc679e86",
+  "git_status_during_cpu_runs": "?? benchmarks/evidence/2026-09-27-toy-transformer-learning/",
+  "git_status_during_mps_runs": "M README.md\n?? benchmarks/evidence/2026-09-27-toy-transformer-learning/",
+  "git_status_explanation": "The evidence directory was untracked; MPS runs also saw a README edit. Benchmark and Tiger source files matched the recorded commit and hashes.",
+  "runtime": {
+    "devices": ["cpu", "mps"],
+    "cpu_threads_for_cpu_runs": 1,
+    "cpu_threads_for_mps_runs": 4,
+    "chip": "Apple M4",
+    "memory_gb": 24,
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.6",
+    "torch": "2.12.1",
+    "python_invocation": "python3 -S with PYTHONPATH including Python 3.12 site-packages and src"
+  },
+  "task": {
+    "model": "one-layer 48-wide, four-head causal MultiheadAttention, 96-wide FFN",
+    "vocab_size": 24,
+    "sequence_length": 12,
+    "training_sequences": 768,
+    "heldout_sequences": 256,
+    "minibatch_size": 48,
+    "updates_per_run": 100,
+    "development_seeds": [23, 37, 41],
+    "confirmation_seeds": [43, 47, 53],
+    "mps_confirmation_seeds": [43, 47, 53],
+    "full_period_cosine_pilot_seed": 37,
+    "selection": "Tail cosine was selected after inspecting development runs; confirmation seeds were then run as a separate set."
+  },
+  "modes": {
+    "tiger_full": "spectral QKV adaptation enabled",
+    "tiger_no_spectral": "spectral QKV adaptation disabled, all other Tiger settings unchanged",
+    "adamw": "contextual reference with different LR and no Tiger tag-specific scales"
+  },
+  "learning_rates": {
+    "tiger_initial": 0.01,
+    "adamw_constant": 0.003,
+    "tail_cosine_start_fraction": 0.9,
+    "tail_cosine_target": 0.001,
+    "optimizer_step_100_lr_under_tail": 0.0012202456766718093
+  },
+  "host_load": "A separate long-running model process was active during CPU runs and finished before MPS runs. Other host work continued; no throughput claim is made.",
+  "archive": {
+    "raw_initial": "raw/initial/",
+    "raw_locked": "raw/locked/",
+    "raw_format": "JSON compressed as gzip with no filename and mtime 0 in the header",
+    "derived_summary": "comparison.json",
+    "figure": "learning-curves.png",
+    "checksum_file": "SHA256SUMS"
+  }
+}
