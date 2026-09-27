@@ -123,6 +123,53 @@ Checkpoints made before Tiger stored adaptive state cannot resume exactly. The
 loader warns about this and needs fresh QKV rules from the new model when the
 old checkpoint contains QKV groups.
 
+### Tail cosine decay for a fixed update budget
+
+`TailCosineLR` keeps each parameter group's initial LR until `decay_start`
+updates have completed, then applies a cosine decay toward a fraction of that
+group's initial LR. It is opt-in. The 100-update causal Transformer probe in
+[PR #55](https://github.com/RyoSpiralArchitect/tiger-optim/pull/55) used
+`decay_start=90` and `min_lr_ratio=0.1`; three held-out confirmation seeds
+favored this recipe on that synthetic task. It does not establish a general
+schedule advantage.
+
+```python
+from tiger_optim import TailCosineLR
+
+opt = Tiger(build_tagged_param_groups(model, base_lr=0.01, base_wd=0.0),
+            auto_lr=False, auto_blend=False)
+scheduler = TailCosineLR(opt, total_steps=100, decay_start=90,
+                         min_lr_ratio=0.1)
+
+# After computing gradients on each batch:
+opt.step()
+scheduler.step()
+```
+
+Call `scheduler.step()` after `opt.step()`. In this example, updates 1–91 use
+the initial LR; update 100 uses approximately 0.122 times that LR, and the
+0.1 floor is set after update 100. Tagged `lr_scale` and QKV slice scales
+remain independent of the scheduler. Disable Tiger's plateau `auto_lr` when
+using this fixed schedule so both controls do not modify the same group LR.
+
+Save `scheduler.state_dict()` alongside the model and optimizer. To resume,
+recreate the optimizer and scheduler, then load their saved states:
+
+```python
+torch.save({"model": model.state_dict(), "optimizer": opt.state_dict(),
+            "scheduler": scheduler.state_dict()}, "checkpoint.pt")
+
+# In a later process, after recreating the model:
+checkpoint = torch.load("checkpoint.pt", map_location="cpu")
+model.load_state_dict(checkpoint["model"])
+opt = Tiger(build_tagged_param_groups(model, base_lr=0.01, base_wd=0.0),
+            auto_lr=False, auto_blend=False)
+scheduler = TailCosineLR(opt, total_steps=100, decay_start=90,
+                         min_lr_ratio=0.1)
+opt.load_state_dict(checkpoint["optimizer"])
+scheduler.load_state_dict(checkpoint["scheduler"])
+```
+
 With FP16 or BF16 parameters and `skip_if_nonfinite=True`, median bucket
 standardization is rejected before updating. Use the `global` or `mean` bucket
 source for low-precision parameters.
