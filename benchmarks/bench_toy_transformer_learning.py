@@ -195,7 +195,7 @@ def _evaluate(model, pair, device):
         return {"ce": float(loss.item()), "accuracy": float(accuracy.item())}
 
 
-def _run_seed(seed, steps, mode, lr, device):
+def _run_seed(seed, steps, mode, lr, schedule, min_lr, device):
     train, heldout, batches = _corpus(seed, steps)
     corpus_hash = _tensor_hash((
         ("train_inputs", train[0]), ("train_targets", train[1]),
@@ -207,6 +207,27 @@ def _run_seed(seed, steps, mode, lr, device):
     initial_hash = _tensor_hash(model.state_dict().items())
     model = model.to(device)
     optimizer, qkv_group = _optimizer(model, mode, lr)
+    if schedule == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=steps, eta_min=min_lr,
+        )
+    elif schedule == "tail-cosine":
+        decay_start = int(0.9 * steps)
+        decay_length = max(1, steps - decay_start)
+        minimum_factor = min_lr / lr
+
+        def tail_factor(update):
+            if update <= decay_start:
+                return 1.0
+            progress = min(1.0, (update - decay_start) / decay_length)
+            cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
+            return minimum_factor + (1.0 - minimum_factor) * cosine
+
+        scheduler = torch.optim.lr_scheduler.LambdaLR(
+            optimizer, lr_lambda=tail_factor,
+        )
+    else:
+        scheduler = None
     qkv_weight = model.attn.in_proj_weight
     checkpoints = set(_evaluation_steps(steps))
     trace = []
@@ -248,9 +269,12 @@ def _run_seed(seed, steps, mode, lr, device):
                 status, stopped_at = "invalid_qkv_gradient", step + 1
                 break
         t0 = time.perf_counter()
+        step_lr = float(optimizer.param_groups[0]["lr"])
         optimizer.step()
         _sync(device)
         optimizer_ms = 1000.0 * (time.perf_counter() - t0)
+        if scheduler is not None:
+            scheduler.step()
         qkv_scales = (dict(qkv_group["qkv_lr_scales"])
                       if qkv_group is not None else None)
         metrics = {}
@@ -270,6 +294,7 @@ def _run_seed(seed, steps, mode, lr, device):
         trace.append({
             "step": step + 1,
             "batch_ce": float(loss.item()),
+            "lr": step_lr,
             "optimizer_ms": optimizer_ms,
             "qkv_weight_grad_l2": grad_norm,
             "qkv_scales": qkv_scales,
@@ -300,6 +325,10 @@ def main(argv=None):
     parser.add_argument("--seeds", nargs="+", type=int, default=[11, 23, 37])
     parser.add_argument("--lr", type=float,
                         help="learning rate (default: Tiger 0.01, AdamW 0.003)")
+    parser.add_argument("--schedule", choices=("constant", "cosine", "tail-cosine"),
+                        default="constant")
+    parser.add_argument("--min-lr", type=float, default=1e-4,
+                        help="cosine final LR (default: 0.0001)")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     if args.steps < 25:
@@ -307,6 +336,10 @@ def main(argv=None):
     lr = args.lr if args.lr is not None else (3e-3 if args.mode == "adamw" else 1e-2)
     if not math.isfinite(lr) or lr <= 0:
         parser.error("--lr must be positive and finite")
+    if args.schedule != "constant" and (
+        not math.isfinite(args.min_lr) or args.min_lr < 0 or args.min_lr >= lr
+    ):
+        parser.error("--min-lr must be nonnegative, finite, and below --lr")
     if len(set(args.seeds)) != len(args.seeds):
         parser.error("--seeds must be unique")
     if args.output.exists():
@@ -355,7 +388,10 @@ def main(argv=None):
         "optimizer": {
             "lr": lr,
             "weight_decay": 0.0,
-            "schedule": "constant",
+            "schedule": args.schedule,
+            "cosine_min_lr": args.min_lr if args.schedule != "constant" else None,
+            "tail_decay_starts_after_fraction": 0.9 if args.schedule == "tail-cosine" else None,
+            "scheduler_order": "scheduler.step() after optimizer.step()",
             "tiger_auto_lr": False,
             "tiger_auto_blend": False,
             "tiger_recipe": "tagged groups, param RMS clip 1, preconditioned trust clip 5, FP32 updates",
@@ -371,7 +407,9 @@ def main(argv=None):
         "runs": [],
     }
     for seed in args.seeds:
-        result["runs"].append(_run_seed(seed, args.steps, args.mode, lr, device))
+        result["runs"].append(_run_seed(
+            seed, args.steps, args.mode, lr, args.schedule, args.min_lr, device
+        ))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, allow_nan=False) + "\n")
     print(json.dumps({
