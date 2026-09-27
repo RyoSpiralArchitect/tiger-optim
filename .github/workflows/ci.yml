@@ -31,6 +31,15 @@ jobs:
       - name: Run test suite
         run: python -m pytest -q
 
+      - name: Exercise causal Transformer learning probe
+        run: |
+          python benchmarks/bench_toy_transformer_learning.py \
+            --mode tiger-full \
+            --device cpu \
+            --steps 25 \
+            --seeds 11 \
+            --output "$RUNNER_TEMP/tiger-toy-learning.json"
+
       - name: Build source and wheel distributions
         run: |
           python -m pip install build
