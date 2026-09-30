@@ -328,6 +328,10 @@ records fused-QKV adaptation, a spectral-off ablation, and a separately
 confirmed tail learning-rate schedule on Mac CPU and MPS. Its synthetic task and
 mode-specific learning rates do not establish a general optimizer ranking.
 
+The [QKV control audit](benchmarks/evidence/2026-09-30-qkv-learning/README.md)
+extends that probe with matched adaptation settings and new confirmation seeds,
+and verifies that group LR controls compose with the fused Q/K/V multipliers.
+
 ```bash
 git rev-parse HEAD
 git status --short
