@@ -1,477 +1,227 @@
-# Tiger Optimizer
-Tiger is a PyTorch optimizer exploring sign-aware updates, trust ratios, and
-LoRA/QKV adaptation. 🐅
+# Tiger Optimizer 🐅
 
-<p align="center">
-  <a href="LICENSE.txt"><img src="https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg" alt="AGPL-3.0-only"></a>
-  <img src="https://img.shields.io/badge/Commercial%20License-Available-orange.svg" alt="Commercial License Available">
-  <img src="https://img.shields.io/badge/PyTorch-2.x-lightgrey.svg" alt="PyTorch 2.x">
-  <a href="issues?q=label%3Abenchmark"><img src="https://img.shields.io/badge/Benchmarks-help%20wanted-brightgreen.svg" alt="Benchmarks: help wanted"></a>
-</p>
-<p align="center"><i>Sign‑aware, trust‑ratio, LoRA‑PID with inertia — precise like a tiger.</i></p>
+**A PyTorch optimizer for experiments with sign-aware updates, trust ratios,
+and adaptive Q/K/V and LoRA controls.**
 
-The timing figures below are historical local notes for Tiger v2.1. They are
-not a performance or convergence claim for this checkout; the corresponding raw
-results and environment records are not tracked in this repository.
+[![CI](https://github.com/RyoSpiralArchitect/tiger-optim/actions/workflows/ci.yml/badge.svg)](https://github.com/RyoSpiralArchitect/tiger-optim/actions/workflows/ci.yml)
+[![License: AGPL-3.0-only](https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg)](LICENSE.txt)
 
----
-
-## Contents
-- [Install](#install)
-- [Quickstart](#quickstart)
-- [Historical Local Timing Notes](#historical-local-timing-notes)
-- [Benchmark and Claim Gate](#benchmark-and-claim-gate)
-- [System Info for This CUDA Run (Legacy Reference)](#system-info-for-this-cuda-run-legacy-reference)
-- [Call for Community CUDA Runs](#call-for-community-cuda-runs)
-- [Experimental Starting Settings](#experimental-starting-settings)
-- [Legacy CUDA: Quick Preset](#legacy-cuda-quick-preset)
-- [Roadmap & Lessons from Legacy GPUs](#roadmap--lessons-from-legacy-gpus)
-
----
+Tiger is research software. Its update rules and checkpoint behavior have
+regression coverage, and its learning experiments retain raw results and source
+hashes. An adaptive feature being implemented does not establish a learning
+advantage; the current evidence includes negative results.
 
 ## Install
 
-```bash
-# dev install from this repo
-pip install -e .
+From a source checkout, with a PyTorch build appropriate for your device:
 
-# editable install with tests/benchmark tooling
-pip install -e ".[dev]"
-
-# add the optional Julia acceleration bridge
-pip install -e ".[julia]"
-
-# or grab everything most contributors want
-pip install -e ".[dev,julia,bench]"
-
-# after publication
-# pip install tiger-optim
-# pip install "tiger-optim[julia,bench]"
+```sh
+git clone https://github.com/RyoSpiralArchitect/tiger-optim.git
+cd tiger-optim
+python -m pip install -e .
+# Tests and benchmark tools:
+python -m pip install -e '.[dev]'
 ```
 
-> The public Tiger Optimizer distribution is licensed under **GNU AGPL‑3.0 only**.
->
-> **Commercial licenses** (OEM/Enterprise) are available for proprietary integration.
+Package metadata: **2.4.0**, Python **3.9+**, PyTorch **1.13+**. The recall
+benchmark needs **PyTorch 2.0+** for scaled dot-product attention; CUDA BF16
+runs also need compatible hardware. Julia is optional (`pip install -e '.[julia]'`).
+No license-based feature gates are present in this public build.
 
----
+## Start training
 
-## Quickstart
+This example exercises tagging and a real optimizer step. Its LR illustrates
+the API; it is not a validated preset for your model.
 
 ```python
-import torch, torch.nn as nn
+import torch
+from torch import nn
 from tiger_optim import Tiger, build_tagged_param_groups
 
-# tiny demo model
-class TinyMix(nn.Module):
-    def __init__(self, d=256, ff=512, heads=4):
-        super().__init__()
-        self.mha = nn.MultiheadAttention(d, heads, batch_first=True)
-        self.up  = nn.Linear(d, ff)
-        self.down= nn.Linear(ff, d)
-        self.ln  = nn.LayerNorm(d)
-    def forward(self, x):
-        h,_ = self.mha(x,x,x)
-        h = torch.nn.functional.gelu(self.up(h))
-        h = self.down(h)
-        return self.ln(h)
-
-model = TinyMix()
-groups = build_tagged_param_groups(model, base_lr=3e-4, base_wd=0.01, enable_qkv_slicing=True)
-
-opt = Tiger(
-    groups,
-    # modern default
-    factored=True, precond_alpha=1.0, trust_space="precond",
-    use_foreach_update=True, bucket_standardize=True, bucket_scalarless=True,
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = nn.TransformerEncoder(
+    nn.TransformerEncoderLayer(
+        d_model=128, nhead=4, dim_feedforward=512,
+        dropout=0.0, batch_first=True,
+    ),
+    num_layers=2,
+).to(device)
+groups = build_tagged_param_groups(model, base_lr=3e-4, base_wd=0.01)
+optimizer = Tiger(
+    groups, trust_space="precond", trust_clip=5.0,
+    update_buffer_dtype="fp32", auto_lr=False, auto_blend=False,
 )
-
-x = torch.randn(16, 32, 256)
-y = torch.randn(16, 32, 256)
-loss_fn = nn.MSELoss()
-
-opt.zero_grad(set_to_none=True)
-loss = loss_fn(model(x), y)
+x = torch.randn(8, 32, 128, device=device)
+target = torch.randn_like(x)
+optimizer.zero_grad(set_to_none=True)
+loss = (model(x) - target).square().mean()
 loss.backward()
-opt.step()
+optimizer.step()
 ```
 
-LoRA/QKV adaptation and scalarless foreach options in this repository execute
-when enabled; this public build has no license-based no-op path for them.
+CPU, MPS, and CUDA use native PyTorch operations. Move the model and inputs to
+the desired device before constructing the optimizer. Inspect tagged groups
+when using custom module names:
 
-For fused QKV parameters, the learning rate of each slice is
-`group["lr"] * group["lr_scale"] * group["qkv_lr_scales"].get(slice, 1.0)`
-before trust and RMS clipping. This lets one group control scale Q, K, and V
-together while QKV adaptation adjusts their individual multipliers:
+```python
+from tiger_optim import summarize_param_groups
+print(summarize_param_groups(optimizer.param_groups))
+```
+
+## What Tiger adds
+
+| Component | Behavior | Main controls |
+| --- | --- | --- |
+| Sign-aware direction | Blends sign/softsign with normalized momentum and optional factored preconditioning | `sign_mode`, `sign_blend`, `factored`, `precond_alpha` |
+| Trust ratios | Scales updates relative to parameter magnitude; fused QKV can use separate slice ratios | `use_trust_ratio`, `trust_space`, `trust_clip`, `qkv_trust_split` |
+| Tagged groups | Assigns LR scales and decay rules to attention, embeddings, norms, FFNs, and LoRA parameters | `build_tagged_param_groups`, `tag_overrides`, `lora_overrides` |
+| QKV adaptation | Adjusts slice LR multipliers from RMS/trust statistics, with optional spectral feedback | `qkv_lr_autoadapt`, `qkv_lr_interval`, `qkv_lr_gain`, `qkv_spectral_adapt` |
+| LoRA adaptation | Uses density feedback, PID state, and inertia to adjust blend/clipping | `lora_density_adapt`, `lora_pid_*`, `lora_cross_adapt`, `lora_bridge` |
+| Schedules and metrics | Fixed-budget tail cosine, tag warmup/decay, or reported-loss plateau controls | `TailCosineLR`, `TagWarmupDecay`, `report_metrics` |
+
+The [constructor](src/tiger_optim/tiger.py) defines the complete option set.
+QKV and LoRA mechanisms need correctly tagged parameters. LoRA adaptation has
+correctness coverage but no learning advantage established by the current
+retrieval experiments, which contain no LoRA adapters.
+
+### Control Q, K, and V
+
+For a fused QKV slice, the LR before trust and clipping is:
+
+```text
+group["lr"] × group["lr_scale"] × group["qkv_lr_scales"].get(slice, 1.0)
+```
+
+The tag builder starts Q/K/V multipliers at **0.9 / 0.8 / 1.1**. Group and slice
+controls compose, including staged updates:
 
 ```python
 groups = build_tagged_param_groups(
     model, base_lr=3e-4,
     tag_overrides={"attn_qkv": {"lr_scale": 0.5}},
 )
+optimizer = Tiger(groups, auto_lr=False, auto_blend=False)
+qkv_index = next(i for i, g in enumerate(optimizer.param_groups)
+                 if g.get("block_tag") == "attn_qkv")
+optimizer.stage_group_update(qkv_index, {"lr_scale": 0.0})
+optimizer.reflect_pending()
 ```
 
-A staged `lr_scale` update follows the same rule after `reflect_pending()`.
-A zero group scale stops parameter changes (including weight decay), while
-moment estimates and adaptation counters continue to advance.
+A zero group scale stops parameter updates and weight decay; moments and
+adaptation counters still advance. To hold QKV multipliers fixed, pass
+`qkv_lr_autoadapt=False, qkv_spectral_adapt=False`. To isolate spectral feedback,
+leave QKV adaptation enabled and set only `qkv_spectral_adapt=False`.
 
-### Reporting loss and resuming training
+The default cadence is 25 updates with gain 0.02. Increasing cadence and gain
+did not consistently improve the [matched Mac probe](benchmarks/evidence/2026-09-30-qkv-learning/README.md).
 
-The plateau-based `auto_lr` and `auto_blend` controls act only after the training
-loop calls `opt.report_metrics(loss=...)`. With `auto_lr=True`, a plateau of
-`plateau_patience` reported finite losses multiplies each group LR by
-`lr_decay`, down to `lr_min`. These controls run in eager mode.
+### Schedule and resume
 
-Save both the model and optimizer to resume the blend schedule and adaptation
-state. Recreate the optimizer with parameter groups in the same order before
-loading:
-
-```python
-torch.save({"model": model.state_dict(), "optimizer": opt.state_dict()}, "checkpoint.pt")
-
-# In a later process, after recreating the model and its tagged groups:
-checkpoint = torch.load("checkpoint.pt", map_location="cpu")
-model.load_state_dict(checkpoint["model"])
-opt = Tiger(build_tagged_param_groups(model, base_lr=3e-4, base_wd=0.01))
-opt.load_state_dict(checkpoint["optimizer"])
-```
-
-Checkpoints made before Tiger stored adaptive state cannot resume exactly. The
-loader warns about this and needs fresh QKV rules from the new model when the
-old checkpoint contains QKV groups.
-
-### Tail cosine decay for a fixed update budget
-
-`TailCosineLR` keeps each parameter group's initial LR until `decay_start`
-updates have completed, then applies a cosine decay toward a fraction of that
-group's initial LR. It is opt-in. The 100-update causal Transformer probe in
-[PR #55](https://github.com/RyoSpiralArchitect/tiger-optim/pull/55) used
-`decay_start=90` and `min_lr_ratio=0.1`; three held-out confirmation seeds
-favored this recipe on that synthetic task. It does not establish a general
-schedule advantage.
+`TailCosineLR` holds the initial LR and then decays toward a fraction of it:
 
 ```python
 from tiger_optim import TailCosineLR
 
-opt = Tiger(build_tagged_param_groups(model, base_lr=0.01, base_wd=0.0),
-            auto_lr=False, auto_blend=False)
-scheduler = TailCosineLR(opt, total_steps=100, decay_start=90,
+scheduler = TailCosineLR(optimizer, total_steps=1000, decay_start=900,
                          min_lr_ratio=0.1)
-
-# After computing gradients on each batch:
-opt.step()
+# In each iteration, after backward():
+optimizer.step()
 scheduler.step()
 ```
 
-Call `scheduler.step()` after `opt.step()`. In this example, updates 1–91 use
-the initial LR; update 100 uses approximately 0.122 times that LR, and the
-0.1 floor is set after update 100. Tagged `lr_scale` and QKV slice scales
-remain independent of the scheduler. Disable Tiger's plateau `auto_lr` when
-using this fixed schedule so both controls do not modify the same group LR.
+`decay_start` counts completed updates. Here, updates 1–901 use the initial LR;
+the floor is installed after update 1000. The scheduler preserves group LR
+ratios. Disable `auto_lr` when using an external schedule.
 
-Save `scheduler.state_dict()` alongside the model and optimizer. To resume,
-recreate the optimizer and scheduler, then load their saved states:
+For plateau control instead, enable `auto_lr` and call
+`optimizer.report_metrics(loss=float(loss.detach()))` each iteration. Only
+reported finite losses advance its plateau history; `auto_blend` also consumes
+reported metrics. These controls run eagerly.
+
+Save model, optimizer, and scheduler together:
 
 ```python
-torch.save({"model": model.state_dict(), "optimizer": opt.state_dict(),
+torch.save({"model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
             "scheduler": scheduler.state_dict()}, "checkpoint.pt")
 
-# In a later process, after recreating the model:
-checkpoint = torch.load("checkpoint.pt", map_location="cpu")
+# Recreate model, tagged groups, optimizer, and scheduler first,
+# keeping parameter/group order and constructor options the same.
+checkpoint = torch.load("checkpoint.pt", map_location=device)
 model.load_state_dict(checkpoint["model"])
-opt = Tiger(build_tagged_param_groups(model, base_lr=0.01, base_wd=0.0),
-            auto_lr=False, auto_blend=False)
-scheduler = TailCosineLR(opt, total_steps=100, decay_start=90,
-                         min_lr_ratio=0.1)
-opt.load_state_dict(checkpoint["optimizer"])
+optimizer.load_state_dict(checkpoint["optimizer"])
 scheduler.load_state_dict(checkpoint["scheduler"])
 ```
 
-With FP16 or BF16 parameters and `skip_if_nonfinite=True`, median bucket
-standardization is rejected before updating. Use the `global` or `mean` bucket
-source for low-precision parameters.
+Old checkpoints without Tiger's adaptive state cannot resume exactly; the
+loader warns and needs newly built QKV rules when loading old QKV groups.
 
----
+## Numerical behavior and acceleration
 
-## Acceleration toolchain (Pure Python core + optional Julia)
+- `skip_if_nonfinite=True` rejects unsafe parameter updates before committing
+  candidate moments or decay for that parameter. It is not a whole-step
+  rollback or a substitute for monitoring training loss.
+- For FP16/BF16 parameters, `update_buffer_dtype="fp32"` keeps update buffers
+  in FP32. Low-precision storage still has its own range limits.
+- Median bucket standardization is rejected for low-precision parameters with
+  nonfinite protection; use `global` or `mean` instead.
+- Foreach, bucket standardization, Triton, and Julia are experimental execution
+  choices. Measure their effect on the target model before claiming a speedup.
 
-Tiger v2.4.0 keeps the optimizer entirely in Python while still offering two
-runtime acceleration paths:
-
-- `torch`: a real backend built on native PyTorch kernels that works on CPU,
-  MPS, and CUDA devices without extra dependencies.
-- `julia`: an optional backend for CPU-centric primitives (softsign, RMS and
-  vector-norm). When Julia ≥1.9 and the `juliacall` bridge are present Tiger
-  can dispatch to Julia loops.
-
-The runtime still profiles every backend invocation and automatically reorders
-the priority list to favour the fastest healthy implementation. Backends that
-raise errors (or return `None`) are temporarily suppressed so later calls can
-fall back to another backend or the PyTorch reference path.
-
-Runtime selection is automatic. You can inspect the availability at runtime:
+The core works without Julia or Triton. Runtime backend controls are available:
 
 ```python
-from tiger_optim import available_backends, current_backend_priority
-print(available_backends())  # e.g. {"julia": False, "torch": True}
-print(current_backend_priority())  # runtime ordering after scoring
-```
-
-### Runtime configuration
-
-Tiger now exposes lightweight runtime controls so you can experiment without
-restarting your notebook or script:
-
-```python
-from tiger_optim import (
-    available_backends,
-    backend_diagnostics,
-    configure_backends,
-    current_backend_priority,
-    refresh_backend_state,
-    reset_backend_configuration,
-)
-
-# Prefer Julia for the current process, then the torch backend
-configure_backends(preferred=["julia", "torch"])
-
-# Prefer the device-native torch backend on MPS/CUDA
+from tiger_optim import configure_backends, backend_diagnostics
 configure_backends(preferred=["torch"])
-
-# Disable all native accelerators (forces the PyTorch eager path)
-configure_backends(disabled=["all"])
-
-# Clear runtime overrides and reset performance history, e.g. after rebuilding a backend
-reset_backend_configuration()
-refresh_backend_state(reload=True, reset_metrics=True)
-print(available_backends())
-print(current_backend_priority())
 print(backend_diagnostics())
 ```
 
-Prefer environment variables? Set them before import:
+`configure_backends(disabled=["all"])` selects the eager reference path.
+`reset_backend_configuration()` clears process overrides;
+`refresh_backend_state(reload=True, reset_metrics=True)` refreshes availability
+and timing history. Environment alternatives are `TIGER_ACCEL_DISABLE` and
+`TIGER_ACCEL_PREFER`.
 
-```bash
-export TIGER_ACCEL_DISABLE=all       # disable all accelerators
-export TIGER_ACCEL_PREFER=julia,torch     # prefer Julia when available
+## Learning evidence
+
+See the [benchmark guide](benchmarks/README.md) for runnable protocols and the
+archive. Open questions include whether spectral QKV feedback improves held-out
+learning and whether LoRA controls help actual adapter training.
+
+- [Mac causal Transformer](benchmarks/evidence/2026-09-27-toy-transformer-learning/README.md):
+  learning and schedule checks on a short periodic-copy task.
+- [QKV control audit](benchmarks/evidence/2026-09-30-qkv-learning/README.md):
+  33 runs, a verified group-scale correction, and a stronger-adaptation candidate
+  that improved only one of three new confirmation seeds.
+- [CUDA associative recall](benchmarks/evidence/2026-09-30-cuda-recall/README.md):
+  a 1.83M-parameter Transformer and QKV ablations on RTX 5090. At 1000 updates,
+  Tiger full averaged 7.59% test accuracy and AdamW 8.55%; both underperformed
+  a query-independent context baseline (12.42%). Spectral feedback showed no
+  consistent gain. A separate 5000-update AdamW diagnostic also failed to
+  establish retrieval mastery. This is a stress probe awaiting a successful
+  learning control, not evidence of optimizer superiority.
+
+Historical timing notes without raw receipts have been removed from this
+README. Tracked experiments remain in the archive so source revisions,
+failed hypotheses, and correctness comparisons remain reproducible. None of
+these results establishes a general advantage over AdamW.
+
+## Development
+
+```sh
+python -m pip install -e '.[dev]'
+python -m pytest -q
+python benchmarks/bench_associative_recall.py \
+  --device cpu --precision fp32 --mode tiger-full --lr 0.003 --seed 11 \
+  --steps 3 --width 24 --layers 2 --heads 3 --symbols 16 --pairs 4 \
+  --gap 3 --queries 3 --batch-size 4 --eval-size 8 --test-size 8 \
+  --output benchmarks/results/recall-smoke.json
 ```
 
-Both signals are lazily cached, so changes made at runtime can be picked up via
-`refresh_backend_state()`.
+Use a fresh output path: the learning benchmark refuses to overwrite results.
+CI checks Python 3.9/3.12, tests, learning smoke, wheel/sdist builds, and the
+installed wheel. Device-specific checks skip when unavailable.
 
-If no accelerator is available Tiger falls back to the stock PyTorch
-implementations, so you can opt-in incrementally.
+## License
 
----
-
-## Historical Local Timing Notes
-
-Earlier local TinyMix notes recorded the following medians during Tiger v2.1
-comparisons, using 120 steps and 30–50 warmup steps. The raw JSON, plots,
-exact source revision, and full environment records for these rows are not
-tracked here.
-These figures cannot establish a current speed or convergence comparison.
-
-| Device | Optimizer | Median step time |
-|-------:|:---------:|-----------------:|
-| CPU (Mac) | Tiger v2.1 (full) | **8.50 ms** |
-| MPS (Mac) | Tiger v2.1 (full) | **26.84–35.53 ms** |
-| CUDA (Win, GTX 1650 / CUDA 11.1) | AdamW | **5.43–6.69 ms** |
-| CUDA (Win, GTX 1650 / CUDA 11.1) | Tiger v2.1 (full) | **14.8–15.0 ms** |
-
-The CUDA entries came from a legacy GPU and driver (see below). Measure on the
-target workload and device before drawing a performance conclusion.
-
-## Benchmark and Claim Gate
-
-For a new result, record the exact commit and dirty state, Python/PyTorch and
-device/driver versions, seed, command, warmup, and step count. Run AdamW and
-Tiger on the same seeded model and data, repeat each mode in at least three
-fresh processes, and retain every raw JSON file. Use a clean result set for
-each comparison: the plotter reads all matching files, while the summarizer
-selects the latest file per device and mode rather than measuring variation.
-Publish all raw files (with SHA-256 hashes), the spread across runs, and plots
-alongside any timing claim. A convergence claim also needs a defined
-quality metric, a fixed compute budget, and multiple seeds; the current bench
-CLI is a smoke/timing tool and does not establish that claim.
-
-The [2026-09-25 CPU smoke](benchmarks/evidence/2026-09-25-cpu-smoke/README.md)
-preserves three fresh-process pairs with raw JSON and hashes. On that fixed
-synthetic workload, Tiger took 8.97 ms per measured compute step versus 4.05 ms
-for AdamW, and ended with a higher training loss. The configurations differ and
-the runs repeat one seed, so this is a local negative result rather than a
-general comparison.
-
-The [2026-09-26 Mac diagnostic](benchmarks/evidence/2026-09-26-mac-perf/README.md)
-preserves CPU/MPS raw runs, profiler traces, source hashes, and the host-load
-caveat. Consolidating finite checks reduced profiled MPS scalar reads inside
-Tiger from 68 to 30 per step at the recorded intermediate source revisions;
-the last PR #46 source (`387600e0…`) measured 36 per step after its FP32
-overflow guard. The 23.95 ms Tiger and 0.998 ms AdamW optimizer medians came
-from the earlier `4ef12be8…` paired MPS smoke; no paired run measured the
-current source. The [step-25 diagnosis](benchmarks/evidence/2026-09-26-mac-step25/README.md)
-isolates QKV spectral adaptation as the recurring spike. The
-[batched QKV check](benchmarks/evidence/2026-09-26-qkv-batch/README.md)
-records two FFT calls in place of six for the synthetic fused weight and bias,
-with equal final QKV scales and loss in its bounded A/B runs. Host-load drift
-prevents a wall-clock speed claim; these runs also do not establish a
-convergence comparison.
-
-Run `python benchmarks/bench_quality_smoke.py` for a separate CPU toy task with
-held-out data and three seeds. Its Tiger recipe uses a cosine LR schedule while
-the AdamW reference uses a fixed LR, so its output checks learning rather than
-ranking the optimizers; the archived traces are
-[here](benchmarks/evidence/2026-09-25-cpu-quality/README.md).
-
-The [toy causal Transformer learning probe](benchmarks/evidence/2026-09-27-toy-transformer-learning/README.md)
-trains on disjoint period-3 token sequences with held-out evaluation. It
-records fused-QKV adaptation, a spectral-off ablation, and a separately
-confirmed tail learning-rate schedule on Mac CPU and MPS. Its synthetic task and
-mode-specific learning rates do not establish a general optimizer ranking.
-
-The [QKV control audit](benchmarks/evidence/2026-09-30-qkv-learning/README.md)
-extends that probe with matched adaptation settings and new confirmation seeds,
-and verifies that group LR controls compose with the fused Q/K/V multipliers.
-
-```bash
-git rev-parse HEAD
-git status --short
-python -c 'import platform, torch; print(platform.platform()); print(torch.__version__)'
-for run in 1 2 3; do
-  python benchmarks/bench_compare_optim.py --device cpu --steps 200 --warmup 50 --modes adamw tiger_v21_full
-done
-python benchmarks/summarize_results.py --pattern 'benchmarks/results/compare-*.json' --markdown-out benchmarks/results/summary.md
-shasum -a 256 benchmarks/results/compare-*.json
-```
-
-Use the wildcard above only when `benchmarks/results` contains the current
-comparison. Run the same command on MPS/CUDA only when that device is available.
-
----
-
-## System Info for This CUDA Run (Legacy Reference)
-
-- OS: Windows  
-- GPU: **GeForce GTX 1650** (Turing, **4 GB**, **SM 7.5**)  
-- NVIDIA Driver: **457.49**  
-- CUDA reported by `nvidia-smi`: **11.1**  
-- Notes: legacy hardware (no TF32) with older driver/runtime; some fused/foreach paths may not be effective.
-
----
-
-## Call for Community CUDA Runs
-
-We’d love **fresh results on modern GPUs** (Ampere/Ada/Hopper; CUDA 11.8+/12.x).
-
-**How to contribute**
-1. Run:
-   ```bash
-   git rev-parse HEAD
-   git status --short
-   python benchmarks/bench_compare_optim.py --device cuda --steps 200 --warmup 50
-   python benchmarks/plot_bench.py --out-dir benchmarks/plots
-   python benchmarks/summarize_results.py --pattern "benchmarks/results/compare-*.json" --markdown-out benchmarks/results/summary.md
-   ```
-2. Collect and attach:
-   - `benchmarks/results/compare-*.json` (AdamW + Tiger)
-   - `benchmarks/results/summary.md`
-   - `benchmarks/plots/median_step_time.png`, `benchmarks/plots/loss_curves.png`
-   - SHA-256 hashes for the raw JSON and the exact source commit/dirty state
-   - Environment info:
-     ```
-     nvidia-smi
-     python - <<'PY'
-     import torch,sys
-     print('torch=', torch.__version__)
-     print('torch.cuda(build)=', torch.version.cuda)
-     print('cuDNN=', torch.backends.cudnn.version())
-     print('GPU=', torch.cuda.get_device_name(0))
-     print('SM=' + '.'.join(map(str, torch.cuda.get_device_capability(0))))
-     PY
-     ```
-3. Open a GitHub Issue titled  
-   **Benchmark: &lt;GPU model&gt; (CUDA &lt;build&gt;, Driver &lt;ver&gt;)**  
-   We’ll **credit contributors** in the README.
-
----
-
-## Experimental Starting Settings
-
-- **Conservative clipping experiment.** This configuration keeps the update
-  buffer in FP32, but its AGC setting can make learning very slow. Validate the
-  actual update size and held-out loss on your task. RMS clipping is a parameter
-  group option:
-  ```python
-  groups = [{"params": model.parameters(),
-             "rms_clip_threshold": 1.0, "rms_clip_granularity": "param"}]
-  opt = Tiger(groups, update_buffer_dtype="fp32", lr=2e-4,
-              agc_clip=0.02, trust_clip=5.0)
-  ```
-  In a [three-seed held-out CPU probe](benchmarks/evidence/2026-09-25-cpu-quality/README.md),
-  this setting barely learned the test task; treat it as a clipping experiment,
-  not a validated quality preset.
-- **MPS (Apple Silicon)**: keep Triton flags off; prefer FP32 update buffer.  
-- **CUDA (modern)**: try `use_foreach_update=True`, `bucket_standardize=True`, and Triton stats if available.
-
-### Profiling `opt.step()` on MPS
-
-Use the built-in profiler harness when you want to see where Apple Silicon time is
-really going:
-
-```bash
-python benchmarks/bench_profile_v21.py \
-  --device mps \
-  --steps 4 \
-  --warmup 2 \
-  --torch-profiler \
-  --profile-steps 3
-```
-
-The profiler output can identify operations to investigate. Preserve the trace,
-table, source revision, and a paired baseline before reporting an improvement.
-
----
-
-## Legacy CUDA: Quick Preset
-
-For Turing‑class / older drivers (e.g., GTX 1650, CUDA 11.1), use a leaner path:
-
-```python
-Tiger(
-  groups,
-  factored=False, precond_alpha=0.0,      # lighten preconditioning
-  use_trust_ratio=False,                  # cut extra norms
-  use_foreach_update=False,               # avoid foreach overhead
-  bucket_standardize=False, bucket_scalarless=False,
-  update_buffer_dtype="fp32",
-  lr=2e-4, agc_clip=0.02, trust_clip=5.0
-)
-```
-
----
-
-## Roadmap & Lessons from Legacy GPUs
-
-From our GTX 1650 (Driver 457.49 / CUDA 11.1) measurements:
-
-1. **Auto‑Preset by Capability/Driver**  
-   - Detect `SM` & driver/runtime at init and choose **`preset="modern"` / `preset="legacy"`**.  
-   - Gate foreach/bucketization/Triton paths and preconditioning strength automatically.
-
-2. **Lean Path for WDDM / Older Drivers**  
-   - Provide an **in‑place fused update** without bucketization; minimize tensor re‑reads.  
-   - Prefer FP32 update buffers, lighter trust math, optional AGC only.
-
-3. **Convergence Guard on Legacy**  
-   - If loss plateaus >N steps and `Δloss≈0`, auto‑toggle `use_sign=False` and reduce WD;  
-     re‑enable gradually once descent is detected.
-
-4. **Minimal‑alloc Foreach**  
-   - On CC ≤7.5, bypass scalarless stats; avoid small kernel storms; coalesce tiny params.
-
-5. **Debug Hooks**  
-   - `opt.debug_check()` to log per‑group norms (p/m/update), non‑finite counts, and effective LR/trust (device‑safe).
-
-6. **Docs**  
-   - A dedicated **“Legacy CUDA Playbook”** with presets, known gotchas (WDDM, driver 45x/46x), and validation checklist.
-
-These items will land as: `Tiger(..., preset="auto")` with internal feature gating; a `--legacy` flag in benches; and a **single‑kernel apply** path for legacy devices.
+**GNU AGPL-3.0-only.** See [LICENSE.txt](LICENSE.txt).

@@ -266,6 +266,8 @@ def main():
         parser.error("lr must be positive and finite")
     if args.output.exists() or (args.checkpoint and args.checkpoint.exists()):
         parser.error("refusing to overwrite an existing result/checkpoint")
+    if args.checkpoint and args.output.resolve() == args.checkpoint.resolve():
+        parser.error("result and checkpoint must have different paths")
     run(args)
 
 
