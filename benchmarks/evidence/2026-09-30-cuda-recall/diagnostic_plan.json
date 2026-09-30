@@ -1,0 +1,9 @@
+{
+  "phase": "post-confirmation learnability diagnostic",
+  "reason": "all four 1000-update recipes underperformed a query-independent context-frequency baseline",
+  "mode": "adamw", "lr": 0.001, "seed": 307, "steps": 5000,
+  "development": true, "eval_interval": 500,
+  "source": "c4c6c644231e0bbbcd2f7bcb213e4d9df2df4278",
+  "other_settings": "same architecture and recipe defaults as the frozen comparison",
+  "interpretation": "one exploratory control to test learnability at a larger update budget; no test set, no retuning or replacement of confirmation results"
+}

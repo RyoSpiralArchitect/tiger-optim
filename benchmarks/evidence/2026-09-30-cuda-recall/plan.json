@@ -1,0 +1,24 @@
+{
+  "task": "multi-query associative recall with a 64-token gap",
+  "purpose": "compare QKV adaptation components under matched learning conditions",
+  "model": {"width": 192, "layers": 4, "heads": 6, "symbols": 64, "pairs": 16, "gap": 64, "queries": 4},
+  "batch_size": 64,
+  "precision": "bf16 autocast, FP32 parameters and optimizer updates",
+  "development": {
+    "seed": 101, "steps": 300,
+    "learning_rates": {"adamw": [0.0003, 0.001, 0.003], "tiger-full": [0.001, 0.003, 0.01]},
+    "selection": "lowest final validation cross-entropy among completed finite runs within each optimizer family"
+  },
+  "confirmation": {
+    "seeds": [211, 223, 227], "steps": 1000,
+    "modes": ["adamw", "tiger-full", "tiger-no-spectral", "tiger-fixed-qkv"],
+    "learning_rates": "selected AdamW rate; all Tiger modes share selected tiger-full rate",
+    "primary_metric": "test cross-entropy after the fixed 1000-update budget",
+    "secondary_metrics": ["test query accuracy", "validation trajectory", "QKV scale trajectory"],
+    "test_access": "one final evaluation per run, no setting changes after confirmation begins"
+  },
+  "schedule": "5 percent linear warmup then cosine toward 0.1 of base LR, shared across modes",
+  "controls": "same initial weights, generated examples, clipping and schedule per paired seed; Tiger tag scales and trust remain part of the optimizer recipe",
+  "scope": "controlled synthetic retrieval, not natural-language quality or a general optimizer ranking",
+  "timing": "diagnostic only; other CPU jobs may remain active on the host"
+}

@@ -1,0 +1,250 @@
+{
+  "source_commit": "c4c6c644231e0bbbcd2f7bcb213e4d9df2df4278",
+  "parameter_count": 1830144,
+  "environment": {
+    "python": "3.14.4",
+    "torch": "2.13.0+cu132",
+    "cuda": "13.2",
+    "device": "NVIDIA GeForce RTX 5090",
+    "precision": "bf16",
+    "cpu_threads": 2,
+    "tf32": false
+  },
+  "development": {
+    "adamw": {
+      "candidates": [
+        {
+          "lr": 0.0003,
+          "validation_ce": 4.146979570388794
+        },
+        {
+          "lr": 0.001,
+          "validation_ce": 3.49111607670784
+        },
+        {
+          "lr": 0.003,
+          "validation_ce": 3.827223628759384
+        }
+      ],
+      "lr": 0.001
+    },
+    "tiger-full": {
+      "candidates": [
+        {
+          "lr": 0.001,
+          "validation_ce": 4.053446829319
+        },
+        {
+          "lr": 0.003,
+          "validation_ce": 4.132965683937073
+        },
+        {
+          "lr": 0.01,
+          "validation_ce": 4.239185988903046
+        }
+      ],
+      "lr": 0.001
+    }
+  },
+  "confirmation": [
+    {
+      "seed": 211,
+      "context_mode_accuracy": 0.129150390625,
+      "context_frequency_ce": 2.611114978790283,
+      "modes": {
+        "adamw": {
+          "ce": 2.9234193190932274,
+          "accuracy": 0.087646484375,
+          "queries": 8192,
+          "qkv_scales": null
+        },
+        "tiger-full": {
+          "ce": 3.9020194709300995,
+          "accuracy": 0.0699462890625,
+          "queries": 8192,
+          "qkv_scales": {
+            "q": 0.9004376884925352,
+            "k": 0.794525681904534,
+            "v": 1.098892234795303
+          }
+        },
+        "tiger-no-spectral": {
+          "ce": 3.893778182566166,
+          "accuracy": 0.07275390625,
+          "queries": 8192,
+          "qkv_scales": {
+            "q": 0.8973134552281494,
+            "k": 0.799260314979711,
+            "v": 1.0997046591389399
+          }
+        },
+        "tiger-fixed-qkv": {
+          "ce": 3.945344939827919,
+          "accuracy": 0.0672607421875,
+          "queries": 8192,
+          "qkv_scales": {
+            "q": 0.9,
+            "k": 0.8,
+            "v": 1.1
+          }
+        }
+      }
+    },
+    {
+      "seed": 223,
+      "context_mode_accuracy": 0.11865234375,
+      "context_frequency_ce": 2.615112543106079,
+      "modes": {
+        "adamw": {
+          "ce": 2.9405567049980164,
+          "accuracy": 0.085205078125,
+          "queries": 8192,
+          "qkv_scales": null
+        },
+        "tiger-full": {
+          "ce": 3.63333697617054,
+          "accuracy": 0.0771484375,
+          "queries": 8192,
+          "qkv_scales": {
+            "q": 0.8980753097238439,
+            "k": 0.7991294724601674,
+            "v": 1.106800092331743
+          }
+        },
+        "tiger-no-spectral": {
+          "ce": 3.6855283081531525,
+          "accuracy": 0.0758056640625,
+          "queries": 8192,
+          "qkv_scales": {
+            "q": 0.9015189389468368,
+            "k": 0.8011917961510564,
+            "v": 1.1081581966180327
+          }
+        },
+        "tiger-fixed-qkv": {
+          "ce": 3.6657955199480057,
+          "accuracy": 0.0762939453125,
+          "queries": 8192,
+          "qkv_scales": {
+            "q": 0.9,
+            "k": 0.8,
+            "v": 1.1
+          }
+        }
+      }
+    },
+    {
+      "seed": 227,
+      "context_mode_accuracy": 0.1248779296875,
+      "context_frequency_ce": 2.6118316650390625,
+      "modes": {
+        "adamw": {
+          "ce": 2.936388775706291,
+          "accuracy": 0.083740234375,
+          "queries": 8192,
+          "qkv_scales": null
+        },
+        "tiger-full": {
+          "ce": 3.6694674119353294,
+          "accuracy": 0.08056640625,
+          "queries": 8192,
+          "qkv_scales": {
+            "q": 0.89883270298205,
+            "k": 0.7978539549285484,
+            "v": 1.1021974564324348
+          }
+        },
+        "tiger-no-spectral": {
+          "ce": 3.5014663487672806,
+          "accuracy": 0.082275390625,
+          "queries": 8192,
+          "qkv_scales": {
+            "q": 0.8964313600225042,
+            "k": 0.799334298566766,
+            "v": 1.107654044427595
+          }
+        },
+        "tiger-fixed-qkv": {
+          "ce": 3.551128938794136,
+          "accuracy": 0.0806884765625,
+          "queries": 8192,
+          "qkv_scales": {
+            "q": 0.9,
+            "k": 0.8,
+            "v": 1.1
+          }
+        }
+      }
+    }
+  ],
+  "aggregate": {
+    "adamw": {
+      "ce": {
+        "mean": 2.933454933265845,
+        "min": 2.9234193190932274,
+        "max": 2.9405567049980164
+      },
+      "accuracy": {
+        "mean": 0.08553059895833333,
+        "min": 0.083740234375,
+        "max": 0.087646484375
+      }
+    },
+    "tiger-full": {
+      "ce": {
+        "mean": 3.734941286345323,
+        "min": 3.63333697617054,
+        "max": 3.9020194709300995
+      },
+      "accuracy": {
+        "mean": 0.07588704427083333,
+        "min": 0.0699462890625,
+        "max": 0.08056640625
+      }
+    },
+    "tiger-no-spectral": {
+      "ce": {
+        "mean": 3.693590946495533,
+        "min": 3.5014663487672806,
+        "max": 3.893778182566166
+      },
+      "accuracy": {
+        "mean": 0.07694498697916667,
+        "min": 0.07275390625,
+        "max": 0.082275390625
+      }
+    },
+    "tiger-fixed-qkv": {
+      "ce": {
+        "mean": 3.72075646619002,
+        "min": 3.551128938794136,
+        "max": 3.945344939827919
+      },
+      "accuracy": {
+        "mean": 0.07474772135416667,
+        "min": 0.0672607421875,
+        "max": 0.0806884765625
+      }
+    }
+  },
+  "uniform_value_guess_accuracy": 0.015625,
+  "context_mode_accuracy_mean": 0.12422688802083333,
+  "context_frequency_ce_mean": 2.6126863956451416,
+  "full_beats_no_spectral_ce_seeds": 1,
+  "full_beats_fixed_qkv_ce_seeds": 2,
+  "post_confirmation_diagnostic": {
+    "seed": 307,
+    "steps": 5000,
+    "validation": {
+      "ce": 2.729838103055954,
+      "accuracy": 0.10107421875,
+      "queries": 2048
+    },
+    "context_baseline": {
+      "ce": 2.6238226890563965,
+      "accuracy": 0.11572265625
+    },
+    "test_evaluated": false
+  },
+  "scope": "finite update budget, synthetic retrieval, three confirmation seeds, limited LR search; no speed or general optimizer ranking claim"
+}

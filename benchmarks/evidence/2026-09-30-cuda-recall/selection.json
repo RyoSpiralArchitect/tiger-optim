@@ -1,0 +1,39 @@
+{
+  "plan_sha256": "6d73860d1fb22303efff638cdfd5516badfa6fb7c7bfba27d6f317a42e247846",
+  "selected": {
+    "adamw": {
+      "candidates": [
+        {
+          "lr": 0.0003,
+          "validation_ce": 4.146979570388794
+        },
+        {
+          "lr": 0.001,
+          "validation_ce": 3.49111607670784
+        },
+        {
+          "lr": 0.003,
+          "validation_ce": 3.827223628759384
+        }
+      ],
+      "lr": 0.001
+    },
+    "tiger-full": {
+      "candidates": [
+        {
+          "lr": 0.001,
+          "validation_ce": 4.053446829319
+        },
+        {
+          "lr": 0.003,
+          "validation_ce": 4.132965683937073
+        },
+        {
+          "lr": 0.01,
+          "validation_ce": 4.239185988903046
+        }
+      ],
+      "lr": 0.001
+    }
+  }
+}

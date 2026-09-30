@@ -1,0 +1,24 @@
+{
+  "measured_commit": "c4c6c644231e0bbbcd2f7bcb213e4d9df2df4278",
+  "decompressed_raw_sha256": {
+    "raw/dev-adamw-0.0003.json.gz": "c3d03c2438788fd282d5a4ba6f687c926d789dd7b66039b4d60305374f384743",
+    "raw/dev-adamw-0.001.json.gz": "ecc9c6ddf1aa595c119f55e596fa375ca5dc200ae0eb0f8b38508a7be40e82e4",
+    "raw/dev-adamw-0.003.json.gz": "f0cc51e7857733a61a9fa919158deae4be915fabe2f767af4f8ba6b148d3f0e3",
+    "raw/dev-tiger-full-0.001.json.gz": "47c9fa58e6f9483450413180f9a1d18f12d23a666e7c131c95fbc209ed748075",
+    "raw/dev-tiger-full-0.003.json.gz": "e6ac203c5a034078ad688af2ccc6d46e014368d37e223c119462e05ea3c46d46",
+    "raw/dev-tiger-full-0.01.json.gz": "c90a58a49acd6501e4f778bb625ec0a687fccaa108b0f649ee2d7d9427585b40",
+    "raw/confirm-adamw-211.json.gz": "844f36fb1add82c652f3507993f06e8325fdba6819e8bc394252569c674824ba",
+    "raw/confirm-adamw-223.json.gz": "b05180ffcb135a635f0e65029fe5625d9978518c1e5c98b24f70c6c80e1a28a8",
+    "raw/confirm-adamw-227.json.gz": "818ac888fab9f8861dfd49fd79a609f7bbdfcd596ef016672a7176ed3d4a07d9",
+    "raw/confirm-tiger-fixed-qkv-211.json.gz": "e21de9be3f6ded35f2afe65d1b4282cb866b2d9d70c2a8557ec89972d548f004",
+    "raw/confirm-tiger-fixed-qkv-223.json.gz": "7570eba5fcf1f2c169c3df9de8da6dc6493a0775f0f2a558b714a538be41a6b2",
+    "raw/confirm-tiger-fixed-qkv-227.json.gz": "24bc5ee3d9e93b39d65be8b0fe3f4156e39e97025d9fed0a4ff082646eeaaa47",
+    "raw/confirm-tiger-full-211.json.gz": "bad21e86124b7a20e6aacb46246b438bc5cd232c475a97b49ca02339dcaa64b4",
+    "raw/confirm-tiger-full-223.json.gz": "edcda6a892b263db36b0149bdd8cd7f4a386bc32ae57c20be4b67668c64a566d",
+    "raw/confirm-tiger-full-227.json.gz": "82d2971503e585d425de5ee35674fcc2420a067026a36c16273bf15919d18156",
+    "raw/confirm-tiger-no-spectral-211.json.gz": "74147276c199bde6d36312580d69a5a505effff32677002f8e2e155331089801",
+    "raw/confirm-tiger-no-spectral-223.json.gz": "76487f8647c4b4e3d8939a48e1acb9d723df16ec1550793ea8c9575a22b09764",
+    "raw/confirm-tiger-no-spectral-227.json.gz": "d4805551d85faf5630f18a19ce5b7678a3fa8ae44f4f82854600d3a4dd6c2228",
+    "diagnostics/adamw-5000.json.gz": "55dcfc5a815ebb901714f7aa258cea52c5b8fc7f300c2f041bd9517fb5b9f3a5"
+  }
+}
