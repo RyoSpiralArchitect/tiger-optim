@@ -1,0 +1,41 @@
+{
+  "date": "2026-09-30",
+  "baseline_commit": "50f1f5c58b705723ce503407c7a900792251aba1",
+  "candidate_commit": "bbd3d39dd70ab073bde73c63c1c3f509708003fd",
+  "decompressed_raw_sha256": {
+    "raw/baseline-development.json.gz": "b02064da4904fa6ebdfdaef38f6d54e4cf84c41a6d0a062d93855cc784a0820b",
+    "raw/fast-development.json.gz": "4331decb3fef2d0ecbfbde27a98d4ec4059abd08065259d75fddbe626cc90c8b",
+    "raw/fast-spectral-development.json.gz": "18f65522652c2ccb6d3aca90ec28fa11ed6b3e6996ef2e7386f1f7e1b4cdaee7",
+    "raw/gain-zero-development.json.gz": "ba7c0523a47535206357e4dce5d3b1deccec150f1719576f2014586c1ea071de",
+    "raw/scale-after-default-cpu.json.gz": "bce9fb24c5619f62ed52f634c3f1b540c8033f3a7ad8e0b7f35a4efcfdb69fad",
+    "raw/scale-after-group-cpu.json.gz": "f38b1a7b4490e2430fd4d38f90079fa5dcde8db893785d84d91c59177dd609c6",
+    "raw/scale-after-group-mps.json.gz": "f3c375a19ec0b2f9cc3b2d7c2d9670e7e95966fcc8186f55719a572081d33d49",
+    "raw/scale-before-group-cpu.json.gz": "5e5a682d87f34995727f90b6161ee4c9af4a63ae4ecf224784cbde86845a6043",
+    "raw/scale-reference-lr-cpu.json.gz": "62a9e4d7a07d2ec6716bc4718a86a3a5d0a915568db8759ecf5602e4eb4dcfdb",
+    "raw/scale-reference-lr-mps.json.gz": "790e1c403a9e2ed5f65bf68be9ae30c2c5dd1206d7da4c35fbd336a071ea8d41",
+    "raw/fast-confirmation.json.gz": "c6dc936d89bc5ce0b689ef3cdbb8afe86fbf4048f83934616aff2558c5f18b76",
+    "raw/fast-spectral-confirmation.json.gz": "c849248642ca1d2979b9635dc37ac6d19a5ebf70d00eddf42922c5b616fc300b",
+    "raw/gain-zero-confirmation.json.gz": "c59565731aa403d7ef0b46ccfce258ae7f517e30e7cd1c4d9e01e1643bb24edc"
+  },
+  "baseline_source_sha256": "3d46d4da43b92c7a9914f16f7bcf03b01266d92e8678bbdfc1ac9f81bc679e86",
+  "candidate_source_sha256": "080367b99595c8a7d92f49c8893a5513dcb440defed28c60fa6efc81c2f3a8c1",
+  "scope": "QKV feature exploration and group-scale correctness, not optimizer ranking or speed claim",
+  "source_loading": "scale_probe.py loads Tiger from the recorded Git commit and imports unchanged package helper modules from the checkout; probe.py used baseline main source.",
+  "host_load": "Local Mac host load was not controlled; optimizer timings are diagnostic only.",
+  "toy_sha256": "658b4c05bb54eeecca8553606b4acc6cb2ab99c4cf7e99860c1b2ce1d96b1a74",
+  "selection": {
+    "development_seeds": [
+      23,
+      37,
+      41
+    ],
+    "confirmation_seeds": [
+      61,
+      67,
+      71
+    ],
+    "candidate": "gain 0.2 / interval 5 (spectral off), selected after improvement in 2/3 development seeds; same setting with spectral on retained as a control",
+    "criterion": "held-out CE after 100 updates against gain-zero with matched schedule and inputs",
+    "result": "candidate improved 1/3 confirmation seeds; no default promoted"
+  }
+}

@@ -1,0 +1,162 @@
+{
+  "development": [
+    {
+      "seed": 23,
+      "final_heldout_ce": {
+        "gain-zero": 0.000479904847452417,
+        "baseline": 0.0004803137853741646,
+        "fast": 0.00048189624794758856,
+        "fast-spectral": 0.00048186746425926685
+      },
+      "final_qkv_scales": {
+        "gain-zero": {
+          "q": 0.9,
+          "k": 0.8,
+          "v": 1.1
+        },
+        "baseline": {
+          "q": 0.8954911802425094,
+          "k": 0.8016272849974915,
+          "v": 1.1001816393322266
+        },
+        "fast": {
+          "q": 0.7981587005449159,
+          "k": 0.8606078006651074,
+          "v": 1.0835946029158583
+        },
+        "fast-spectral": {
+          "q": 0.8012551837073555,
+          "k": 0.8591023787540175,
+          "v": 1.0841670166595532
+        }
+      }
+    },
+    {
+      "seed": 37,
+      "final_heldout_ce": {
+        "gain-zero": 0.0005985907628200948,
+        "baseline": 0.0006138418102636933,
+        "fast": 0.0004895806196145713,
+        "fast-spectral": 0.0004898031475022435
+      },
+      "final_qkv_scales": {
+        "gain-zero": {
+          "q": 0.9,
+          "k": 0.8,
+          "v": 1.1
+        },
+        "baseline": {
+          "q": 0.894805007306657,
+          "k": 0.8014105595860199,
+          "v": 1.1000119168579958
+        },
+        "fast": {
+          "q": 0.7764607850468124,
+          "k": 0.8585364602667076,
+          "v": 1.0829113001745312
+        },
+        "fast-spectral": {
+          "q": 0.7830109456286969,
+          "k": 0.8557095322079102,
+          "v": 1.0839046558380105
+        }
+      }
+    },
+    {
+      "seed": 41,
+      "final_heldout_ce": {
+        "gain-zero": 0.0033029946498572826,
+        "baseline": 0.0033759952057152987,
+        "fast": 0.0028863842599093914,
+        "fast-spectral": 0.0034340855199843645
+      },
+      "final_qkv_scales": {
+        "gain-zero": {
+          "q": 0.9,
+          "k": 0.8,
+          "v": 1.1
+        },
+        "baseline": {
+          "q": 0.8953496253205877,
+          "k": 0.8017748556032566,
+          "v": 1.1001368430332157
+        },
+        "fast": {
+          "q": 0.7911063925195273,
+          "k": 0.8704751717396172,
+          "v": 1.0904148398523035
+        },
+        "fast-spectral": {
+          "q": 0.7979774772837376,
+          "k": 0.8655986856768313,
+          "v": 1.0900074478053854
+        }
+      }
+    }
+  ],
+  "confirmation": [
+    {
+      "seed": 61,
+      "final_heldout_ce": {
+        "gain-zero": 0.0004741879238281399,
+        "fast": 0.0004603604320436716,
+        "fast-spectral": 0.0004601959662977606
+      }
+    },
+    {
+      "seed": 67,
+      "final_heldout_ce": {
+        "gain-zero": 0.0007761953165754676,
+        "fast": 0.0007769213989377022,
+        "fast-spectral": 0.0007762563182041049
+      }
+    },
+    {
+      "seed": 71,
+      "final_heldout_ce": {
+        "gain-zero": 0.0040612476877868176,
+        "fast": 0.004261520225554705,
+        "fast-spectral": 0.004257150460034609
+      }
+    }
+  ],
+  "group_scale_cpu": [
+    {
+      "seed": 43,
+      "before_group_half_ce": 0.0012675172183662653,
+      "reference_lr_half_ce": 0.004550621844828129,
+      "after_group_half_ce": 0.004550621844828129,
+      "after_matches_reference_model_and_evaluations": true
+    },
+    {
+      "seed": 47,
+      "before_group_half_ce": 0.000317921134410426,
+      "reference_lr_half_ce": 0.001728312112390995,
+      "after_group_half_ce": 0.001728312112390995,
+      "after_matches_reference_model_and_evaluations": true
+    },
+    {
+      "seed": 53,
+      "before_group_half_ce": 0.0004512655141297728,
+      "reference_lr_half_ce": 0.0024249868001788855,
+      "after_group_half_ce": 0.0024249868001788855,
+      "after_matches_reference_model_and_evaluations": true
+    }
+  ],
+  "default_scale_cpu_seed43_evaluations_unchanged": true,
+  "group_scale_mps": {
+    "seed": 43,
+    "reference_ce": 0.004550630692392588,
+    "after_ce": 0.004550634883344173,
+    "max_abs_heldout_ce_difference": 1.0728836059570312e-06,
+    "max_abs_heldout_accuracy_difference": 0.0
+  },
+  "interpretation": [
+    "More frequent/higher-gain QKV adaptation changed learning but did not improve every development seed.",
+    "Adding spectral adaptation to the fast setting did not consistently improve held-out CE.",
+    "The fixed fast candidate beat gain-zero on only one of three new confirmation seeds; no default change is supported.",
+    "The corrected group scale exactly matches direct QKV base-LR scaling on three CPU seeds.",
+    "A smaller QKV LR was worse here; the correction makes the requested control effective, not generally superior.",
+    "No wall-clock performance claim; timings were collected with uncontrolled host load."
+  ]
+}
