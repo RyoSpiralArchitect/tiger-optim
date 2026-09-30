@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-01",
+  "purpose": "Measure QKV components after establishing learnable retrieval and binding-sensitive controls on Mac",
+  "preflight": "AdamW seed 401 on main 039964e, 1200 updates, 4 pairs, no gap: validation accuracy reached 100 percent by update 400; kept separately as an exploratory receipt",
+  "model": {"symbols": 16, "pairs": 4, "gap": 0, "queries": 2, "width": 64, "layers": 2, "heads": 4},
+  "batch_size": 32,
+  "steps": 1200,
+  "eval_interval": 50,
+  "eval_size": 256,
+  "test_size": 1024,
+  "device": "cpu",
+  "precision": "fp32",
+  "cpu_threads": 2,
+  "development": {
+    "seed": 401,
+    "rates": {"adamw": [0.0003, 0.001, 0.003], "tiger-full": [0.001, 0.003, 0.01]},
+    "selection": "lowest final validation CE within each family; all Tiger ablations share selected full-Tiger LR",
+    "qualification": "selected recipe must reach at least 90 percent validation and rebound accuracy, and at most 20 percent old-target accuracy after rebinding; test data is absent"
+  },
+  "confirmation": {
+    "seeds": [421, 431, 443],
+    "modes": ["adamw", "tiger-full", "tiger-no-spectral", "tiger-fixed-qkv", "tiger-uniform-qkv", "tiger-global-trust"],
+    "primary_metric": "final test CE after 1200 updates",
+    "secondary_metrics": ["original and rebound test accuracy", "old-target accuracy under rebinding", "validation CE averaged over sampled updates", "first sampled update at 90 percent validation accuracy"],
+    "controls": "same model initialization, examples, batch order, clipping, warmup/cosine LR factors and other Tiger settings per paired seed"
+  },
+  "contrasts": {
+    "spectral": ["tiger-no-spectral", "tiger-full"],
+    "adaptive_slice_lr": ["tiger-fixed-qkv", "tiger-no-spectral"],
+    "fixed_slice_scales": ["tiger-uniform-qkv", "tiger-fixed-qkv"],
+    "separate_slice_trust": ["tiger-global-trust", "tiger-uniform-qkv"]
+  },
+  "binding_check": "rotate memory values while retaining keys, queries and the value bag; evaluate both new correct targets and obsolete original targets",
+  "interpretation": "component effects on this short synthetic task; three seeds do not establish general optimizer superiority or LoRA benefits",
+  "timing": "diagnostic only; local host load is uncontrolled"
+}

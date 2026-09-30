@@ -44,3 +44,27 @@ def test_fixed_qkv_control_and_spectral_ablation_are_distinct():
         group = next(g for g in optimizer.param_groups if g["block_tag"] == "attn_qkv")
         assert len(group["qkv_rules"]) == 2
         assert group["qkv_lr_scales"] == {"q": 0.9, "k": 0.8, "v": 1.1}
+
+
+def test_rebinding_preserves_value_bag_and_queries_but_changes_associations():
+    tokens, targets = recall.corpus(13, 20, symbols=16, pairs=4, gap=3, queries=3)
+    rebound, rebound_targets = recall.rebind_values((tokens, targets), symbols=16, pairs=4, gap=3, queries=3)
+    assert torch.equal(tokens[:, :8:2], rebound[:, :8:2])
+    assert torch.equal(tokens[:, 8:], rebound[:, 8:])
+    assert torch.equal(tokens[:, 1:8:2].sort(dim=1).values, rebound[:, 1:8:2].sort(dim=1).values)
+    assert (targets != rebound_targets).any()
+    for row, expected in zip(rebound.tolist(), rebound_targets.tolist()):
+        mapping = dict(zip(row[:8:2], [value - 16 for value in row[1:8:2]]))
+        assert [mapping[key] for key in row[12::2]] == expected
+
+
+def test_uniform_scale_and_shared_trust_change_one_control_at_a_time():
+    model = recall.RecallTransformer(symbols=16, pairs=4, gap=3, queries=3, width=24, layers=2, heads=3).cpu()
+    optimizers = [recall.optimizer_for(model, mode, 0.003)
+                  for mode in ("tiger-fixed-qkv", "tiger-uniform-qkv", "tiger-global-trust")]
+    groups = [next(g for g in opt.param_groups if g["block_tag"] == "attn_qkv") for opt in optimizers]
+    assert groups[0]["qkv_lr_scales"] == {"q": 0.9, "k": 0.8, "v": 1.1}
+    assert groups[1]["qkv_lr_scales"] == groups[2]["qkv_lr_scales"] == {"q": 1.0, "k": 1.0, "v": 1.0}
+    assert groups[0]["qkv_trust_split"] and groups[1]["qkv_trust_split"]
+    assert not groups[2]["qkv_trust_split"]
+    assert all(not opt.defaults["qkv_lr_autoadapt"] and not opt.defaults["qkv_spectral_adapt"] for opt in optimizers)

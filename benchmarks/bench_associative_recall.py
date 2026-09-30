@@ -26,7 +26,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from tiger_optim import Tiger, build_tagged_param_groups
 
-MODES = ("adamw", "tiger-full", "tiger-no-spectral", "tiger-fixed-qkv")
+MODES = ("adamw", "tiger-full", "tiger-no-spectral", "tiger-fixed-qkv",
+         "tiger-uniform-qkv", "tiger-global-trust")
 
 
 def corpus(seed, count, *, symbols, pairs, gap, queries):
@@ -41,6 +42,19 @@ def corpus(seed, count, *, symbols, pairs, gap, queries):
     tokens[:, 2 * pairs + gap::2] = 2 * symbols + 1
     tokens[:, 2 * pairs + gap + 1::2] = keys.gather(1, selected)
     return tokens, values.gather(1, selected)
+
+
+def rebind_values(data, *, symbols, pairs, gap, queries):
+    """Rotate context values while preserving keys, queries and the value bag."""
+    tokens, _ = data
+    rebound = tokens.clone()
+    values = tokens[:, 1:2 * pairs:2] - symbols
+    rotated = values.roll(1, dims=1)
+    rebound[:, 1:2 * pairs:2] = rotated + symbols
+    keys = tokens[:, :2 * pairs:2]
+    query_keys = tokens[:, 2 * pairs + gap + 1::2]
+    selected = (query_keys[:, :, None] == keys[:, None, :]).long().argmax(dim=-1)
+    return rebound, rotated.gather(1, selected)
 
 
 class Block(nn.Module):
@@ -91,6 +105,8 @@ def tensor_hash(items):
 
 
 def optimizer_for(model, mode, lr):
+    if mode not in MODES:
+        raise ValueError("unknown optimizer mode: " + mode)
     if mode == "adamw":
         return torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.0)
     groups = build_tagged_param_groups(model, base_lr=lr, base_wd=0.0)
@@ -101,10 +117,14 @@ def optimizer_for(model, mode, lr):
     expected = {id(block.qkv.weight) for block in model.blocks}
     if set(qkv["qkv_rules"]) != expected or set(map(id, qkv["params"])) != expected:
         raise RuntimeError("every block must have exactly one tagged fused QKV weight")
+    if mode in ("tiger-uniform-qkv", "tiger-global-trust"):
+        qkv["qkv_lr_scales"] = {key: 1.0 for key in ("q", "k", "v")}
+    if mode == "tiger-global-trust":
+        qkv["qkv_trust_split"] = False
     return Tiger(
         groups, lr=lr, weight_decay=0.0, trust_space="precond", trust_clip=5.0,
         update_buffer_dtype="fp32", auto_lr=False, auto_blend=False,
-        lora_cross_adapt=False, qkv_lr_autoadapt=mode != "tiger-fixed-qkv",
+        lora_cross_adapt=False, qkv_lr_autoadapt=mode in ("tiger-full", "tiger-no-spectral"),
         qkv_spectral_adapt=mode == "tiger-full", qkv_lr_interval=25,
     )
 
@@ -137,6 +157,13 @@ def git(*args):
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def sync(device):
+    if device.type == "cuda":
+        torch.cuda.synchronize()
+    elif device.type == "mps":
+        torch.mps.synchronize()
+
+
 def run(args):
     torch.set_default_device("cpu")
     torch.set_num_threads(args.cpu_threads)
@@ -157,24 +184,38 @@ def run(args):
     if not args.development:
         datasets["test"] = corpus(args.seed + 30000, args.test_size, **data_config)
     hashes = {name: tensor_hash(zip(("tokens", "targets"), data)) for name, data in datasets.items()}
+    rebound_name = "validation" if args.development else "test"
+    rebound = rebind_values(datasets[rebound_name], **data_config)
+    hashes[rebound_name + "_rebound"] = tensor_hash(zip(("tokens", "targets"), rebound))
     torch.manual_seed(args.seed)
     model = RecallTransformer(**model_config)
     initial_hash = tensor_hash(model.state_dict().items())
     model.to(device)
     datasets = {name: tuple(part.to(device) for part in data) for name, data in datasets.items()}
+    rebound = tuple(part.to(device) for part in rebound)
     optimizer = optimizer_for(model, args.mode, args.lr)
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda step: lr_factor(step, args.steps))
     qkv = next((g for g in optimizer.param_groups if g.get("block_tag") == "attn_qkv"), None)
+    controls = None if qkv is None else {
+        "qkv_lr_autoadapt": optimizer.defaults["qkv_lr_autoadapt"],
+        "qkv_spectral_adapt": optimizer.defaults["qkv_spectral_adapt"],
+        "qkv_trust_split": qkv["qkv_trust_split"],
+        "initial_qkv_scales": dict(qkv["qkv_lr_scales"]),
+        "qkv_lr_interval": optimizer.defaults["qkv_lr_interval"],
+        "qkv_lr_gain": optimizer.defaults["qkv_lr_gain"],
+        "trust_space": qkv["trust_space"], "trust_clip": qkv["trust_clip"],
+    }
     source_paths = [Path(__file__), *sorted((ROOT / "src/tiger_optim").rglob("*.py"))]
     result = {
-        "schema": 1, "status": "running", "config": {k: v.name if isinstance(v, Path) else v for k, v in vars(args).items()},
+        "schema": 2, "status": "running", "config": {k: v.name if isinstance(v, Path) else v for k, v in vars(args).items()},
         "model": model_config, "parameter_count": sum(p.numel() for p in model.parameters()),
         "git": {"head": git("rev-parse", "HEAD"), "status": git("status", "--porcelain")},
         "source_sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in source_paths},
         "environment": {"python": platform.python_version(), "torch": torch.__version__,
-                        "cuda": torch.version.cuda, "device": torch.cuda.get_device_name() if device.type == "cuda" else "cpu",
+                        "cuda": torch.version.cuda, "device": torch.cuda.get_device_name() if device.type == "cuda" else device.type,
                         "precision": args.precision, "cpu_threads": args.cpu_threads, "tf32": False},
         "initial_state_sha256": initial_hash, "data_sha256": hashes,
+        "optimizer_controls": controls,
         "evaluations": [], "steps": [],
     }
 
@@ -192,7 +233,11 @@ def run(args):
                 if not math.isfinite(score["ce"]):
                     raise FloatingPointError("nonfinite validation loss")
                 scales = dict(qkv["qkv_lr_scales"]) if qkv is not None else None
-                result["evaluations"].append({"step": completed, "validation": score, "qkv_scales": scales})
+                feedback = None if qkv is None else {key: optimizer._last_metrics.get(key) for key in (
+                    "qkv_disp", "qkv_gamma_eff", "qkv_freq_factor", "qkv_phase_boost", "qkv_step_clip_eff",
+                )}
+                result["evaluations"].append({"step": completed, "validation": score,
+                                               "qkv_scales": scales, "qkv_feedback": feedback})
                 save()
                 print(json.dumps({"mode": args.mode, "seed": args.seed, "step": completed, **score}), flush=True)
             if completed == args.steps:
@@ -200,8 +245,7 @@ def run(args):
             model.train()
             start = completed * args.batch_size
             tokens, targets = (part[start:start + args.batch_size] for part in datasets["train"])
-            if device.type == "cuda":
-                torch.cuda.synchronize()
+            sync(device)
             began = time.perf_counter()
             optimizer.zero_grad(set_to_none=True)
             with autocast():
@@ -214,8 +258,7 @@ def run(args):
             lr = optimizer.param_groups[0]["lr"]
             optimizer.step()
             scheduler.step()
-            if device.type == "cuda":
-                torch.cuda.synchronize()
+            sync(device)
             elapsed = time.perf_counter() - began
             train_seconds += elapsed
             result["steps"].append({"step": completed + 1, "loss": loss.item(), "lr": lr,
@@ -226,6 +269,14 @@ def run(args):
             result["test"] = evaluate(model, datasets["test"], args.batch_size, autocast)
             if not math.isfinite(result["test"]["ce"]):
                 raise FloatingPointError("nonfinite test loss")
+        result["binding_check"] = {
+            "split": rebound_name,
+            "rebound": evaluate(model, rebound, args.batch_size, autocast),
+            "old_targets": evaluate(model, (rebound[0], datasets[rebound_name][1]), args.batch_size, autocast),
+            "changed_target_fraction": (rebound[1] != datasets[rebound_name][1]).float().mean().item(),
+        }
+        if not all(math.isfinite(result["binding_check"][key]["ce"]) for key in ("rebound", "old_targets")):
+            raise FloatingPointError("nonfinite binding-check loss")
         result["final_state_sha256"] = tensor_hash(model.state_dict().items())
         result["train_seconds"] = train_seconds
         result["peak_cuda_bytes"] = torch.cuda.max_memory_allocated() if device.type == "cuda" else None
@@ -245,7 +296,7 @@ def run(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=MODES, required=True)
-    parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
+    parser.add_argument("--device", choices=("cpu", "cuda", "mps"), default="cuda")
     parser.add_argument("--precision", choices=("fp32", "bf16"), default="bf16")
     parser.add_argument("--lr", type=float, required=True)
     parser.add_argument("--seed", type=int, required=True)

@@ -114,6 +114,10 @@ leave QKV adaptation enabled and set only `qkv_spectral_adapt=False`.
 
 The default cadence is 25 updates with gain 0.02. Increasing cadence and gain
 did not consistently improve the [matched Mac probe](benchmarks/evidence/2026-09-30-qkv-learning/README.md).
+The [learnable Mac retrieval control](benchmarks/evidence/2026-10-01-mac-qkv-ablation/README.md)
+separates fixed scales, adaptive slice LR, spectral feedback and slice trust.
+At its frozen LR, asymmetric scales rescue two failed uniform-scale runs;
+spectral feedback worsens final test CE in all three confirmation seeds.
 
 ### Schedule and resume
 
@@ -188,6 +192,13 @@ See the [benchmark guide](benchmarks/README.md) for runnable protocols and the
 archive. Open questions include whether spectral QKV feedback improves held-out
 learning and whether LoRA controls help actual adapter training.
 
+- [Mac QKV component ablation](benchmarks/evidence/2026-10-01-mac-qkv-ablation/README.md):
+  102,912-parameter short retrieval control, six configurations, three paired
+  confirmation seeds, and an MPS replay. Full QKV averages 99.76% original and
+  99.87% rebound test accuracy; AdamW reaches 100% on both. Fixed slice scales
+  have the largest observed component effect at the shared LR. Spectral
+  feedback improves sampled validation CE but worsens final test CE in all
+  three seeds. This is a learnable synthetic control with binding checks.
 - [Mac causal Transformer](benchmarks/evidence/2026-09-27-toy-transformer-learning/README.md):
   learning and schedule checks on a short periodic-copy task.
 - [QKV control audit](benchmarks/evidence/2026-09-30-qkv-learning/README.md):
@@ -198,8 +209,8 @@ learning and whether LoRA controls help actual adapter training.
   Tiger full averaged 7.59% test accuracy and AdamW 8.55%; both underperformed
   a query-independent context baseline (12.42%). Spectral feedback showed no
   consistent gain. A separate 5000-update AdamW diagnostic also failed to
-  establish retrieval mastery. This is a stress probe awaiting a successful
-  learning control, not evidence of optimizer superiority.
+  establish retrieval mastery. This harder stress task still needs a successful
+  learning control before it can assess an optimizer's retrieval advantage.
 
 Historical timing notes without raw receipts have been removed from this
 README. Tracked experiments remain in the archive so source revisions,
