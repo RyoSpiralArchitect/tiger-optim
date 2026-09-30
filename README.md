@@ -98,6 +98,22 @@ opt.step()
 LoRA/QKV adaptation and scalarless foreach options in this repository execute
 when enabled; this public build has no license-based no-op path for them.
 
+For fused QKV parameters, the learning rate of each slice is
+`group["lr"] * group["lr_scale"] * group["qkv_lr_scales"].get(slice, 1.0)`
+before trust and RMS clipping. This lets one group control scale Q, K, and V
+together while QKV adaptation adjusts their individual multipliers:
+
+```python
+groups = build_tagged_param_groups(
+    model, base_lr=3e-4,
+    tag_overrides={"attn_qkv": {"lr_scale": 0.5}},
+)
+```
+
+A staged `lr_scale` update follows the same rule after `reflect_pending()`.
+A zero group scale stops parameter changes (including weight decay), while
+moment estimates and adaptation counters continue to advance.
+
 ### Reporting loss and resuming training
 
 The plateau-based `auto_lr` and `auto_blend` controls act only after the training

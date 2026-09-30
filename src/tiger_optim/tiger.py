@@ -1359,7 +1359,14 @@ class Tiger(Optimizer):
                                 torch.chunk(preview_value, parts, dim=dim),
                                 torch.chunk(preview_d, parts, dim=dim),
                             )):
-                                effective_lr = lr * float(qkv_lr.get(("q", "k", "v")[i], lr_scale)) if qkv_lr is not None and i < 3 else lr * lr_scale
+                                effective_lr = lr * lr_scale
+                                if qkv_lr is not None and i < 3:
+                                    effective_lr *= float(qkv_lr.get(("q", "k", "v")[i], 1.0))
+                                # add_'s FP32 alpha conversion can raise before
+                                # the tensor finite checks see an oversized LR.
+                                if not math.isfinite(effective_lr) or abs(effective_lr) > torch.finfo(torch.float32).max:
+                                    checks.append(torch.zeros_like(scalar_zero, dtype=torch.bool))
+                                    continue
                                 candidate.add_(direction.to(torch.float32) * (preview_trusts[i] * preview_clip), alpha=-effective_lr)
                         else:
                             unstandardized = preview_d.to(torch.float32) * (preview_trust() * preview_clip) * (lr * lr_scale)
@@ -1403,7 +1410,7 @@ class Tiger(Optimizer):
                         route_lrs = [abs(lr * lr_scale)]
                         qkv_route = qkv_rules.get(id(p)) is not None and (qkv_lr is not None or (qkv_split and use_trust))
                         if qkv_route and qkv_lr is not None:
-                            route_lrs.extend(abs(lr * float(qkv_lr.get(key, lr_scale))) for key in ("q", "k", "v"))
+                            route_lrs.extend(abs(lr * lr_scale * float(qkv_lr.get(key, 1.0))) for key in ("q", "k", "v"))
                         route_lr = max(route_lrs) if all(math.isfinite(value) for value in route_lrs) else math.inf
                         scaled_direction_bound = direction_max * trust_growth
                         raw_update_bound = scaled_direction_bound * route_lr
@@ -1624,7 +1631,8 @@ class Tiger(Optimizer):
                             tr = chunk_trust_t[i]
                             eff_lr = base_lr
                             if qkv_lr is not None and i < len(keys):
-                                eff_lr = lr * float(qkv_lr.get(keys[i], lr_scale))
+                                # Group controls and adaptive slice controls compose.
+                                eff_lr = base_lr * float(qkv_lr.get(keys[i], 1.0))
                             low_raw_t = high_raw_t = phase_raw_t = None
                             if collect_qkv_spectral and i < len(keys):
                                 low_raw_t, high_raw_t, phase_raw_t = spectral_by_chunk[i]
