@@ -1,0 +1,47 @@
+{
+  "plan_sha256": "57ff20c57ac7ca983e5da08580e905921f6d6e4643cccb1c5533fc47f2e6e813",
+  "selected": {
+    "adamw": {
+      "candidates": [
+        {
+          "lr": 0.0003,
+          "ce": 0.6478157341480255,
+          "qualified": false
+        },
+        {
+          "lr": 0.001,
+          "ce": 0.0031141103827394545,
+          "qualified": true
+        },
+        {
+          "lr": 0.003,
+          "ce": 0.0006512730615213513,
+          "qualified": true
+        }
+      ],
+      "lr": 0.003,
+      "qualified": true
+    },
+    "tiger-full": {
+      "candidates": [
+        {
+          "lr": 0.001,
+          "ce": 0.03273752721401024,
+          "qualified": true
+        },
+        {
+          "lr": 0.003,
+          "ce": 0.019096085300560617,
+          "qualified": true
+        },
+        {
+          "lr": 0.01,
+          "ce": 2.46743506193161,
+          "qualified": false
+        }
+      ],
+      "lr": 0.003,
+      "qualified": true
+    }
+  }
+}

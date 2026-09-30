@@ -3,14 +3,16 @@
 ## Current learning protocol: associative recall
 
 [`bench_associative_recall.py`](bench_associative_recall.py) trains a causal
-Transformer to answer four queries about 16 key/value pairs across a 64-token
-gap. Training examples are generated independently for each update. Answers
+Transformer to answer queries about key/value pairs. Training examples are
+generated independently for each update. Answers
 never appear in the query suffix. This is synthetic retrieval, not language
 modeling.
 
-Defaults: four layers, width 192, six heads, batch 64, 1000 updates. CUDA uses
-BF16 autocast with FP32 parameters and optimizer buffers. The four modes
-`adamw`, `tiger-full`, `tiger-no-spectral`, and `tiger-fixed-qkv` share model/data
+Defaults: 16 pairs, 64 symbols, a 64-token gap, four queries, four layers,
+width 192, six heads, batch 64, 1000 updates. CUDA uses BF16 autocast with FP32
+parameters and optimizer buffers; CPU and MPS use FP32. The six modes
+`adamw`, `tiger-full`, `tiger-no-spectral`, `tiger-fixed-qkv`,
+`tiger-uniform-qkv`, and `tiger-global-trust` share model/data
 seeds, gradient clipping, and a warmup/cosine schedule. Tiger retains its tag
 scales and trust recipe; the AdamW row is a configured reference. FFN asymmetry
 and LoRA cross-adaptation are disabled to isolate the QKV comparison.
@@ -28,11 +30,40 @@ never creates or evaluates test data. Confirmation evaluates test data once
 after training. A [frozen plan and results](evidence/2026-09-30-cuda-recall/README.md)
 record the procedure. Runs store input/source hashes, complete update and
 validation traces, final test scores, and an explicit completion status.
-Timing includes synchronization and safety checks; it is diagnostic.
+Schema 2 additionally records actual QKV controls/feedback and a final binding
+check: rotate context values while preserving the value bag, keys and queries,
+then evaluate the new correct answers and obsolete original answers. Development
+uses validation for this check; confirmation uses test. Timing includes device
+synchronization and safety checks; it is diagnostic.
 
-The archived recipes did not beat a query-independent context baseline, even
-with a separate extended AdamW diagnostic. Treat this as a stress probe; a
-successful learning control is still needed before using it to assess an
+### Learnable Mac control
+
+The [Mac QKV ablation](evidence/2026-10-01-mac-qkv-ablation/README.md) uses four
+pairs, 16 symbols, no gap and a 102,912-parameter Transformer. A separate LR
+search qualifies learning with original/rebound accuracy and low obsolete-answer
+accuracy, then locks rates for three new paired seeds and six configurations.
+The component chain separates spectral feedback, adaptive slice LR, fixed
+slice scales and separate versus shared trust within a fused QKV tensor.
+
+```sh
+python benchmarks/evidence/2026-10-01-mac-qkv-ablation/run_suite.py \
+  --phase development --output-dir benchmarks/results/mac-qkv-fresh
+python benchmarks/evidence/2026-10-01-mac-qkv-ablation/run_suite.py \
+  --phase confirmation --output-dir benchmarks/results/mac-qkv-fresh
+```
+
+Full QKV averages 99.76% original and 99.87% rebound test accuracy. AdamW
+reaches 100% on both. Asymmetric fixed scales rescue two uniform-scale failures
+at the shared LR; spectral feedback worsens final test CE in all three seeds.
+This is a conditional component comparison; ablations are not separately tuned.
+A supplementary full-QKV replay also learns the binding task on MPS.
+
+### Harder CUDA stress task
+
+The [Sep 30 CUDA recipes](evidence/2026-09-30-cuda-recall/README.md) did not beat
+a query-independent context baseline, even with a separate extended AdamW
+diagnostic. The shorter Mac control does not establish mastery of that harder
+task, which still needs a successful learning control before it can assess an
 optimizer's retrieval advantage.
 
 ## Other tools
@@ -53,6 +84,7 @@ file per mode/device and does not estimate variation across runs.
 
 | Record | Scope |
 | --- | --- |
+| [Mac QKV ablation, Oct 1](evidence/2026-10-01-mac-qkv-ablation/README.md) | Learnable retrieval, binding checks, six component controls and MPS replay |
 | [CUDA recall, Sep 30](evidence/2026-09-30-cuda-recall/README.md) | Larger retrieval task and QKV ablations |
 | [QKV learning, Sep 30](evidence/2026-09-30-qkv-learning/README.md) | Group-scale correctness and rejected stronger adaptation |
 | [Toy Transformer, Sep 27](evidence/2026-09-27-toy-transformer-learning/README.md) | Periodic-copy learning and tail schedule |

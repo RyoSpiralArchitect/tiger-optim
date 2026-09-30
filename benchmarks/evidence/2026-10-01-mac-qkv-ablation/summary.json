@@ -1,0 +1,556 @@
+{
+  "source_commit": "5253d2d06d7a612f3dbc37e5c7fd84fd3c529e75",
+  "parameter_count": 102912,
+  "environment": {
+    "python": "3.12.6",
+    "torch": "2.12.1",
+    "cuda": null,
+    "device": "cpu",
+    "precision": "fp32",
+    "cpu_threads": 2,
+    "tf32": false
+  },
+  "development": {
+    "adamw": {
+      "candidates": [
+        {
+          "lr": 0.0003,
+          "ce": 0.6478157341480255,
+          "qualified": false
+        },
+        {
+          "lr": 0.001,
+          "ce": 0.0031141103827394545,
+          "qualified": true
+        },
+        {
+          "lr": 0.003,
+          "ce": 0.0006512730615213513,
+          "qualified": true
+        }
+      ],
+      "lr": 0.003,
+      "qualified": true
+    },
+    "tiger-full": {
+      "candidates": [
+        {
+          "lr": 0.001,
+          "ce": 0.03273752721401024,
+          "qualified": true
+        },
+        {
+          "lr": 0.003,
+          "ce": 0.019096085300560617,
+          "qualified": true
+        },
+        {
+          "lr": 0.01,
+          "ce": 2.46743506193161,
+          "qualified": false
+        }
+      ],
+      "lr": 0.003,
+      "qualified": true
+    }
+  },
+  "confirmation": [
+    {
+      "seed": 421,
+      "context_mode_accuracy": 0.33154296875,
+      "changed_target_fraction": 0.93798828125,
+      "modes": {
+        "adamw": {
+          "test": {
+            "ce": 0.0026799240804393776,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.0026496676364331506,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.06201171875,
+          "sampled_validation_ce_mean": 0.7281937958602308,
+          "first_sampled_step_at_90_percent": 600,
+          "final_qkv_scales": null
+        },
+        "tiger-full": {
+          "test": {
+            "ce": 0.012417860542736747,
+            "accuracy": 0.99755859375,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.029079277609285414,
+            "accuracy": 0.998046875,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.0615234375,
+          "sampled_validation_ce_mean": 0.4873172456956474,
+          "first_sampled_step_at_90_percent": 350,
+          "final_qkv_scales": {
+            "q": 0.8980878018490803,
+            "k": 0.8056823426549762,
+            "v": 1.0804871539242555
+          }
+        },
+        "tiger-no-spectral": {
+          "test": {
+            "ce": 0.001412580589047252,
+            "accuracy": 0.99951171875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.0046095772984457994,
+            "accuracy": 0.99951171875,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.0615234375,
+          "sampled_validation_ce_mean": 0.48924923126229913,
+          "first_sampled_step_at_90_percent": 350,
+          "final_qkv_scales": {
+            "q": 0.8979705225570453,
+            "k": 0.8051426012628317,
+            "v": 1.0781143305788943
+          }
+        },
+        "tiger-fixed-qkv": {
+          "test": {
+            "ce": 4.556277003953113e-05,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 9.502721214360577e-06,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.06201171875,
+          "sampled_validation_ce_mean": 0.49719637821240276,
+          "first_sampled_step_at_90_percent": 350,
+          "final_qkv_scales": {
+            "q": 0.9,
+            "k": 0.8,
+            "v": 1.1
+          }
+        },
+        "tiger-uniform-qkv": {
+          "test": {
+            "ce": 1.360299788415432,
+            "accuracy": 0.298828125,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 1.359793160110712,
+            "accuracy": 0.294921875,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.30126953125,
+          "sampled_validation_ce_mean": 1.5769619395335515,
+          "first_sampled_step_at_90_percent": null,
+          "final_qkv_scales": {
+            "q": 1.0,
+            "k": 1.0,
+            "v": 1.0
+          }
+        },
+        "tiger-global-trust": {
+          "test": {
+            "ce": 1.3604202456772327,
+            "accuracy": 0.29345703125,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 1.368857003748417,
+            "accuracy": 0.30224609375,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.28759765625,
+          "sampled_validation_ce_mean": 1.5920280410597722,
+          "first_sampled_step_at_90_percent": null,
+          "final_qkv_scales": {
+            "q": 1.0,
+            "k": 1.0,
+            "v": 1.0
+          }
+        }
+      }
+    },
+    {
+      "seed": 431,
+      "context_mode_accuracy": 0.337890625,
+      "changed_target_fraction": 0.9306640625,
+      "modes": {
+        "adamw": {
+          "test": {
+            "ce": 0.0006538660327350954,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.0006544841362483567,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.0693359375,
+          "sampled_validation_ce_mean": 0.2489916217919017,
+          "first_sampled_step_at_90_percent": 200,
+          "final_qkv_scales": null
+        },
+        "tiger-full": {
+          "test": {
+            "ce": 0.018998258907966914,
+            "accuracy": 0.9970703125,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.008137682104568,
+            "accuracy": 0.9990234375,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.0693359375,
+          "sampled_validation_ce_mean": 0.4121067240614682,
+          "first_sampled_step_at_90_percent": 300,
+          "final_qkv_scales": {
+            "q": 0.8978390247733645,
+            "k": 0.807658504396917,
+            "v": 1.0816573013907356
+          }
+        },
+        "tiger-no-spectral": {
+          "test": {
+            "ce": 0.00027154263581508076,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 2.527371661642519e-05,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.0693359375,
+          "sampled_validation_ce_mean": 0.43033872582509974,
+          "first_sampled_step_at_90_percent": 300,
+          "final_qkv_scales": {
+            "q": 0.8973033121487037,
+            "k": 0.8064181928079917,
+            "v": 1.080857339575898
+          }
+        },
+        "tiger-fixed-qkv": {
+          "test": {
+            "ce": 0.006185072272384851,
+            "accuracy": 0.99853515625,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.021392114368268267,
+            "accuracy": 0.9970703125,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.07080078125,
+          "sampled_validation_ce_mean": 0.3926354117465665,
+          "first_sampled_step_at_90_percent": 300,
+          "final_qkv_scales": {
+            "q": 0.9,
+            "k": 0.8,
+            "v": 1.1
+          }
+        },
+        "tiger-uniform-qkv": {
+          "test": {
+            "ce": 0.00012274848432980434,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.0001747814571899653,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.0693359375,
+          "sampled_validation_ce_mean": 0.39184895208443987,
+          "first_sampled_step_at_90_percent": 300,
+          "final_qkv_scales": {
+            "q": 1.0,
+            "k": 1.0,
+            "v": 1.0
+          }
+        },
+        "tiger-global-trust": {
+          "test": {
+            "ce": 0.0016276434589883593,
+            "accuracy": 0.9990234375,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.00048281977558417566,
+            "accuracy": 0.99951171875,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.0693359375,
+          "sampled_validation_ce_mean": 0.42356406155296494,
+          "first_sampled_step_at_90_percent": 300,
+          "final_qkv_scales": {
+            "q": 1.0,
+            "k": 1.0,
+            "v": 1.0
+          }
+        }
+      }
+    },
+    {
+      "seed": 443,
+      "context_mode_accuracy": 0.35302734375,
+      "changed_target_fraction": 0.93505859375,
+      "modes": {
+        "adamw": {
+          "test": {
+            "ce": 0.0012223477133375127,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.0012406555797497276,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.06494140625,
+          "sampled_validation_ce_mean": 0.4846392968726529,
+          "first_sampled_step_at_90_percent": 400,
+          "final_qkv_scales": null
+        },
+        "tiger-full": {
+          "test": {
+            "ce": 0.01466294658729339,
+            "accuracy": 0.998046875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.01739024685463164,
+            "accuracy": 0.9990234375,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.06591796875,
+          "sampled_validation_ce_mean": 0.8848578877219969,
+          "first_sampled_step_at_90_percent": 700,
+          "final_qkv_scales": {
+            "q": 0.898298934611921,
+            "k": 0.8041734516775789,
+            "v": 1.082188066927649
+          }
+        },
+        "tiger-no-spectral": {
+          "test": {
+            "ce": 0.007238672151288483,
+            "accuracy": 0.998046875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.0040638183768351155,
+            "accuracy": 0.99853515625,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.06494140625,
+          "sampled_validation_ce_mean": 0.9491343803503772,
+          "first_sampled_step_at_90_percent": 800,
+          "final_qkv_scales": {
+            "q": 0.8970685046151072,
+            "k": 0.803308479093242,
+            "v": 1.0832248184496232
+          }
+        },
+        "tiger-fixed-qkv": {
+          "test": {
+            "ce": 0.016071577262209757,
+            "accuracy": 0.9951171875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.01129908770963084,
+            "accuracy": 0.99755859375,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.06591796875,
+          "sampled_validation_ce_mean": 1.0695973619005297,
+          "first_sampled_step_at_90_percent": 900,
+          "final_qkv_scales": {
+            "q": 0.9,
+            "k": 0.8,
+            "v": 1.1
+          }
+        },
+        "tiger-uniform-qkv": {
+          "test": {
+            "ce": 1.3590782098472118,
+            "accuracy": 0.29150390625,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 1.3516941964626312,
+            "accuracy": 0.31298828125,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.29150390625,
+          "sampled_validation_ce_mean": 1.582020916044712,
+          "first_sampled_step_at_90_percent": null,
+          "final_qkv_scales": {
+            "q": 1.0,
+            "k": 1.0,
+            "v": 1.0
+          }
+        },
+        "tiger-global-trust": {
+          "test": {
+            "ce": 1.3663302697241306,
+            "accuracy": 0.29296875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 1.359570387750864,
+            "accuracy": 0.27880859375,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.29052734375,
+          "sampled_validation_ce_mean": 1.6051610317081213,
+          "first_sampled_step_at_90_percent": null,
+          "final_qkv_scales": {
+            "q": 1.0,
+            "k": 1.0,
+            "v": 1.0
+          }
+        }
+      }
+    }
+  ],
+  "aggregate": {
+    "adamw": {
+      "test_ce_mean": 0.0015187126088373286,
+      "test_accuracy_mean": 1.0,
+      "rebound_accuracy_mean": 1.0
+    },
+    "tiger-full": {
+      "test_ce_mean": 0.01535968867933235,
+      "test_accuracy_mean": 0.99755859375,
+      "rebound_accuracy_mean": 0.9986979166666666
+    },
+    "tiger-no-spectral": {
+      "test_ce_mean": 0.002974265125383605,
+      "test_accuracy_mean": 0.9991861979166666,
+      "rebound_accuracy_mean": 0.9993489583333334
+    },
+    "tiger-fixed-qkv": {
+      "test_ce_mean": 0.00743407076821138,
+      "test_accuracy_mean": 0.9978841145833334,
+      "rebound_accuracy_mean": 0.9982096354166666
+    },
+    "tiger-uniform-qkv": {
+      "test_ce_mean": 0.9065002489156578,
+      "test_accuracy_mean": 0.5301106770833334,
+      "rebound_accuracy_mean": 0.5359700520833334
+    },
+    "tiger-global-trust": {
+      "test_ce_mean": 0.9094593862867839,
+      "test_accuracy_mean": 0.5284830729166666,
+      "rebound_accuracy_mean": 0.52685546875
+    }
+  },
+  "contrasts": {
+    "spectral": {
+      "control": "tiger-no-spectral",
+      "feature": "tiger-full",
+      "test_ce_delta_by_seed": [
+        0.011005279953689495,
+        0.018726716272151833,
+        0.007424274436004907
+      ],
+      "mean_test_ce_delta": 0.012385423553948746,
+      "seeds_with_lower_test_ce": 0,
+      "sampled_validation_ce_mean_delta_by_seed": [
+        -0.0019319855666517505,
+        -0.018232001763631545,
+        -0.06427649262838031
+      ]
+    },
+    "adaptive_slice_lr": {
+      "control": "tiger-fixed-qkv",
+      "feature": "tiger-no-spectral",
+      "test_ce_delta_by_seed": [
+        0.001367017819007721,
+        -0.00591352963656977,
+        -0.008832905110921274
+      ],
+      "mean_test_ce_delta": -0.004459805642827774,
+      "seeds_with_lower_test_ce": 2,
+      "sampled_validation_ce_mean_delta_by_seed": [
+        -0.007947146950103623,
+        0.03770331407853322,
+        -0.12046298155015245
+      ]
+    },
+    "fixed_slice_scales": {
+      "control": "tiger-uniform-qkv",
+      "feature": "tiger-fixed-qkv",
+      "test_ce_delta_by_seed": [
+        -1.3602542256453924,
+        0.006062323788055046,
+        -1.343006632585002
+      ],
+      "mean_test_ce_delta": -0.8990661781474465,
+      "seeds_with_lower_test_ce": 2,
+      "sampled_validation_ce_mean_delta_by_seed": [
+        -1.0797655613211488,
+        0.0007864596621266484,
+        -0.5124235541441824
+      ]
+    },
+    "separate_slice_trust": {
+      "control": "tiger-global-trust",
+      "feature": "tiger-uniform-qkv",
+      "test_ce_delta_by_seed": [
+        -0.00012045726180076599,
+        -0.001504894974658555,
+        -0.007252059876918793
+      ],
+      "mean_test_ce_delta": -0.002959137371126038,
+      "seeds_with_lower_test_ce": 3,
+      "sampled_validation_ce_mean_delta_by_seed": [
+        -0.015066101526220788,
+        -0.03171510946852507,
+        -0.023140115663409233
+      ]
+    }
+  },
+  "context_mode_accuracy_mean": 0.3408203125,
+  "input_contexts_disjoint": true,
+  "scope": "short synthetic retrieval, frozen rates, three paired confirmation seeds; no general optimizer or wall-clock speed claim",
+  "mps_replay": {
+    "seed": 421,
+    "test": {
+      "ce": 0.00770283603281019,
+      "accuracy": 0.9990234375,
+      "queries": 2048
+    },
+    "binding_check": {
+      "split": "test",
+      "rebound": {
+        "ce": 0.0005395341348841676,
+        "accuracy": 0.99951171875,
+        "queries": 2048
+      },
+      "old_targets": {
+        "ce": 28.127150535583496,
+        "accuracy": 0.06201171875,
+        "queries": 2048
+      },
+      "changed_target_fraction": 0.93798828125
+    },
+    "cpu_test": {
+      "ce": 0.012417860542736747,
+      "accuracy": 0.99755859375,
+      "queries": 2048
+    }
+  }
+}
