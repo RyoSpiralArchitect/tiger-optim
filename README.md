@@ -118,6 +118,12 @@ The [learnable Mac retrieval control](benchmarks/evidence/2026-10-01-mac-qkv-abl
 separates fixed scales, adaptive slice LR, spectral feedback and slice trust.
 At its frozen LR, asymmetric scales rescue two failed uniform-scale runs;
 spectral feedback worsens final test CE in all three confirmation seeds.
+The [mean-scale follow-up](benchmarks/evidence/2026-10-01-qkv-scale-factorial/README.md)
+shows that lowering the mean multiplier also rescues a uniform-scale run.
+With [physical QKV RMS matched each step](benchmarks/evidence/2026-10-01-qkv-rms-matched/README.md),
+asymmetric allocation improves final CE in three of five new seeds, with a
+mean gain driven by one seed. These results keep allocation and magnitude
+effects separately observable.
 
 ### Schedule and resume
 
@@ -192,6 +198,13 @@ See the [benchmark guide](benchmarks/README.md) for runnable protocols and the
 archive. Open questions include whether spectral QKV feedback improves held-out
 learning and whether LoRA controls help actual adapter training.
 
+- [Matched QKV magnitude](benchmarks/evidence/2026-10-01-qkv-rms-matched/README.md):
+  a 2×2 [allocation/mean-scale factorial](benchmarks/evidence/2026-10-01-qkv-scale-factorial/README.md)
+  followed by five additional seeds with equal physical QKV RMS every step.
+  In the factorial, low-mean recipes pass binding in 4/5 seeds and unit-mean
+  recipes in 3/5, for both allocations. Under physical RMS matching, asymmetric
+  allocation lowers CE in 3/5 seeds; both arms pass binding in 5/5. The earlier
+  fixed-versus-uniform result combines allocation with a lower mean LR scale.
 - [Mac QKV component ablation](benchmarks/evidence/2026-10-01-mac-qkv-ablation/README.md):
   102,912-parameter short retrieval control, six configurations, three paired
   confirmation seeds, and an MPS replay. Full QKV averages 99.76% original and
@@ -230,7 +243,7 @@ python benchmarks/bench_associative_recall.py \
 ```
 
 Use a fresh output path: the learning benchmark refuses to overwrite results.
-CI checks Python 3.9/3.12, tests, learning smoke, wheel/sdist builds, and the
+CI checks Python 3.9/3.12, tests, learning/RMS matching smoke, wheel/sdist builds, and the
 installed wheel. Device-specific checks skip when unavailable.
 
 ## License

@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "date": "2026-10-01",
+  "source_commit": "2e331c969c45058ec3740ee1fbc512140b63abd9",
+  "parent_commit": "50f1e7abf026804dd050c41fce47e54acfa21851",
+  "raw_count": 15,
+  "compression": "gzip mtime=0; original decompressed bytes preserved",
+  "source_state": "Protocol and source frozen before running; every measured checkout clean; all cases retained",
+  "decompressed_raw_sha256": {
+    "raw/reference-uniform-521.json.gz": "e78933580382dfc2a73e7c2539e4d90685b6669a8a2b1faf456dfc874a529fa4",
+    "raw/matched-uniform-521.json.gz": "5d5124de38fb45792045c21141fe6c3cd855352f068ef8d37494c94f16363299",
+    "raw/matched-asymmetric-521.json.gz": "e003f8dbad5f822f8b748486aa8561b1d58e86da16d7373829fdad6c2014c14b",
+    "raw/reference-uniform-523.json.gz": "2eebaf283d66e6931ddf97f75133ac50916b635b25fa5355b09954aeb16da4a6",
+    "raw/matched-uniform-523.json.gz": "a33baba883dc18ece3f0e0ec61e5ed9e64fa9a3dcdf5635f0b98ea9d50f5fd2f",
+    "raw/matched-asymmetric-523.json.gz": "5346f5eeb275a6523aa67a0e8cc688fccae37f4204b89206e1a81cfaef4dc726",
+    "raw/reference-uniform-541.json.gz": "a217ef9b647ce051e76d2fec040f72fe05bad5bafb3532ccc1d97ab536ff433b",
+    "raw/matched-uniform-541.json.gz": "fbca6a2d0e6684af9042a1b231bdf7c72419a76dfde188f46a182aa52ff60b37",
+    "raw/matched-asymmetric-541.json.gz": "db240fd33db2971495cb4fe10b4a2585478762dfed84a0021b0c0562435b681e",
+    "raw/reference-uniform-547.json.gz": "17f3cbe6fb8a6a050fd7123a48890a5a218ab1096d947d161e9f3ca4259095f9",
+    "raw/matched-uniform-547.json.gz": "6a4d9254556b807ee912a8a1d37f3c967e5458449a9cf3a6943b4fac4faf7abd",
+    "raw/matched-asymmetric-547.json.gz": "ce7e94ad27cb9688f217fd108dc8e0e979c400157acb364d79d6306e7aad4de8",
+    "raw/reference-uniform-557.json.gz": "8302979bc248ce9892c9ba58db8945f840f0734432b419033b7c8453a2cfe470",
+    "raw/matched-uniform-557.json.gz": "0b945f8e1b9930d30d77de437f1be63e818eec3a705e82277189e61f926e6575",
+    "raw/matched-asymmetric-557.json.gz": "f0fa117e184fbe9cb40a5af0460f06b2f78be8758d15a4c514ee360e7c7f15fe"
+  }
+}
