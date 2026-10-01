@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-01",
+  "purpose": "Compare asymmetric QKV allocation with equal applied QKV update RMS at every step",
+  "parent_evidence": "2026-10-01-qkv-scale-factorial",
+  "motivation": "The completed mean-scale factorial recorded 16 to 35 percent larger mean applied RMS under asymmetric allocation, despite equal arithmetic mean LR scales; a new intervention and new seeds are needed for matching actual QKV update magnitude",
+  "model": {"symbols": 16, "pairs": 4, "gap": 0, "queries": 2, "width": 64, "layers": 2, "heads": 4},
+  "batch_size": 32,
+  "steps": 1200,
+  "eval_interval": 50,
+  "eval_size": 256,
+  "test_size": 1024,
+  "device": "cpu",
+  "precision": "fp32",
+  "cpu_threads": 2,
+  "lr": 0.003,
+  "seeds": [521, 523, 541, 547, 557],
+  "recipes": {
+    "reference-uniform": {"mode": "tiger-uniform-qkv", "scales": {"q": 1.0, "k": 1.0, "v": 1.0}, "rms_match": false},
+    "matched-uniform": {"mode": "tiger-uniform-qkv", "scales": {"q": 1.0, "k": 1.0, "v": 1.0}, "rms_match": true},
+    "matched-asymmetric": {"mode": "tiger-normalized-qkv", "scales": {"q": 0.9642857142857143, "k": 0.8571428571428571, "v": 1.1785714285714286}, "rms_match": true}
+  },
+  "reference": "For each seed, run ordinary uniform QKV first and freeze its training-update RMS trace. Both matched arms follow these same targets and use the same post-step rescaling wrapper; reference test outcomes are never used to select targets or exclude a seed",
+  "intervention": "After the ordinary Tiger step, multiply all QKV parameter deltas by one shared scalar equal to target combined RMS divided by candidate combined RMS. Other parameters and optimizer moment state are not rewritten. Direction is preserved up to FP32 rounding",
+  "match_tolerance": 0.001,
+  "primary_metric": "Final original-test CE after 1200 updates; paired matched-asymmetric-minus-matched-uniform deltas",
+  "secondary_metrics": ["original and rebound accuracy", "obsolete-target accuracy", "binding gate pass count", "sampled validation CE mean", "first sampled step at 90 percent validation accuracy", "maximum per-step RMS relative error and candidate rescale-factor traces", "reference-uniform versus matched-uniform numerical replay"],
+  "binding_gate": "original and rebound accuracy at least 90 percent and obsolete-target accuracy at most 20 percent; all failures retained",
+  "controls": "Identical model initialization/data/batch order/LR traces per paired seed; mean LR scales one; slice trust on; LR/spectral adaptation off; other Tiger settings inherited; all five seeds are new",
+  "interpretation": "An experimental QKV magnitude intervention tied to each uniform reference trajectory, not ordinary unconstrained Tiger or a generally recommended optimizer; non-QKV physical update magnitudes are not constrained",
+  "timing": "Diagnostic only; dependent reference order and uncontrolled Mac load prevent speed conclusions"
+}
