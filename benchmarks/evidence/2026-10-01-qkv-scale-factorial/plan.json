@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-01",
+  "purpose": "Separate asymmetric QKV allocation from arithmetic mean LR multiplier on the learnable Mac binding task",
+  "parent_evidence": "2026-10-01-mac-qkv-ablation",
+  "model": {"symbols": 16, "pairs": 4, "gap": 0, "queries": 2, "width": 64, "layers": 2, "heads": 4},
+  "batch_size": 32,
+  "steps": 1200,
+  "eval_interval": 50,
+  "eval_size": 256,
+  "test_size": 1024,
+  "device": "cpu",
+  "precision": "fp32",
+  "cpu_threads": 2,
+  "measure_qkv_updates": true,
+  "lr": 0.003,
+  "lr_source": "Selected on development seed 401 in parent experiment; fixed before this experiment; no new tuning or best-checkpoint selection",
+  "seeds": [461, 479, 487, 499, 503],
+  "cells": {
+    "tiger-fixed-qkv": {"allocation": "asymmetric", "mean_scale": 0.9333333333333333, "scales": {"q": 0.9, "k": 0.8, "v": 1.1}},
+    "tiger-normalized-qkv": {"allocation": "asymmetric", "mean_scale": 1.0, "scales": {"q": 0.9642857142857143, "k": 0.8571428571428571, "v": 1.1785714285714286}},
+    "tiger-uniform-low-qkv": {"allocation": "uniform", "mean_scale": 0.9333333333333333, "scales": {"q": 0.9333333333333333, "k": 0.9333333333333333, "v": 0.9333333333333333}},
+    "tiger-uniform-qkv": {"allocation": "uniform", "mean_scale": 1.0, "scales": {"q": 1.0, "k": 1.0, "v": 1.0}}
+  },
+  "contrasts": {
+    "allocation_at_low_mean": ["tiger-uniform-low-qkv", "tiger-fixed-qkv"],
+    "allocation_at_unit_mean": ["tiger-uniform-qkv", "tiger-normalized-qkv"],
+    "mean_increase_under_uniform": ["tiger-uniform-low-qkv", "tiger-uniform-qkv"],
+    "mean_increase_under_asymmetric": ["tiger-fixed-qkv", "tiger-normalized-qkv"]
+  },
+  "primary_metric": "Final original-test CE after exactly 1200 updates; paired feature-minus-control deltas at each factor level",
+  "secondary_metrics": ["original and rebound accuracy", "obsolete-target accuracy", "sampled validation CE mean over updates 50 through 1200", "first sampled update at 90 percent validation accuracy", "per-slice and combined applied QKV update RMS"],
+  "binding_gate": "original and rebound accuracy at least 90 percent and obsolete-target accuracy at most 20 percent; gate failures are retained, not excluded",
+  "controls": "identical initialization/data/batch order/LR traces per seed; slice trust on; LR and spectral adaptation off; all other Tiger settings unchanged",
+  "measurement": "Every update records actual post-optimizer-minus-pre-optimizer QKV parameter deltas. Per-slice RMS pools all layers; combined RMS pools all QKV entries. Equal mean LR multipliers do not guarantee equal applied update RMS after trust/clipping or divergent gradients",
+  "mps_replay": {"seed": 461, "modes": ["tiger-normalized-qkv", "tiger-uniform-qkv"], "purpose": "Supplementary first-seed replay of the unit-mean allocation contrast after the CPU study; no device parity or speed claim"},
+  "interpretation": "Conditional factorial effects on this short synthetic task and inherited LR; no general optimizer or LoRA claim",
+  "timing": "Diagnostic only; host load uncontrolled and update measurement adds overhead"
+}

@@ -10,9 +10,10 @@ modeling.
 
 Defaults: 16 pairs, 64 symbols, a 64-token gap, four queries, four layers,
 width 192, six heads, batch 64, 1000 updates. CUDA uses BF16 autocast with FP32
-parameters and optimizer buffers; CPU and MPS use FP32. The six modes
+parameters and optimizer buffers; CPU and MPS use FP32. The eight modes
 `adamw`, `tiger-full`, `tiger-no-spectral`, `tiger-fixed-qkv`,
-`tiger-uniform-qkv`, and `tiger-global-trust` share model/data
+`tiger-uniform-qkv`, `tiger-global-trust`, `tiger-normalized-qkv`, and
+`tiger-uniform-low-qkv` share model/data
 seeds, gradient clipping, and a warmup/cosine schedule. Tiger retains its tag
 scales and trust recipe; the AdamW row is a configured reference. FFN asymmetry
 and LoRA cross-adaptation are disabled to isolate the QKV comparison.
@@ -58,6 +59,36 @@ at the shared LR; spectral feedback worsens final test CE in all three seeds.
 This is a conditional component comparison; ablations are not separately tuned.
 A supplementary full-QKV replay also learns the binding task on MPS.
 
+### Separate allocation from update magnitude
+
+The [mean-scale factorial](evidence/2026-10-01-qkv-scale-factorial/README.md)
+compares asymmetric/uniform allocation at arithmetic mean multipliers 14/15
+and 1, using five new seeds and the inherited LR. Both low-mean cells pass
+binding in 4/5 seeds; both unit-mean cells pass in 3/5. The opt-in
+`--measure-qkv-updates` records actual per-slice and combined parameter-delta
+RMS after every optimizer step. At equal coefficient means, asymmetric runs
+still have larger mean applied RMS along their trajectories.
+
+The [physical RMS study](evidence/2026-10-01-qkv-rms-matched/README.md) then uses
+five more seeds with a reference-derived QKV RMS budget at every step. Both
+comparison arms use `--qkv-rms-reference`, which rescales actual QKV deltas
+after the ordinary Tiger step. It is an experimental benchmark intervention;
+optimizer moments and non-QKV parameters are not rewritten. A completed
+uniform reference with matching inputs/source is required. Both matched arms
+pass binding in all five seeds; asymmetric allocation lowers final CE in 3/5,
+with the favorable mean largely driven by one seed. Ordinary and matched
+uniform trajectories differ numerically, so the primary control also uses
+the wrapper.
+
+```sh
+python benchmarks/evidence/2026-10-01-qkv-rms-matched/run_suite.py \
+  --output-dir benchmarks/results/qkv-rms-fresh
+```
+
+Schema 3 receipts add measured applied deltas; schema 4 adds reference
+provenance and per-step candidate/target/applied RMS and rescale factors.
+The source commits and protocols are frozen separately for the two studies.
+
 ### Harder CUDA stress task
 
 The [Sep 30 CUDA recipes](evidence/2026-09-30-cuda-recall/README.md) did not beat
@@ -84,6 +115,8 @@ file per mode/device and does not estimate variation across runs.
 
 | Record | Scope |
 | --- | --- |
+| [Matched QKV RMS, Oct 1](evidence/2026-10-01-qkv-rms-matched/README.md) | Five new seeds with equal applied QKV magnitude and a common rescaling control |
+| [QKV mean-scale factorial, Oct 1](evidence/2026-10-01-qkv-scale-factorial/README.md) | Allocation versus coefficient mean, actual update traces and negative MPS replay |
 | [Mac QKV ablation, Oct 1](evidence/2026-10-01-mac-qkv-ablation/README.md) | Learnable retrieval, binding checks, six component controls and MPS replay |
 | [CUDA recall, Sep 30](evidence/2026-09-30-cuda-recall/README.md) | Larger retrieval task and QKV ablations |
 | [QKV learning, Sep 30](evidence/2026-09-30-qkv-learning/README.md) | Group-scale correctness and rejected stronger adaptation |

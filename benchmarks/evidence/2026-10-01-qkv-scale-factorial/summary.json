@@ -1,0 +1,941 @@
+{
+  "source_commit": "5f541465d3ef3d837ec25d9b248fa9d6ec3020ca",
+  "environment": {
+    "python": "3.12.6",
+    "torch": "2.12.1",
+    "cuda": null,
+    "device": "cpu",
+    "precision": "fp32",
+    "cpu_threads": 2,
+    "tf32": false
+  },
+  "parameter_count": 102912,
+  "confirmation": [
+    {
+      "seed": 461,
+      "context_mode_accuracy": 0.33642578125,
+      "changed_target_fraction": 0.939453125,
+      "modes": {
+        "tiger-fixed-qkv": {
+          "test": {
+            "ce": 0.00817272991218232,
+            "accuracy": 0.99755859375,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.024738333037291227,
+            "accuracy": 0.99853515625,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.06201171875,
+          "binding_gate_passed": true,
+          "sampled_validation_ce_mean": 0.5954578896745902,
+          "first_sampled_step_at_90_percent": 450,
+          "applied_update": {
+            "combined_rms_mean": 0.000995638081243063,
+            "slice_rms_mean": {
+              "q": 0.0007331217471964162,
+              "k": 0.0005729586517675974,
+              "v": 0.0014424898452864454
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 3.991697212768486e-06,
+                "k": 3.5788184504781384e-06,
+                "v": 4.789470494870329e-06
+              },
+              "combined_rms": 4.15052636526525e-06
+            }
+          }
+        },
+        "tiger-normalized-qkv": {
+          "test": {
+            "ce": 1.34782575070858,
+            "accuracy": 0.30078125,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 1.3428558371961117,
+            "accuracy": 0.3203125,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.29736328125,
+          "binding_gate_passed": false,
+          "sampled_validation_ce_mean": 1.5661805849522352,
+          "first_sampled_step_at_90_percent": null,
+          "applied_update": {
+            "combined_rms_mean": 0.001014436399754004,
+            "slice_rms_mean": {
+              "q": 0.0007150196252306766,
+              "k": 0.0005407247448590624,
+              "v": 0.0015004006857797473
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.276823347026948e-06,
+                "k": 3.83441647500149e-06,
+                "v": 5.1315760174475145e-06
+              },
+              "combined_rms": 4.446985713002505e-06
+            }
+          }
+        },
+        "tiger-uniform-low-qkv": {
+          "test": {
+            "ce": 0.002092585368359323,
+            "accuracy": 0.99951171875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.0007973453059548774,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.060546875,
+          "binding_gate_passed": true,
+          "sampled_validation_ce_mean": 0.7171138076470905,
+          "first_sampled_step_at_90_percent": 550,
+          "applied_update": {
+            "combined_rms_mean": 0.0007754519892262124,
+            "slice_rms_mean": {
+              "q": 0.0007256623609365912,
+              "k": 0.0006986905961514367,
+              "v": 0.0008854482373082343
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.139526026847307e-06,
+                "k": 4.175264166406123e-06,
+                "v": 4.063785127073061e-06
+              },
+              "combined_rms": 4.1264534047513735e-06
+            }
+          }
+        },
+        "tiger-uniform-qkv": {
+          "test": {
+            "ce": 1.3443100601434708,
+            "accuracy": 0.30810546875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 1.3294688239693642,
+            "accuracy": 0.3154296875,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.3115234375,
+          "binding_gate_passed": false,
+          "sampled_validation_ce_mean": 1.5615195476760466,
+          "first_sampled_step_at_90_percent": null,
+          "applied_update": {
+            "combined_rms_mean": 0.0007870204835865025,
+            "slice_rms_mean": {
+              "q": 0.000755918599090819,
+              "k": 0.0006919700806630165,
+              "v": 0.0008968381930799296
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.4352273107506335e-06,
+                "k": 4.473492936085677e-06,
+                "v": 4.354033990239259e-06
+              },
+              "combined_rms": 4.421198809723137e-06
+            }
+          }
+        }
+      }
+    },
+    {
+      "seed": 479,
+      "context_mode_accuracy": 0.3330078125,
+      "changed_target_fraction": 0.9365234375,
+      "modes": {
+        "tiger-fixed-qkv": {
+          "test": {
+            "ce": 0.0035065322707978908,
+            "accuracy": 0.99951171875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.00011826005010284746,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.0634765625,
+          "binding_gate_passed": true,
+          "sampled_validation_ce_mean": 0.4358048101670313,
+          "first_sampled_step_at_90_percent": 300,
+          "applied_update": {
+            "combined_rms_mean": 0.0010888691180612872,
+            "slice_rms_mean": {
+              "q": 0.0007823205124285929,
+              "k": 0.0006035711040973032,
+              "v": 0.0015880062344168285
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.17248747908161e-06,
+                "k": 3.744715741049731e-06,
+                "v": 5.014179350837367e-06
+              },
+              "combined_rms": 4.3426002775959205e-06
+            }
+          }
+        },
+        "tiger-normalized-qkv": {
+          "test": {
+            "ce": 0.00013837446518039087,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.00020232653224638852,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.0634765625,
+          "binding_gate_passed": true,
+          "sampled_validation_ce_mean": 0.4553310488621231,
+          "first_sampled_step_at_90_percent": 300,
+          "applied_update": {
+            "combined_rms_mean": 0.0012572936147034852,
+            "slice_rms_mean": {
+              "q": 0.00091995956940688,
+              "k": 0.0006883374939908056,
+              "v": 0.0018330444612005674
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.470486601348966e-06,
+                "k": 4.012169029010693e-06,
+                "v": 5.372325631469721e-06
+              },
+              "combined_rms": 4.6527638914994895e-06
+            }
+          }
+        },
+        "tiger-uniform-low-qkv": {
+          "test": {
+            "ce": 0.02484501578896925,
+            "accuracy": 0.99560546875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.019763272521686304,
+            "accuracy": 0.998046875,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.064453125,
+          "binding_gate_passed": true,
+          "sampled_validation_ce_mean": 0.4680794460920102,
+          "first_sampled_step_at_90_percent": 300,
+          "applied_update": {
+            "combined_rms_mean": 0.0008673792482644179,
+            "slice_rms_mean": {
+              "q": 0.000819366771715219,
+              "k": 0.0008091042204390912,
+              "v": 0.0009599318785300663
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.327012902649585e-06,
+                "k": 4.368827376310946e-06,
+                "v": 4.254428858985193e-06
+              },
+              "combined_rms": 4.317014827392995e-06
+            }
+          }
+        },
+        "tiger-uniform-qkv": {
+          "test": {
+            "ce": 0.00982227412552561,
+            "accuracy": 0.998046875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.014318208746175287,
+            "accuracy": 0.998046875,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.064453125,
+          "binding_gate_passed": true,
+          "sampled_validation_ce_mean": 0.5065171963055803,
+          "first_sampled_step_at_90_percent": 350,
+          "applied_update": {
+            "combined_rms_mean": 0.0009904012822361588,
+            "slice_rms_mean": {
+              "q": 0.0009215933937033091,
+              "k": 0.0009092694576872873,
+              "v": 0.001118406385170374
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.636039193428587e-06,
+                "k": 4.680892288888572e-06,
+                "v": 4.5582987695524935e-06
+              },
+              "combined_rms": 4.625353994924808e-06
+            }
+          }
+        }
+      }
+    },
+    {
+      "seed": 487,
+      "context_mode_accuracy": 0.31494140625,
+      "changed_target_fraction": 0.94580078125,
+      "modes": {
+        "tiger-fixed-qkv": {
+          "test": {
+            "ce": 0.0002737948404849533,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 1.1128174854824202e-05,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.05419921875,
+          "binding_gate_passed": true,
+          "sampled_validation_ce_mean": 0.3527884134657891,
+          "first_sampled_step_at_90_percent": 250,
+          "applied_update": {
+            "combined_rms_mean": 0.0011618895609414419,
+            "slice_rms_mean": {
+              "q": 0.0007773361146322107,
+              "k": 0.0005917452301882046,
+              "v": 0.0017410212012517452
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.193872882751748e-06,
+                "k": 3.7694276215916034e-06,
+                "v": 5.1339748097234406e-06
+              },
+              "combined_rms": 4.402834747452289e-06
+            }
+          }
+        },
+        "tiger-normalized-qkv": {
+          "test": {
+            "ce": 0.010680241030463833,
+            "accuracy": 0.998046875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.008791753228676313,
+            "accuracy": 0.998046875,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.05419921875,
+          "binding_gate_passed": true,
+          "sampled_validation_ce_mean": 0.37180789071598097,
+          "first_sampled_step_at_90_percent": 250,
+          "applied_update": {
+            "combined_rms_mean": 0.0014456854633037135,
+            "slice_rms_mean": {
+              "q": 0.0009269161617953614,
+              "k": 0.0006801271058551113,
+              "v": 0.0022018174027562056
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.493451342568733e-06,
+                "k": 4.038654878968373e-06,
+                "v": 5.500710358319338e-06
+              },
+              "combined_rms": 4.717331648862455e-06
+            }
+          }
+        },
+        "tiger-uniform-low-qkv": {
+          "test": {
+            "ce": 0.004016363625245489,
+            "accuracy": 0.99951171875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.0014850912892221402,
+            "accuracy": 0.99951171875,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.05419921875,
+          "binding_gate_passed": true,
+          "sampled_validation_ce_mean": 0.37485346183358503,
+          "first_sampled_step_at_90_percent": 250,
+          "applied_update": {
+            "combined_rms_mean": 0.0008974404640017989,
+            "slice_rms_mean": {
+              "q": 0.0008322425461036194,
+              "k": 0.0008107868378757151,
+              "v": 0.0010254859039768387
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.349230039224494e-06,
+                "k": 4.397688371682307e-06,
+                "v": 4.3561062739172485e-06
+              },
+              "combined_rms": 4.367727342469152e-06
+            }
+          }
+        },
+        "tiger-uniform-qkv": {
+          "test": {
+            "ce": 0.01860845425356672,
+            "accuracy": 0.9970703125,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.0025008134763737644,
+            "accuracy": 0.99951171875,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.0546875,
+          "binding_gate_passed": true,
+          "sampled_validation_ce_mean": 0.38478048619835786,
+          "first_sampled_step_at_90_percent": 250,
+          "applied_update": {
+            "combined_rms_mean": 0.001073500619850923,
+            "slice_rms_mean": {
+              "q": 0.0009499235071048891,
+              "k": 0.0009320108686282916,
+              "v": 0.0012888321341665687
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.659878413804108e-06,
+                "k": 4.7117823669395875e-06,
+                "v": 4.6672830649185926e-06
+              },
+              "combined_rms": 4.6797040340607055e-06
+            }
+          }
+        }
+      }
+    },
+    {
+      "seed": 499,
+      "context_mode_accuracy": 0.328125,
+      "changed_target_fraction": 0.943359375,
+      "modes": {
+        "tiger-fixed-qkv": {
+          "test": {
+            "ce": 1.3376385048031807,
+            "accuracy": 0.3017578125,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 1.3193271644413471,
+            "accuracy": 0.33447265625,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.2978515625,
+          "binding_gate_passed": false,
+          "sampled_validation_ce_mean": 1.5655720805128415,
+          "first_sampled_step_at_90_percent": null,
+          "applied_update": {
+            "combined_rms_mean": 0.0007966480407556749,
+            "slice_rms_mean": {
+              "q": 0.0006241278836747218,
+              "k": 0.00048001867867355943,
+              "v": 0.0011264392371416914
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.057470960106002e-06,
+                "k": 3.6352844290377107e-06,
+                "v": 4.869808890362037e-06
+              },
+              "combined_rms": 4.2187439248664305e-06
+            }
+          }
+        },
+        "tiger-normalized-qkv": {
+          "test": {
+            "ce": 1.3519065417349339,
+            "accuracy": 0.29248046875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 1.3314394392073154,
+            "accuracy": 0.32177734375,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.28515625,
+          "binding_gate_passed": false,
+          "sampled_validation_ce_mean": 1.581009930620591,
+          "first_sampled_step_at_90_percent": null,
+          "applied_update": {
+            "combined_rms_mean": 0.0009226639009724143,
+            "slice_rms_mean": {
+              "q": 0.0006903089542553668,
+              "k": 0.0005235494461552056,
+              "v": 0.0013336540050511304
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.347262802184559e-06,
+                "k": 3.89494925912004e-06,
+                "v": 5.2176178542140406e-06
+              },
+              "combined_rms": 4.520061338553205e-06
+            }
+          }
+        },
+        "tiger-uniform-low-qkv": {
+          "test": {
+            "ce": 1.3491242416203022,
+            "accuracy": 0.29833984375,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 1.339313082396984,
+            "accuracy": 0.318359375,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.283203125,
+          "binding_gate_passed": false,
+          "sampled_validation_ce_mean": 1.5758188087493181,
+          "first_sampled_step_at_90_percent": null,
+          "applied_update": {
+            "combined_rms_mean": 0.0006749310164824844,
+            "slice_rms_mean": {
+              "q": 0.0006802001800349445,
+              "k": 0.0006209664511068998,
+              "v": 0.0007188247780743495
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.207710389891872e-06,
+                "k": 4.241150236339308e-06,
+                "v": 4.131967671128223e-06
+              },
+              "combined_rms": 4.19385833083652e-06
+            }
+          }
+        },
+        "tiger-uniform-qkv": {
+          "test": {
+            "ce": 1.3637532107532024,
+            "accuracy": 0.28515625,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 1.34576715528965,
+            "accuracy": 0.3232421875,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.2919921875,
+          "binding_gate_passed": false,
+          "sampled_validation_ce_mean": 1.5794864123066266,
+          "first_sampled_step_at_90_percent": null,
+          "applied_update": {
+            "combined_rms_mean": 0.0007982039986700329,
+            "slice_rms_mean": {
+              "q": 0.0008198724517020158,
+              "k": 0.0007290198222862425,
+              "v": 0.000839669928876295
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.50825473308214e-06,
+                "k": 4.5441479414876085e-06,
+                "v": 4.427100066095591e-06
+              },
+              "combined_rms": 4.493434062169399e-06
+            }
+          }
+        }
+      }
+    },
+    {
+      "seed": 503,
+      "context_mode_accuracy": 0.33837890625,
+      "changed_target_fraction": 0.94482421875,
+      "modes": {
+        "tiger-fixed-qkv": {
+          "test": {
+            "ce": 0.03025691525401797,
+            "accuracy": 0.9970703125,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.001292361251946872,
+            "accuracy": 0.99951171875,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.05517578125,
+          "binding_gate_passed": true,
+          "sampled_validation_ce_mean": 0.4023940478595264,
+          "first_sampled_step_at_90_percent": 300,
+          "applied_update": {
+            "combined_rms_mean": 0.0010660045444050561,
+            "slice_rms_mean": {
+              "q": 0.0007717894575516008,
+              "k": 0.0005997408923917646,
+              "v": 0.0015526814898445688
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 3.832176389551023e-06,
+                "k": 3.4217164284200408e-06,
+                "v": 4.587122930388432e-06
+              },
+              "combined_rms": 3.9764058783475775e-06
+            }
+          }
+        },
+        "tiger-normalized-qkv": {
+          "test": {
+            "ce": 7.362216791761966e-05,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.00010145750580647928,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.05517578125,
+          "binding_gate_passed": true,
+          "sampled_validation_ce_mean": 0.36994828326079937,
+          "first_sampled_step_at_90_percent": 250,
+          "applied_update": {
+            "combined_rms_mean": 0.001343161800366867,
+            "slice_rms_mean": {
+              "q": 0.0008905466622616132,
+              "k": 0.0006727854209200738,
+              "v": 0.002018681865470171
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.105947937205201e-06,
+                "k": 3.6661247122538043e-06,
+                "v": 4.914795681543183e-06
+              },
+              "combined_rms": 4.260457444615895e-06
+            }
+          }
+        },
+        "tiger-uniform-low-qkv": {
+          "test": {
+            "ce": 0.0014562666397424096,
+            "accuracy": 0.99951171875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 7.069207555332468e-05,
+            "accuracy": 1.0,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.05517578125,
+          "binding_gate_passed": true,
+          "sampled_validation_ce_mean": 0.4141096755512598,
+          "first_sampled_step_at_90_percent": 300,
+          "applied_update": {
+            "combined_rms_mean": 0.0008691667618696404,
+            "slice_rms_mean": {
+              "q": 0.000805887748921729,
+              "k": 0.0007849388740385166,
+              "v": 0.0009932523454358488
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 3.97413987229811e-06,
+                "k": 3.992000983998878e-06,
+                "v": 3.89209708373528e-06
+              },
+              "combined_rms": 3.952985480282223e-06
+            }
+          }
+        },
+        "tiger-uniform-qkv": {
+          "test": {
+            "ce": 0.021623280413550106,
+            "accuracy": 0.998046875,
+            "queries": 2048
+          },
+          "rebound": {
+            "ce": 0.008973957306281477,
+            "accuracy": 0.99853515625,
+            "queries": 2048
+          },
+          "old_target_accuracy": 0.0556640625,
+          "binding_gate_passed": true,
+          "sampled_validation_ce_mean": 0.4152160930301226,
+          "first_sampled_step_at_90_percent": 300,
+          "applied_update": {
+            "combined_rms_mean": 0.0010036144774339087,
+            "slice_rms_mean": {
+              "q": 0.0009132847764726648,
+              "k": 0.0009177649762652133,
+              "v": 0.0011536874296859878
+            },
+            "first_step": {
+              "rms_by_slice": {
+                "q": 4.258032276993617e-06,
+                "k": 4.277124389773235e-06,
+                "v": 4.170124611846404e-06
+              },
+              "combined_rms": 4.2353499338787515e-06
+            }
+          }
+        }
+      }
+    }
+  ],
+  "aggregate": {
+    "tiger-fixed-qkv": {
+      "test_ce_mean": 0.27596969541613275,
+      "test_accuracy_mean": 0.8591796875,
+      "rebound_accuracy_mean": 0.86650390625,
+      "binding_gate_pass_count": 4,
+      "sampled_validation_ce_mean": 0.6704034483359557,
+      "applied_combined_rms_mean": 0.0010218098690813046
+    },
+    "tiger-normalized-qkv": {
+      "test_ce_mean": 0.5421249060214152,
+      "test_accuracy_mean": 0.71826171875,
+      "rebound_accuracy_mean": 0.72802734375,
+      "binding_gate_pass_count": 3,
+      "sampled_validation_ce_mean": 0.868855547682346,
+      "applied_combined_rms_mean": 0.0011966482358200968
+    },
+    "tiger-uniform-low-qkv": {
+      "test_ce_mean": 0.27630689460852376,
+      "test_accuracy_mean": 0.85849609375,
+      "rebound_accuracy_mean": 0.86318359375,
+      "binding_gate_pass_count": 4,
+      "sampled_validation_ce_mean": 0.7099950399746527,
+      "applied_combined_rms_mean": 0.0008168738959689108
+    },
+    "tiger-uniform-qkv": {
+      "test_ce_mean": 0.5516234559378631,
+      "test_accuracy_mean": 0.71728515625,
+      "rebound_accuracy_mean": 0.726953125,
+      "binding_gate_pass_count": 3,
+      "sampled_validation_ce_mean": 0.8895039471033468,
+      "applied_combined_rms_mean": 0.0009305481723555052
+    }
+  },
+  "contrasts": {
+    "allocation_at_low_mean": {
+      "control": "tiger-uniform-low-qkv",
+      "feature": "tiger-fixed-qkv",
+      "test_ce_delta_by_seed": [
+        0.006080144543822996,
+        -0.02133848351817136,
+        -0.003742568784760536,
+        -0.011485736817121506,
+        0.02880064861427556
+      ],
+      "mean_test_ce_delta": -0.000337199192390969,
+      "seeds_with_lower_test_ce": 3,
+      "sampled_validation_ce_delta_by_seed": [
+        -0.1216559179725003,
+        -0.03227463592497887,
+        -0.022065048367795936,
+        -0.010246728236476654,
+        -0.011715627691733399
+      ],
+      "first_step_combined_rms_ratio_by_seed": [
+        1.005833813726373,
+        1.005926653306951,
+        1.0080379113049878,
+        1.00593381847139,
+        1.0059247366786894
+      ],
+      "mean_applied_combined_rms_ratio_by_seed": [
+        1.283945486085559,
+        1.2553552788357105,
+        1.2946703514575568,
+        1.180339947788352,
+        1.2264672225983464
+      ]
+    },
+    "allocation_at_unit_mean": {
+      "control": "tiger-uniform-qkv",
+      "feature": "tiger-normalized-qkv",
+      "test_ce_delta_by_seed": [
+        0.003515690565109253,
+        -0.009683899660345219,
+        -0.007928213223102887,
+        -0.011846669018268585,
+        -0.021549658245632486
+      ],
+      "mean_test_ce_delta": -0.009498549916447985,
+      "seeds_with_lower_test_ce": 4,
+      "sampled_validation_ce_delta_by_seed": [
+        0.0046610372761886065,
+        -0.05118614744345723,
+        -0.012972595482376892,
+        0.001523518313964356,
+        -0.04526780976932321
+      ],
+      "first_step_combined_rms_ratio_by_seed": [
+        1.0058325590838977,
+        1.0059260105507075,
+        1.008040597124921,
+        1.0059258188760314,
+        1.0059280841321534
+      ],
+      "mean_applied_combined_rms_ratio_by_seed": [
+        1.2889580651460972,
+        1.2694789851894461,
+        1.3467020293891174,
+        1.155924929604157,
+        1.3383244568184487
+      ]
+    },
+    "mean_increase_under_uniform": {
+      "control": "tiger-uniform-low-qkv",
+      "feature": "tiger-uniform-qkv",
+      "test_ce_delta_by_seed": [
+        1.3422174747751114,
+        -0.01502274166344364,
+        0.01459209062832123,
+        0.014628969132900238,
+        0.020167013773807696
+      ],
+      "mean_test_ce_delta": 0.2753165613293394,
+      "seeds_with_lower_test_ce": 1,
+      "sampled_validation_ce_delta_by_seed": [
+        0.8444057400289561,
+        0.038437750213570154,
+        0.00992702436477283,
+        0.003667603557308441,
+        0.0011064174788627534
+      ],
+      "first_step_combined_rms_ratio_by_seed": [
+        1.0714282644346307,
+        1.0714241622649268,
+        1.0714276938851195,
+        1.0714320102637147,
+        1.0714306832152516
+      ],
+      "mean_applied_combined_rms_ratio_by_seed": [
+        1.014918388915133,
+        1.1418318852081162,
+        1.1961803182620605,
+        1.182645306227007,
+        1.1546857536004502
+      ]
+    },
+    "mean_increase_under_asymmetric": {
+      "control": "tiger-fixed-qkv",
+      "feature": "tiger-normalized-qkv",
+      "test_ce_delta_by_seed": [
+        1.3396530207963977,
+        -0.0033681578056175,
+        0.01040644618997888,
+        0.014268036931753159,
+        -0.03018329308610035
+      ],
+      "mean_test_ce_delta": 0.26615521060528236,
+      "seeds_with_lower_test_ce": 2,
+      "sampled_validation_ce_delta_by_seed": [
+        0.970722695277645,
+        0.01952623869509179,
+        0.019019477250191874,
+        0.015437850107749451,
+        -0.032445764598727056
+      ],
+      "first_step_combined_rms_ratio_by_seed": [
+        1.0714269279718955,
+        1.0714234776577864,
+        1.0714305486010236,
+        1.071423489800063,
+        1.0714342486553101
+      ],
+      "mean_applied_combined_rms_ratio_by_seed": [
+        1.018880674479095,
+        1.1546783666177207,
+        1.2442537672275158,
+        1.1581826023160802,
+        1.259996317479579
+      ]
+    }
+  },
+  "test_ce_interaction_by_seed": [
+    -0.0025644539787137433,
+    0.01165458385782614,
+    -0.004185644438342351,
+    -0.00036093220114707947,
+    -0.050350306859908045
+  ],
+  "mean_test_ce_interaction": -0.009161350724057016,
+  "input_contexts_disjoint": true,
+  "mps_replay": {
+    "seed": 461,
+    "modes": {
+      "tiger-normalized-qkv": {
+        "test": {
+          "ce": 1.3444370739161968,
+          "accuracy": 0.3115234375,
+          "queries": 2048
+        },
+        "rebound": {
+          "ce": 1.3433430902659893,
+          "accuracy": 0.3232421875,
+          "queries": 2048
+        },
+        "old_target_accuracy": 0.30078125,
+        "binding_gate_passed": false,
+        "sampled_validation_ce_mean": 1.55721789970994,
+        "first_sampled_step_at_90_percent": null,
+        "applied_update": {
+          "combined_rms_mean": 0.0010147276132067872,
+          "slice_rms_mean": {
+            "q": 0.0007268423544371671,
+            "k": 0.0005458319570698223,
+            "v": 0.0014946679313068974
+          },
+          "first_step": {
+            "rms_by_slice": {
+              "q": 4.27681925430079e-06,
+              "k": 3.834419658232946e-06,
+              "v": 5.131578291184269e-06
+            },
+            "combined_rms": 4.446985713002505e-06
+          }
+        }
+      },
+      "tiger-uniform-qkv": {
+        "test": {
+          "ce": 1.3404072895646095,
+          "accuracy": 0.32177734375,
+          "queries": 2048
+        },
+        "rebound": {
+          "ce": 1.3360306024551392,
+          "accuracy": 0.30078125,
+          "queries": 2048
+        },
+        "old_target_accuracy": 0.32275390625,
+        "binding_gate_passed": false,
+        "sampled_validation_ce_mean": 1.5522641266385715,
+        "first_sampled_step_at_90_percent": null,
+        "applied_update": {
+          "combined_rms_mean": 0.0007965164405694243,
+          "slice_rms_mean": {
+            "q": 0.0007686640411164566,
+            "k": 0.0007049511619516125,
+            "v": 0.0009011674116735927
+          },
+          "first_step": {
+            "rms_by_slice": {
+              "q": 4.435222763277125e-06,
+              "k": 4.473495209822431e-06,
+              "v": 4.35403444498661e-06
+            },
+            "combined_rms": 4.421198354975786e-06
+          }
+        }
+      }
+    }
+  },
+  "scope": "five new paired seeds on a short synthetic task; arithmetic mean LR scales matched, actual update RMS observed rather than forced equal; inherited LR; no general optimizer claim"
+}

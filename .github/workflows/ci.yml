@@ -48,6 +48,20 @@ jobs:
             --gap 3 --queries 3 --batch-size 4 --eval-size 8 --test-size 8 \
             --output "$RUNNER_TEMP/tiger-recall.json"
 
+      - name: Exercise physical QKV RMS matching
+        run: |
+          python benchmarks/bench_associative_recall.py \
+            --device cpu --precision fp32 --mode tiger-uniform-qkv --lr 0.003 --seed 11 \
+            --steps 3 --width 24 --layers 2 --heads 3 --symbols 16 --pairs 4 \
+            --gap 3 --queries 3 --batch-size 4 --eval-size 8 --test-size 8 \
+            --measure-qkv-updates --output "$RUNNER_TEMP/tiger-qkv-reference.json"
+          python benchmarks/bench_associative_recall.py \
+            --device cpu --precision fp32 --mode tiger-normalized-qkv --lr 0.003 --seed 11 \
+            --steps 3 --width 24 --layers 2 --heads 3 --symbols 16 --pairs 4 \
+            --gap 3 --queries 3 --batch-size 4 --eval-size 8 --test-size 8 \
+            --measure-qkv-updates --qkv-rms-reference "$RUNNER_TEMP/tiger-qkv-reference.json" \
+            --output "$RUNNER_TEMP/tiger-qkv-matched.json"
+
       - name: Build source and wheel distributions
         run: |
           python -m pip install build

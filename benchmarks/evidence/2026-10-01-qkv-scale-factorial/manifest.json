@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "date": "2026-10-01",
+  "source_commit": "5f541465d3ef3d837ec25d9b248fa9d6ec3020ca",
+  "parent_commit": "0e7ed30eae33df39810fd0b6b45896a1c5a542b7",
+  "raw_counts": {
+    "cpu": 20,
+    "mps": 2
+  },
+  "compression": "gzip mtime=0; original decompressed bytes preserved",
+  "source_state": "All receipts complete, clean measured checkout; protocol frozen before running",
+  "decompressed_raw_sha256": {
+    "raw/cpu-tiger-fixed-qkv-461.json.gz": "73ae754798b11de4d7a6695d3438ac32d251fc5d502d2cf73d227b6ff717c92d",
+    "raw/cpu-tiger-normalized-qkv-461.json.gz": "f1a4916141c360efe43b74ded44bfcdf6adcec49fd0e4a608fac03a461b23a04",
+    "raw/cpu-tiger-uniform-low-qkv-461.json.gz": "bcb7d3a34fb25c1e6c7309ae5739041af3c39f37e5359566521d3f44782e021a",
+    "raw/cpu-tiger-uniform-qkv-461.json.gz": "0c9c5391d8fabbbb6272844397a79410b01532f1a24318f9254dba31ba0638f7",
+    "raw/cpu-tiger-normalized-qkv-479.json.gz": "a70f8939cd668abc4f58d074219e1e00a44462b288f56035ce620ed2451b08fb",
+    "raw/cpu-tiger-uniform-low-qkv-479.json.gz": "5737522544ef26ea94de77473f5527b2b141663014188b0b667df1ee5966a63d",
+    "raw/cpu-tiger-uniform-qkv-479.json.gz": "8f1f2c045cb86f39498a9e611566a001f1196d70be3324ab755309a81c078b55",
+    "raw/cpu-tiger-fixed-qkv-479.json.gz": "d6f8c167adae05e9e954858b5b59569f2139b4fd21ed2e4900d7971d33722345",
+    "raw/cpu-tiger-uniform-low-qkv-487.json.gz": "8c5244fb358d79bfc7b24af472edfede8d7e3f8c2044d61fe0590c4d73937ff0",
+    "raw/cpu-tiger-uniform-qkv-487.json.gz": "cd08cf4488999e1817478b101a94d9e9ca5fa60654a0f90861ff748e7a855689",
+    "raw/cpu-tiger-fixed-qkv-487.json.gz": "8edeb2972ec0e277b9ae6300b902554a653d5ecd017687c6e00b54b47f7da43d",
+    "raw/cpu-tiger-normalized-qkv-487.json.gz": "a8b6f0e24370858616e373abadb922effefdf9f69c185877b2c4e54c8e431d6e",
+    "raw/cpu-tiger-uniform-qkv-499.json.gz": "7dbf8afe96bef4f7ee4bdbdd4e6bf7494ed9132ea94052e488e0354f367cce0a",
+    "raw/cpu-tiger-fixed-qkv-499.json.gz": "5a48f999ba7dcf4701438574267b73beb750e9299dbfbe415db9df8282376006",
+    "raw/cpu-tiger-normalized-qkv-499.json.gz": "983de35cbe53baba0424a7e253ef956396edc4c64fd2c963ab36842109e72b5b",
+    "raw/cpu-tiger-uniform-low-qkv-499.json.gz": "54e6fdeec3d5a900d3f9795b4778f6fec1ff51829f6f4ddcf22385b684d7680b",
+    "raw/cpu-tiger-fixed-qkv-503.json.gz": "dd9b6afa835958b3cf525a349dd35366d60081ae830781665742431beace2fcc",
+    "raw/cpu-tiger-normalized-qkv-503.json.gz": "0fc15ce878f6992ed3e92ba8860d47e591ca11bf59f879a202ac1d5d9acae524",
+    "raw/cpu-tiger-uniform-low-qkv-503.json.gz": "bdf31a55c602a5151c0e072962d034dd3df44901d4279e0e2953b78477294250",
+    "raw/cpu-tiger-uniform-qkv-503.json.gz": "0b0e77eb0450c60dfa7ca325f8e550538dc8aec87c9e904afc58954081a8d016",
+    "raw/mps-tiger-normalized-qkv-461.json.gz": "3038f2cad403a6a4c24462ed5130217d1f1c8ebfb792857d6b04a0f87b286382",
+    "raw/mps-tiger-uniform-qkv-461.json.gz": "1e43b3a98d4d8b850c274a8ffbd494f2391d3bce59fe53d431f3bfa1e4361191"
+  }
+}

@@ -1,6 +1,7 @@
 """Check retrieval labels, causality, and the actual QKV ablation boundaries."""
 import importlib.util
 from pathlib import Path
+import math
 
 import torch
 
@@ -68,3 +69,37 @@ def test_uniform_scale_and_shared_trust_change_one_control_at_a_time():
     assert groups[0]["qkv_trust_split"] and groups[1]["qkv_trust_split"]
     assert not groups[2]["qkv_trust_split"]
     assert all(not opt.defaults["qkv_lr_autoadapt"] and not opt.defaults["qkv_spectral_adapt"] for opt in optimizers)
+
+
+def test_qkv_update_metrics_pool_applied_deltas_across_layers():
+    model = recall.RecallTransformer(symbols=16, pairs=4, gap=0, queries=2, width=6, layers=2, heads=2).cpu()
+    before = [torch.zeros_like(block.qkv.weight) for block in model.blocks]
+    with torch.no_grad():
+        for layer, block in enumerate(model.blocks):
+            for index, part in enumerate(block.qkv.weight.chunk(3, dim=0)):
+                part.fill_(3 * layer + index + 1)
+    after = [block.qkv.weight.detach().clone() for block in model.blocks]
+    metrics = recall.qkv_update_metrics(model, before)
+    for index, key in enumerate(("q", "k", "v")):
+        expected = math.sqrt(((index + 1) ** 2 + (index + 4) ** 2) / 2)
+        assert math.isclose(metrics["rms_by_slice"][key], expected, rel_tol=1e-6)
+    assert math.isclose(metrics["combined_rms"], math.sqrt(91 / 6), rel_tol=1e-6)
+    assert all(torch.equal(block.qkv.weight, saved) for block, saved in zip(model.blocks, after))
+
+
+def test_qkv_rms_matching_preserves_delta_direction_and_other_weights():
+    model = recall.RecallTransformer(symbols=16, pairs=4, gap=0, queries=2, width=6, layers=2, heads=2).cpu()
+    before = [block.qkv.weight.detach().clone() for block in model.blocks]
+    other = model.output.weight.detach().clone()
+    with torch.no_grad():
+        for layer, block in enumerate(model.blocks):
+            for index, part in enumerate(block.qkv.weight.chunk(3, dim=0)):
+                part.add_(3 * layer + index + 1)
+    candidate = [block.qkv.weight.detach().clone() for block in model.blocks]
+    target = recall.qkv_update_metrics(model, before)["combined_rms"] * 0.5
+    match = recall.match_qkv_update_rms(model, before, target)
+    assert math.isclose(match["applied_rms"], target, rel_tol=1e-6)
+    assert math.isclose(match["rescale_factor"], 0.5, rel_tol=1e-6)
+    for block, old, update in zip(model.blocks, before, candidate):
+        torch.testing.assert_close(block.qkv.weight - old, (update - old) * 0.5)
+    assert torch.equal(model.output.weight, other)

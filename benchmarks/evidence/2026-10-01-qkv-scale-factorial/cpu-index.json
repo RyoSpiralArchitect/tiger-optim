@@ -1,0 +1,86 @@
+{
+  "plan_sha256": "de017364ca75b03a0f113ae00474ec17a5feb7b7241691771cf16d82d42674fe",
+  "phase": "cpu",
+  "results": [
+    {
+      "file": "cpu-tiger-fixed-qkv-461.json",
+      "sha256": "73ae754798b11de4d7a6695d3438ac32d251fc5d502d2cf73d227b6ff717c92d"
+    },
+    {
+      "file": "cpu-tiger-normalized-qkv-461.json",
+      "sha256": "f1a4916141c360efe43b74ded44bfcdf6adcec49fd0e4a608fac03a461b23a04"
+    },
+    {
+      "file": "cpu-tiger-uniform-low-qkv-461.json",
+      "sha256": "bcb7d3a34fb25c1e6c7309ae5739041af3c39f37e5359566521d3f44782e021a"
+    },
+    {
+      "file": "cpu-tiger-uniform-qkv-461.json",
+      "sha256": "0c9c5391d8fabbbb6272844397a79410b01532f1a24318f9254dba31ba0638f7"
+    },
+    {
+      "file": "cpu-tiger-normalized-qkv-479.json",
+      "sha256": "a70f8939cd668abc4f58d074219e1e00a44462b288f56035ce620ed2451b08fb"
+    },
+    {
+      "file": "cpu-tiger-uniform-low-qkv-479.json",
+      "sha256": "5737522544ef26ea94de77473f5527b2b141663014188b0b667df1ee5966a63d"
+    },
+    {
+      "file": "cpu-tiger-uniform-qkv-479.json",
+      "sha256": "8f1f2c045cb86f39498a9e611566a001f1196d70be3324ab755309a81c078b55"
+    },
+    {
+      "file": "cpu-tiger-fixed-qkv-479.json",
+      "sha256": "d6f8c167adae05e9e954858b5b59569f2139b4fd21ed2e4900d7971d33722345"
+    },
+    {
+      "file": "cpu-tiger-uniform-low-qkv-487.json",
+      "sha256": "8c5244fb358d79bfc7b24af472edfede8d7e3f8c2044d61fe0590c4d73937ff0"
+    },
+    {
+      "file": "cpu-tiger-uniform-qkv-487.json",
+      "sha256": "cd08cf4488999e1817478b101a94d9e9ca5fa60654a0f90861ff748e7a855689"
+    },
+    {
+      "file": "cpu-tiger-fixed-qkv-487.json",
+      "sha256": "8edeb2972ec0e277b9ae6300b902554a653d5ecd017687c6e00b54b47f7da43d"
+    },
+    {
+      "file": "cpu-tiger-normalized-qkv-487.json",
+      "sha256": "a8b6f0e24370858616e373abadb922effefdf9f69c185877b2c4e54c8e431d6e"
+    },
+    {
+      "file": "cpu-tiger-uniform-qkv-499.json",
+      "sha256": "7dbf8afe96bef4f7ee4bdbdd4e6bf7494ed9132ea94052e488e0354f367cce0a"
+    },
+    {
+      "file": "cpu-tiger-fixed-qkv-499.json",
+      "sha256": "5a48f999ba7dcf4701438574267b73beb750e9299dbfbe415db9df8282376006"
+    },
+    {
+      "file": "cpu-tiger-normalized-qkv-499.json",
+      "sha256": "983de35cbe53baba0424a7e253ef956396edc4c64fd2c963ab36842109e72b5b"
+    },
+    {
+      "file": "cpu-tiger-uniform-low-qkv-499.json",
+      "sha256": "54e6fdeec3d5a900d3f9795b4778f6fec1ff51829f6f4ddcf22385b684d7680b"
+    },
+    {
+      "file": "cpu-tiger-fixed-qkv-503.json",
+      "sha256": "dd9b6afa835958b3cf525a349dd35366d60081ae830781665742431beace2fcc"
+    },
+    {
+      "file": "cpu-tiger-normalized-qkv-503.json",
+      "sha256": "0fc15ce878f6992ed3e92ba8860d47e591ca11bf59f879a202ac1d5d9acae524"
+    },
+    {
+      "file": "cpu-tiger-uniform-low-qkv-503.json",
+      "sha256": "bdf31a55c602a5151c0e072962d034dd3df44901d4279e0e2953b78477294250"
+    },
+    {
+      "file": "cpu-tiger-uniform-qkv-503.json",
+      "sha256": "0b0e77eb0450c60dfa7ca325f8e550538dc8aec87c9e904afc58954081a8d016"
+    }
+  ]
+}

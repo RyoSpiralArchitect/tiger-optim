@@ -27,7 +27,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from tiger_optim import Tiger, build_tagged_param_groups
 
 MODES = ("adamw", "tiger-full", "tiger-no-spectral", "tiger-fixed-qkv",
-         "tiger-uniform-qkv", "tiger-global-trust")
+         "tiger-uniform-qkv", "tiger-global-trust", "tiger-normalized-qkv",
+         "tiger-uniform-low-qkv")
 
 
 def corpus(seed, count, *, symbols, pairs, gap, queries):
@@ -119,6 +120,11 @@ def optimizer_for(model, mode, lr):
         raise RuntimeError("every block must have exactly one tagged fused QKV weight")
     if mode in ("tiger-uniform-qkv", "tiger-global-trust"):
         qkv["qkv_lr_scales"] = {key: 1.0 for key in ("q", "k", "v")}
+    elif mode == "tiger-normalized-qkv":
+        # Preserve 9:8:11 allocation with arithmetic mean exactly one.
+        qkv["qkv_lr_scales"] = {"q": 27 / 28, "k": 6 / 7, "v": 33 / 28}
+    elif mode == "tiger-uniform-low-qkv":
+        qkv["qkv_lr_scales"] = {key: 14 / 15 for key in ("q", "k", "v")}
     if mode == "tiger-global-trust":
         qkv["qkv_trust_split"] = False
     return Tiger(
@@ -164,6 +170,41 @@ def sync(device):
         torch.mps.synchronize()
 
 
+def qkv_update_metrics(model, before):
+    """RMS of actual parameter deltas, pooled over every layer by slice."""
+    squared = []
+    count = 0
+    with torch.no_grad():
+        for block, old in zip(model.blocks, before):
+            chunks = (block.qkv.weight.detach() - old).chunk(3, dim=0)
+            squared.append(torch.stack([part.float().square().sum() for part in chunks]))
+            count += chunks[0].numel()
+        means = torch.stack(squared).sum(dim=0) / count
+        values = means.sqrt().cpu().tolist()
+        combined = means.mean().sqrt().item()
+    return {"rms_by_slice": dict(zip(("q", "k", "v"), values)), "combined_rms": combined}
+
+
+def match_qkv_update_rms(model, before, target_rms):
+    """Experimental intervention: preserve QKV delta direction at a fixed RMS."""
+    if not math.isfinite(target_rms) or target_rms < 0:
+        raise ValueError("target QKV update RMS must be finite and nonnegative")
+    candidate = qkv_update_metrics(model, before)["combined_rms"]
+    if not math.isfinite(candidate) or (candidate == 0 and target_rms > 0):
+        raise FloatingPointError("cannot match target RMS from invalid/zero QKV update")
+    factor = target_rms / candidate if candidate > 0 else 1.0
+    with torch.no_grad():
+        for block, old in zip(model.blocks, before):
+            weight = block.qkv.weight
+            weight.copy_(old + (weight - old) * factor)
+    applied = qkv_update_metrics(model, before)["combined_rms"]
+    relative_error = abs(applied - target_rms) / target_rms if target_rms > 0 else abs(applied)
+    if not math.isfinite(relative_error) or relative_error > 1e-3:
+        raise FloatingPointError("applied QKV RMS did not match reference within 0.1 percent")
+    return {"target_rms": target_rms, "candidate_rms": candidate, "rescale_factor": factor,
+            "applied_rms": applied, "relative_error": relative_error}
+
+
 def run(args):
     torch.set_default_device("cpu")
     torch.set_num_threads(args.cpu_threads)
@@ -207,7 +248,7 @@ def run(args):
     }
     source_paths = [Path(__file__), *sorted((ROOT / "src/tiger_optim").rglob("*.py"))]
     result = {
-        "schema": 2, "status": "running", "config": {k: v.name if isinstance(v, Path) else v for k, v in vars(args).items()},
+        "schema": 4, "status": "running", "config": {k: v.name if isinstance(v, Path) else v for k, v in vars(args).items()},
         "model": model_config, "parameter_count": sum(p.numel() for p in model.parameters()),
         "git": {"head": git("rev-parse", "HEAD"), "status": git("status", "--porcelain")},
         "source_sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in source_paths},
@@ -216,6 +257,7 @@ def run(args):
                         "precision": args.precision, "cpu_threads": args.cpu_threads, "tf32": False},
         "initial_state_sha256": initial_hash, "data_sha256": hashes,
         "optimizer_controls": controls,
+        "qkv_rms_reference": None,
         "evaluations": [], "steps": [],
     }
 
@@ -227,6 +269,25 @@ def run(args):
     args.output.parent.mkdir(parents=True, exist_ok=True)
     train_seconds = 0.0
     try:
+        reference = None
+        if args.qkv_rms_reference:
+            reference_bytes = args.qkv_rms_reference.read_bytes()
+            reference = json.loads(reference_bytes)
+            if reference["status"] != "complete" or reference["config"]["mode"] != "tiger-uniform-qkv" or reference.get("qkv_rms_reference"):
+                raise ValueError("QKV RMS reference must be a completed ordinary uniform-QKV run")
+            for key in ("seed", "lr", "steps", "batch_size", "device", "precision", "cpu_threads"):
+                if reference["config"][key] != result["config"][key]:
+                    raise ValueError("QKV RMS reference config mismatch: " + key)
+            for key in ("model", "initial_state_sha256", "data_sha256", "source_sha256"):
+                if reference[key] != result[key]:
+                    raise ValueError("QKV RMS reference mismatch: " + key)
+            if [p["step"] for p in reference["steps"]] != list(range(1, args.steps + 1)):
+                raise ValueError("QKV RMS reference must include every training update")
+            if not all(math.isfinite(p["qkv_update"]["combined_rms"]) and p["qkv_update"]["combined_rms"] >= 0 for p in reference["steps"]):
+                raise ValueError("QKV RMS reference includes invalid update RMS")
+            result["qkv_rms_reference"] = {"sha256": hashlib.sha256(reference_bytes).hexdigest(),
+                                            "source_commit": reference["git"]["head"],
+                                            "mode": reference["config"]["mode"], "max_relative_tolerance": 1e-3}
         for completed in range(args.steps + 1):
             if completed % args.eval_interval == 0 or completed == args.steps:
                 score = evaluate(model, datasets["validation"], args.batch_size, autocast)
@@ -256,13 +317,20 @@ def run(args):
             if not math.isfinite(loss.item()):
                 raise FloatingPointError("nonfinite training loss")
             lr = optimizer.param_groups[0]["lr"]
+            before = [block.qkv.weight.detach().clone() for block in model.blocks] if args.measure_qkv_updates else None
             optimizer.step()
+            rms_match = match_qkv_update_rms(model, before, reference["steps"][completed]["qkv_update"]["combined_rms"]) if reference is not None else None
             scheduler.step()
             sync(device)
             elapsed = time.perf_counter() - began
             train_seconds += elapsed
-            result["steps"].append({"step": completed + 1, "loss": loss.item(), "lr": lr,
-                                    "grad_norm": grad_norm.item(), "seconds": elapsed})
+            point = {"step": completed + 1, "loss": loss.item(), "lr": lr,
+                     "grad_norm": grad_norm.item(), "seconds": elapsed}
+            if before is not None:
+                point["qkv_update"] = qkv_update_metrics(model, before)
+            if rms_match is not None:
+                point["qkv_rms_match"] = rms_match
+            result["steps"].append(point)
         if not all(torch.isfinite(p).all().item() for p in model.parameters()):
             raise FloatingPointError("nonfinite model parameters")
         if "test" in datasets:
@@ -305,6 +373,8 @@ def main():
                          ("eval-size", 512), ("test-size", 2048), ("eval-interval", 100), ("cpu-threads", 2)):
         parser.add_argument("--" + key, type=int, default=default)
     parser.add_argument("--development", action="store_true", help="evaluate validation only; never create test data")
+    parser.add_argument("--measure-qkv-updates", action="store_true", help="record actual QKV parameter delta RMS each update")
+    parser.add_argument("--qkv-rms-reference", type=Path, help="experimental fixed-QKV run: rescale actual QKV deltas to this matched uniform-run RMS trace")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path)
     args = parser.parse_args()
@@ -315,6 +385,8 @@ def main():
         parser.error("require gap >= 0, pairs <= symbols, and width divisible by heads")
     if not math.isfinite(args.lr) or args.lr <= 0:
         parser.error("lr must be positive and finite")
+    if args.qkv_rms_reference and (args.mode not in ("tiger-normalized-qkv", "tiger-uniform-qkv") or not args.measure_qkv_updates):
+        parser.error("QKV RMS matching requires normalized/uniform QKV and --measure-qkv-updates")
     if args.output.exists() or (args.checkpoint and args.checkpoint.exists()):
         parser.error("refusing to overwrite an existing result/checkpoint")
     if args.checkpoint and args.output.resolve() == args.checkpoint.resolve():
