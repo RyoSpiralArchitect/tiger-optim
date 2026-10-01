@@ -27,7 +27,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from tiger_optim import Tiger, build_tagged_param_groups
 
 MODES = ("adamw", "tiger-full", "tiger-no-spectral", "tiger-fixed-qkv",
-         "tiger-uniform-qkv", "tiger-global-trust")
+         "tiger-uniform-qkv", "tiger-global-trust", "tiger-normalized-qkv",
+         "tiger-uniform-low-qkv")
 
 
 def corpus(seed, count, *, symbols, pairs, gap, queries):
@@ -119,6 +120,11 @@ def optimizer_for(model, mode, lr):
         raise RuntimeError("every block must have exactly one tagged fused QKV weight")
     if mode in ("tiger-uniform-qkv", "tiger-global-trust"):
         qkv["qkv_lr_scales"] = {key: 1.0 for key in ("q", "k", "v")}
+    elif mode == "tiger-normalized-qkv":
+        # Preserve 9:8:11 allocation with arithmetic mean exactly one.
+        qkv["qkv_lr_scales"] = {"q": 27 / 28, "k": 6 / 7, "v": 33 / 28}
+    elif mode == "tiger-uniform-low-qkv":
+        qkv["qkv_lr_scales"] = {key: 14 / 15 for key in ("q", "k", "v")}
     if mode == "tiger-global-trust":
         qkv["qkv_trust_split"] = False
     return Tiger(
@@ -164,6 +170,21 @@ def sync(device):
         torch.mps.synchronize()
 
 
+def qkv_update_metrics(model, before):
+    """RMS of actual parameter deltas, pooled over every layer by slice."""
+    squared = []
+    count = 0
+    with torch.no_grad():
+        for block, old in zip(model.blocks, before):
+            chunks = (block.qkv.weight.detach() - old).chunk(3, dim=0)
+            squared.append(torch.stack([part.float().square().sum() for part in chunks]))
+            count += chunks[0].numel()
+        means = torch.stack(squared).sum(dim=0) / count
+        values = means.sqrt().cpu().tolist()
+        combined = means.mean().sqrt().item()
+    return {"rms_by_slice": dict(zip(("q", "k", "v"), values)), "combined_rms": combined}
+
+
 def run(args):
     torch.set_default_device("cpu")
     torch.set_num_threads(args.cpu_threads)
@@ -207,7 +228,7 @@ def run(args):
     }
     source_paths = [Path(__file__), *sorted((ROOT / "src/tiger_optim").rglob("*.py"))]
     result = {
-        "schema": 2, "status": "running", "config": {k: v.name if isinstance(v, Path) else v for k, v in vars(args).items()},
+        "schema": 3, "status": "running", "config": {k: v.name if isinstance(v, Path) else v for k, v in vars(args).items()},
         "model": model_config, "parameter_count": sum(p.numel() for p in model.parameters()),
         "git": {"head": git("rev-parse", "HEAD"), "status": git("status", "--porcelain")},
         "source_sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in source_paths},
@@ -256,13 +277,17 @@ def run(args):
             if not math.isfinite(loss.item()):
                 raise FloatingPointError("nonfinite training loss")
             lr = optimizer.param_groups[0]["lr"]
+            before = [block.qkv.weight.detach().clone() for block in model.blocks] if args.measure_qkv_updates else None
             optimizer.step()
             scheduler.step()
             sync(device)
             elapsed = time.perf_counter() - began
             train_seconds += elapsed
-            result["steps"].append({"step": completed + 1, "loss": loss.item(), "lr": lr,
-                                    "grad_norm": grad_norm.item(), "seconds": elapsed})
+            point = {"step": completed + 1, "loss": loss.item(), "lr": lr,
+                     "grad_norm": grad_norm.item(), "seconds": elapsed}
+            if before is not None:
+                point["qkv_update"] = qkv_update_metrics(model, before)
+            result["steps"].append(point)
         if not all(torch.isfinite(p).all().item() for p in model.parameters()):
             raise FloatingPointError("nonfinite model parameters")
         if "test" in datasets:
@@ -305,6 +330,7 @@ def main():
                          ("eval-size", 512), ("test-size", 2048), ("eval-interval", 100), ("cpu-threads", 2)):
         parser.add_argument("--" + key, type=int, default=default)
     parser.add_argument("--development", action="store_true", help="evaluate validation only; never create test data")
+    parser.add_argument("--measure-qkv-updates", action="store_true", help="record actual QKV parameter delta RMS each update")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path)
     args = parser.parse_args()
