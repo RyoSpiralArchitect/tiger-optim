@@ -538,13 +538,17 @@ class Tiger(Optimizer):
                  # compile staged reflect
                  compile_guard=True, reflect_interval=50,
                  # profiler
-                 profiler_enabled=False, profiler_path="benchmarks/profiles/tiger.jsonl", profiler_interval=10, profiler_ema_decay=0.9):
+                 profiler_enabled=False, profiler_path="benchmarks/profiles/tiger.jsonl", profiler_interval=10, profiler_ema_decay=0.9,
+                 qkv_spectral_strength=1.0):
         if not 0.0 <= float(lr_decay) <= 1.0:
             raise ValueError("lr_decay must be in [0, 1]")
         if float(lr_min) < 0.0:
             raise ValueError("lr_min must be nonnegative")
         if int(plateau_patience) < 1:
             raise ValueError("plateau_patience must be positive")
+        spectral_strength = float(qkv_spectral_strength)
+        if not math.isfinite(spectral_strength) or not 0.0 <= spectral_strength <= 1.0:
+            raise ValueError("qkv_spectral_strength must be finite and in [0, 1]")
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay,
                         factored=factored, precond_alpha=precond_alpha,
                         sign_mode=sign_mode, sign_tau=sign_tau, sign_blend=sign_blend,
@@ -592,6 +596,7 @@ class Tiger(Optimizer):
                         qkv_spectral_adapt=bool(qkv_spectral_adapt), qkv_spectral_low_band=float(qkv_spectral_low_band),
                         qkv_spectral_high_band=float(qkv_spectral_high_band), qkv_spectral_beta=float(qkv_spectral_beta),
                         qkv_spectral_eps=float(qkv_spectral_eps),
+                        qkv_spectral_strength=spectral_strength,
                         qkv_gamma_spectral_gain=float(qkv_gamma_spectral_gain), qkv_gamma_spectral_clip=tuple(qkv_gamma_spectral_clip),
                         qkv_phase_boost_gain=float(qkv_phase_boost_gain), qkv_phase_target=float(qkv_phase_target),
                         qkv_phase_boost_clip=tuple(qkv_phase_boost_clip),
@@ -626,6 +631,23 @@ class Tiger(Optimizer):
         self._fused_apply_failures: List[str] = []
 
     # ---------- Public API ----------
+    @property
+    def qkv_spectral_strength(self) -> float:
+        """Current feedback strength; checkpoints predating this option use one."""
+        return float(self.defaults.get("qkv_spectral_strength", 1.0))
+
+    def set_qkv_spectral_strength(self, strength: float) -> None:
+        """Blend spectral corrections toward neutral, without changing LR scales.
+
+        Zero skips spectral collection while RMS/trust adaptation continues.
+        Spectral EMA history is retained during a pause. This eager control and
+        its current value are saved with the optimizer's adaptive state.
+        """
+        value = float(strength)
+        if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+            raise ValueError("qkv_spectral_strength must be finite and in [0, 1]")
+        self.defaults["qkv_spectral_strength"] = value
+
     def state_dict(self):
         """Save parameter state and the adaptive state needed for exact resume."""
 
@@ -1120,7 +1142,8 @@ class Tiger(Optimizer):
             bucket_scalarless = bool(group.get("bucket_scalarless", self.defaults["bucket_scalarless"]))
             use_triton_stats = bool(group.get("use_triton_bucket_stats", self.defaults["use_triton_bucket_stats"]))
             use_triton_fused = bool(group.get("use_triton_fused_apply", self.defaults["use_triton_fused_apply"]))
-            spec_enabled = bool(self.defaults.get("qkv_spectral_adapt", False))
+            spec_strength = self.qkv_spectral_strength
+            spec_enabled = bool(self.defaults.get("qkv_spectral_adapt", False)) and spec_strength > 0.0
             spec_low_band = float(self.defaults.get("qkv_spectral_low_band", 0.2))
             spec_high_band = float(self.defaults.get("qkv_spectral_high_band", 0.25))
             spec_beta = float(self.defaults.get("qkv_spectral_beta", 0.7))
@@ -1964,24 +1987,26 @@ class Tiger(Optimizer):
                     gamma_eff = max(gmin, min(gmax, gamma_eff))
                     freq_disp_mean = sum(freq_disp_vals)/len(freq_disp_vals)
                     freq_factor = 1.0
-                    if bool(self.defaults.get("qkv_spectral_adapt", False)):
+                    if spec_enabled:
                         freq_gain = float(self.defaults.get("qkv_gamma_spectral_gain", 0.0))
                         clip_lo, clip_hi = self.defaults.get("qkv_gamma_spectral_clip", (0.5, 1.5))
                         if freq_gain != 0.0:
                             freq_factor = math.exp(freq_gain * freq_disp_mean)
                             freq_factor = max(float(clip_lo), min(float(clip_hi), freq_factor))
+                            freq_factor = 1.0 + spec_strength * (freq_factor - 1.0)
                             gamma_eff *= freq_factor
                     # step-clip shrink by positive acceleration
                     step_clip_eff = base_clip / (1.0 + k_shrink * max(0.0, accel))
                     phase_mean = sum(phase_vals)/len(phase_vals) if phase_vals else 0.0
                     phase_boost = 1.0
-                    if bool(self.defaults.get("qkv_spectral_adapt", False)):
+                    if spec_enabled:
                         phase_gain = float(self.defaults.get("qkv_phase_boost_gain", 0.0))
                         phase_target = float(self.defaults.get("qkv_phase_target", 0.0))
                         clip_lo, clip_hi = self.defaults.get("qkv_phase_boost_clip", (0.6, 1.6))
                         if phase_gain != 0.0:
                             phase_boost = 1.0 + phase_gain * (phase_mean - phase_target)
                             phase_boost = max(float(clip_lo), min(float(clip_hi), phase_boost))
+                            phase_boost = 1.0 + spec_strength * (phase_boost - 1.0)
                     step_clip_eff = max(cmin, min(cmax, step_clip_eff * phase_boost))
 
                     med_r = sorted(rms)[1]; med_t = sorted(trs)[1]
@@ -2010,6 +2035,7 @@ class Tiger(Optimizer):
                                                "qkv_step_clip_eff": step_clip_eff, "qkv_accel": accel,
                                                "qkv_freq_disp": freq_disp_mean, "qkv_freq_factor": freq_factor,
                                                "qkv_phase_boost": phase_boost,
+                                               "qkv_spectral_strength": spec_strength,
                                                "qkv_freq_low": sum(freq_low_vals)/len(freq_low_vals) if freq_low_vals else 0.0,
                                                "qkv_freq_high": sum(freq_high_vals)/len(freq_high_vals) if freq_high_vals else 0.0,
                                                "qkv_phase_mean": phase_mean})

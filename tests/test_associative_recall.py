@@ -47,6 +47,18 @@ def test_fixed_qkv_control_and_spectral_ablation_are_distinct():
         assert group["qkv_lr_scales"] == {"q": 0.9, "k": 0.8, "v": 1.1}
 
 
+def test_spectral_fade_keeps_initial_full_recipe_and_completed_step_boundaries():
+    model = recall.RecallTransformer(symbols=16, pairs=4, gap=0, queries=2, width=24, layers=2, heads=3).cpu()
+    full = recall.optimizer_for(model, "tiger-full", 0.003)
+    fade = recall.optimizer_for(model, "tiger-spectral-fade", 0.003)
+    assert full.defaults == fade.defaults
+    assert recall.spectral_strength_factor(0, 100) == 1.0
+    assert recall.spectral_strength_factor(50, 100) == 1.0
+    assert math.isclose(recall.spectral_strength_factor(62.5, 100), 0.5)
+    assert recall.spectral_strength_factor(75, 100) == 0.0
+    assert recall.spectral_strength_factor(100, 100) == 0.0
+
+
 def test_rebinding_preserves_value_bag_and_queries_but_changes_associations():
     tokens, targets = recall.corpus(13, 20, symbols=16, pairs=4, gap=3, queries=3)
     rebound, rebound_targets = recall.rebind_values((tokens, targets), symbols=16, pairs=4, gap=3, queries=3)
