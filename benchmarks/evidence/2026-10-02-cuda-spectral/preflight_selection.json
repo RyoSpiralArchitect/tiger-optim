@@ -1,0 +1,80 @@
+{
+  "plan_sha256": "b91dd54affddbcc6f42c89ca540c978e9a1b2ee8fbf97f6217f318069ea0f4a6",
+  "candidates": {
+    "short": {
+      "adamw": [
+        {
+          "file": "preflight-short-adamw-0.001.json",
+          "sha256": "96d4c0f0d4126b9479ccc103c077d856c8f406919eeb6680f5da0fd95b2d79b3",
+          "lr": 0.001,
+          "validation_ce": 0.003421370027353987,
+          "binding_gate_passed": true
+        },
+        {
+          "file": "preflight-short-adamw-0.003.json",
+          "sha256": "6d4b4dc9a9f91a9a180450948add9a47ea6df983a3dd633f70f2020ae156db37",
+          "lr": 0.003,
+          "validation_ce": 0.0006648877970292233,
+          "binding_gate_passed": true
+        }
+      ],
+      "tiger-full": [
+        {
+          "file": "preflight-short-tiger-full-0.001.json",
+          "sha256": "e97b0849c5da4b9c2e01b08fd027a320bf40d606ee57d2c1ae0a280be86973ba",
+          "lr": 0.001,
+          "validation_ce": 0.00020544554286061611,
+          "binding_gate_passed": true
+        },
+        {
+          "file": "preflight-short-tiger-full-0.003.json",
+          "sha256": "ba5a5a7dc5b27d02b05197cae614c189e993656200f436177b0094aa2226ace8",
+          "lr": 0.003,
+          "validation_ce": 0.0666376062499694,
+          "binding_gate_passed": true
+        }
+      ]
+    },
+    "medium": {
+      "adamw": [
+        {
+          "file": "preflight-medium-adamw-0.001.json",
+          "sha256": "1c281e6fcf16673ed383bea451177565a769127e5120e974c4925ab5204cb77a",
+          "lr": 0.001,
+          "validation_ce": 0.001676087558735162,
+          "binding_gate_passed": true
+        },
+        {
+          "file": "preflight-medium-adamw-0.003.json",
+          "sha256": "e08caa45ecf4e00757d11bf6c3e04ee80ff0fa422fad844b8f10af874f8b2973",
+          "lr": 0.003,
+          "validation_ce": 2.0468273758888245,
+          "binding_gate_passed": false
+        }
+      ],
+      "tiger-full": [
+        {
+          "file": "preflight-medium-tiger-full-0.001.json",
+          "sha256": "9755080eb72f7def6bb339fefc3da23ba8130cf374dcaf6df3e983528c68ce76",
+          "lr": 0.001,
+          "validation_ce": 9.247229741049523e-06,
+          "binding_gate_passed": true
+        },
+        {
+          "file": "preflight-medium-tiger-full-0.003.json",
+          "sha256": "90ddb8ecdfcc0598f7fc55f72ef8f0584d6f3f4e87d2d0ce0e05cc22000add2f",
+          "lr": 0.003,
+          "validation_ce": 2.0284693241119385,
+          "binding_gate_passed": false
+        }
+      ]
+    }
+  },
+  "selected": {
+    "task": "medium",
+    "learning_rates": {
+      "adamw": 0.001,
+      "tiger-full": 0.001
+    }
+  }
+}

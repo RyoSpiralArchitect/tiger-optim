@@ -141,6 +141,14 @@ asymmetric allocation improves final CE in three of five new seeds, with a
 mean gain driven by one seed. These results keep allocation and magnitude
 effects separately observable.
 
+The [learned CUDA follow-up](benchmarks/evidence/2026-10-02-cuda-spectral/README.md)
+uses a 608,256-parameter model with eight pairs and an eight-token gap. All
+four controls pass binding in seven BF16 seeds and two FP32 supplements.
+Full spectral lowers final CE in 4/7 BF16 seeds but worsens the average; fading
+lowers CE versus full in 3/7 and worsens both FP32 supplements. The study
+supports a controllable feedback mechanism, with its learning effect still
+dependent on the recipe and seed.
+
 ### Schedule and resume
 
 `TailCosineLR` holds the initial LR and then decays toward a fraction of it:

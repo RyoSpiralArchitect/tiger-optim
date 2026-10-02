@@ -1,0 +1,150 @@
+{
+  "plan_sha256": "99a386721f46e6108b4234879cb46dd05aa124f9ebf03c59bd4df9d02399ba93",
+  "complete": true,
+  "results": [
+    {
+      "file": "confirm-bf16-adamw-631.json",
+      "sha256": "8b8245230241c6c9a5fe9134beb8ab2c8d42282906ff32d89a86fd160735698b"
+    },
+    {
+      "file": "confirm-bf16-tiger-full-631.json",
+      "sha256": "1baa66fb4d3c558c0089f8553b196c25127aca4865cdd11eca4c957b97074214"
+    },
+    {
+      "file": "confirm-bf16-tiger-no-spectral-631.json",
+      "sha256": "f014008e098811b0733bedbec160d7516d9b1c42a2206812caa36380d9c11223"
+    },
+    {
+      "file": "confirm-bf16-tiger-spectral-fade-631.json",
+      "sha256": "f053e8f0ab37023ab88ca33cb29c6de6432ba29424309e79dec45c53135b2a63"
+    },
+    {
+      "file": "confirm-bf16-tiger-full-641.json",
+      "sha256": "3ed466660577bc58b51f6c4acb0bfe2adb0247c5823c6289b90e11939386d4e2"
+    },
+    {
+      "file": "confirm-bf16-tiger-no-spectral-641.json",
+      "sha256": "c28561e535fc5c09c9c10c78901f46e5cbb37e19296fa6ec414f0f05f595baa5"
+    },
+    {
+      "file": "confirm-bf16-tiger-spectral-fade-641.json",
+      "sha256": "e8af4adabefb14b5cb5a7efb56bd1165769cebf4544c6c3a9cce46a3d698d104"
+    },
+    {
+      "file": "confirm-bf16-adamw-641.json",
+      "sha256": "815767984aa33d5f2e37dcd2411adfefdac631c2329cac3f6835a70720354ee9"
+    },
+    {
+      "file": "confirm-bf16-tiger-no-spectral-653.json",
+      "sha256": "ee9c9faa70ec3a95447f5e10e02ec277e45c86f9817d454746e6fb0ebf19b5fa"
+    },
+    {
+      "file": "confirm-bf16-tiger-spectral-fade-653.json",
+      "sha256": "79d8cb00c7a5c27b77211985832c47e99e0ab4919d0c1e769c5e6128e5450e43"
+    },
+    {
+      "file": "confirm-bf16-adamw-653.json",
+      "sha256": "f95d15961c8be56c81f71527bea51599dd94d93bf88e1a6c2594d2ea8479c584"
+    },
+    {
+      "file": "confirm-bf16-tiger-full-653.json",
+      "sha256": "753bdbb5c869acda31ce276a0089e52a4f3f8c506185d382d6bba152dfcc0312"
+    },
+    {
+      "file": "confirm-bf16-tiger-spectral-fade-659.json",
+      "sha256": "1e43b83e43a9682fe5b2f08810a58afedc534a68d7ea883502fe57d952548dd8"
+    },
+    {
+      "file": "confirm-bf16-adamw-659.json",
+      "sha256": "f2424f482965f66084a3bf3bcf5eb3d39ca96bb68a2edea807648e7c80c3d722"
+    },
+    {
+      "file": "confirm-bf16-tiger-full-659.json",
+      "sha256": "9ccaed63723c6b99b474d5c1ed180321f2dbe89d1ad621eb323f9a81130909e4"
+    },
+    {
+      "file": "confirm-bf16-tiger-no-spectral-659.json",
+      "sha256": "bba676ced920f91770e14bce6d210f86f554df8da2176fe6a673b965aebf94d6"
+    },
+    {
+      "file": "confirm-bf16-adamw-673.json",
+      "sha256": "41cd00d78b6c4d3088208e82708ef788cae9f9d339b27fb32b2f62747f87e711"
+    },
+    {
+      "file": "confirm-bf16-tiger-full-673.json",
+      "sha256": "1898436d1390397dbb087d86bf2294d858006c33fb4320c11c8710a4310d3da2"
+    },
+    {
+      "file": "confirm-bf16-tiger-no-spectral-673.json",
+      "sha256": "f88ad46721210b8355cfc5cbc9161d8fbf12f1ff75f70a946190f7c145c44fff"
+    },
+    {
+      "file": "confirm-bf16-tiger-spectral-fade-673.json",
+      "sha256": "01c000a088fa63156a53e8528d46722ccfe0ea72200b13d6b57652678dc8df90"
+    },
+    {
+      "file": "confirm-bf16-tiger-full-677.json",
+      "sha256": "86bc11dd76968bb33bead7a6cc74c88dfd11605c7056f56d86da23df6e09383d"
+    },
+    {
+      "file": "confirm-bf16-tiger-no-spectral-677.json",
+      "sha256": "e5cffec8b1f4bec633c5a6f06c437e0962243b0850309055b379e64f3abcd8e8"
+    },
+    {
+      "file": "confirm-bf16-tiger-spectral-fade-677.json",
+      "sha256": "22e5cc6319169fc2a3234fe6f56d5a7bb902964702055a2402c664ee3061bdc6"
+    },
+    {
+      "file": "confirm-bf16-adamw-677.json",
+      "sha256": "30768eab5729b491a352e8ce3eef44b927b9bba96cf258d26306d36f446cc5af"
+    },
+    {
+      "file": "confirm-bf16-tiger-no-spectral-683.json",
+      "sha256": "ee14a2417a9b14541a4383aab076e4e2c357fd75489cc16b795f58a399496db0"
+    },
+    {
+      "file": "confirm-bf16-tiger-spectral-fade-683.json",
+      "sha256": "9094d404a93ea007eec132ad8da9919944e96fe2d3da08ea0a7745d90755b1de"
+    },
+    {
+      "file": "confirm-bf16-adamw-683.json",
+      "sha256": "527aa0e5fe8d8df8efa3e4afc2aa0844abba396657453c41d30d4acac245cfe5"
+    },
+    {
+      "file": "confirm-bf16-tiger-full-683.json",
+      "sha256": "b115b93bda6ebc6284d0fe0b712114418cc9f89dadfe1f25687d4ae35f909936"
+    },
+    {
+      "file": "confirm-fp32-adamw-631.json",
+      "sha256": "78939ccf1c15d3142ff6737965158cd1cab1e0c4c61a350b3eaaf9e57693f445"
+    },
+    {
+      "file": "confirm-fp32-tiger-full-631.json",
+      "sha256": "9f51a4f1d37faa5352156f92c32d850c633294dfa7cf0a0e1bf383905bbe2eec"
+    },
+    {
+      "file": "confirm-fp32-tiger-no-spectral-631.json",
+      "sha256": "ba7f0798ab7777c81a970cc9284e483d6e7dfbfb130186b39e0bfec112d4209c"
+    },
+    {
+      "file": "confirm-fp32-tiger-spectral-fade-631.json",
+      "sha256": "aa64c75841ec71f8481f2c475b973d73cd276786a004d93363469725a93fe62e"
+    },
+    {
+      "file": "confirm-fp32-tiger-full-641.json",
+      "sha256": "9d9d9165631aca7a8061182a57bf905bc19e8626b327abcd8f1c3c2be355b201"
+    },
+    {
+      "file": "confirm-fp32-tiger-no-spectral-641.json",
+      "sha256": "14b3c4a16cd6691110095ed202e130a93e72f2500f066cd43932b2065c2f2cf2"
+    },
+    {
+      "file": "confirm-fp32-tiger-spectral-fade-641.json",
+      "sha256": "f7bc460a5f5ab7060ba26cdc60e81b0833b4009f282dbe64016570af6b31bd12"
+    },
+    {
+      "file": "confirm-fp32-adamw-641.json",
+      "sha256": "f6249b5d460cf70b857e0fdcc30434a9b3f706ff89a89ce031a663fbf63e2f2c"
+    }
+  ]
+}

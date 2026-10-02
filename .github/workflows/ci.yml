@@ -102,6 +102,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -120,6 +122,11 @@ jobs:
             --steps 8 \
             --warmup 2 \
             --modes adamw tiger_v13_compat tiger_v21_full
+
+      - name: Verify frozen CUDA learning receipts
+        run: |
+          (cd benchmarks/evidence/2026-10-02-cuda-spectral && sha256sum --quiet -c SHA256SUMS)
+          python benchmarks/evidence/2026-10-02-cuda-spectral/summarize.py
 
       - name: Summarize benchmark results
         run: |

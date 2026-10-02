@@ -1,0 +1,1082 @@
+{
+  "source_commit": "db2d12a3625419677255ab9bc1346fd1c230f92d",
+  "implementation_source_commit": "2cf24451e722d69a61c5b1e89aac4fec2a370e4c",
+  "environment": {
+    "python": "3.14.4",
+    "torch": "2.13.0+cu132",
+    "cuda": "13.2",
+    "device": "NVIDIA GeForce RTX 5090",
+    "precision": "bf16",
+    "cpu_threads": 2,
+    "tf32": false
+  },
+  "parameter_count": 608256,
+  "training_updates": 72000,
+  "preflight_selection": {
+    "task": "medium",
+    "learning_rates": {
+      "adamw": 0.001,
+      "tiger-full": 0.001
+    }
+  },
+  "default_strength_bitwise_compatible": true,
+  "initialization_replay": {
+    "original_runtime": {
+      "python": "3.14.4",
+      "torch": "2.13.0+cu132",
+      "architecture": "x86_64",
+      "device": "cpu",
+      "cpu_threads": 2
+    },
+    "original_bitwise_match_count": 7,
+    "portable_embedding_match_count": 7,
+    "local_torch": "2.12.1",
+    "native_diagnostics": {
+      "631": {
+        "native_state_sha256": "81ba2c97ea140638f439d552864e1ad3cac200f75b55071f6cbfb3c987e504f4",
+        "native_bitwise_equal": false,
+        "embedding_max_absolute_difference": {
+          "token": 1.6689300537109375e-06,
+          "position": 1.5497207641601562e-06
+        }
+      },
+      "641": {
+        "native_state_sha256": "d58461c204aa339bd6e32bfad97e7f8de762d1445969f6f6806f2c26534357b0",
+        "native_bitwise_equal": false,
+        "embedding_max_absolute_difference": {
+          "token": 1.8775463104248047e-06,
+          "position": 1.475214958190918e-06
+        }
+      },
+      "653": {
+        "native_state_sha256": "7f7c8b3fb93909e50067262b35ac6017067d977e28fe7e524f44b296f28525d9",
+        "native_bitwise_equal": false,
+        "embedding_max_absolute_difference": {
+          "token": 1.6689300537109375e-06,
+          "position": 1.6689300537109375e-06
+        }
+      },
+      "659": {
+        "native_state_sha256": "9098f9111bc14ee2a78cd12600b34008708d9593eee94277930106cc8f9dbdb4",
+        "native_bitwise_equal": false,
+        "embedding_max_absolute_difference": {
+          "token": 1.5497207641601562e-06,
+          "position": 1.3560056686401367e-06
+        }
+      },
+      "673": {
+        "native_state_sha256": "3cec3790d6dbeac0fa369265352d7df0a911509b5f2bd18cf6f909fb2dcf0ce7",
+        "native_bitwise_equal": false,
+        "embedding_max_absolute_difference": {
+          "token": 1.6689300537109375e-06,
+          "position": 1.3709068298339844e-06
+        }
+      },
+      "677": {
+        "native_state_sha256": "1de74b7fe97a9300a13141435dc3792fffaafc3e599cf84087eb0159b699f052",
+        "native_bitwise_equal": false,
+        "embedding_max_absolute_difference": {
+          "token": 1.4901161193847656e-06,
+          "position": 1.7210841178894043e-06
+        }
+      },
+      "683": {
+        "native_state_sha256": "cbd6c08163d8ae3d674e7ae6872e2143f6191da349cbe92fcebb543d2b4c6fb0",
+        "native_bitwise_equal": false,
+        "embedding_max_absolute_difference": {
+          "token": 1.3709068298339844e-06,
+          "position": 1.4007091522216797e-06
+        }
+      }
+    }
+  },
+  "input_replay": {
+    "original_bitwise_match_count": 21,
+    "portable_equal_score_replay_count": 21,
+    "native_diagnostics": {
+      "631": {
+        "train": {
+          "native_sha256": "038960998f42efc981658cb13a1c889132363dc786d182bcfb8e3dcafefe2934",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 1
+        },
+        "validation": {
+          "native_sha256": "77da86e80841e748d595847a59fbdc5595cd885d4a27f39b647c85ef89b251e2",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 0
+        },
+        "test": {
+          "native_sha256": "f17a850ba35cc670610bc835da887b6adb9340742d574d41f3e98d384096c851",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 0
+        }
+      },
+      "641": {
+        "train": {
+          "native_sha256": "9360f3529a481d08ed9484baa17c5a53df7228032eba7ce2124b016ae386567e",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 2
+        },
+        "validation": {
+          "native_sha256": "819878b12731a02da5f017f54417dc620e9ada4b06075f513011c955f61aab7a",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 0
+        },
+        "test": {
+          "native_sha256": "f28d737d80aa46ff186d847b929f0a8cd57b2b597680110394f138648b1df146",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 1
+        }
+      },
+      "653": {
+        "train": {
+          "native_sha256": "b297cda37a9928ca2307c74fb9de031d3b28e0258f6bd36bc584e19c45fc0ad7",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 3
+        },
+        "validation": {
+          "native_sha256": "4d1be2ea8c775a40768a960a0bb9fbd9780b4be6fe0b5a3f1f7947df381ba80e",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 0
+        },
+        "test": {
+          "native_sha256": "e58530e5572316c38058106c2a1cb0f844762b0cea8a4b8bf1f3531a1531f5fa",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 0
+        }
+      },
+      "659": {
+        "train": {
+          "native_sha256": "692e3afa5d08c3de51e7278e22aac2425a194f59e00aeb904d59425246ab2429",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 3
+        },
+        "validation": {
+          "native_sha256": "92836581527fccb909fc2bf788f25411b6a2a643fe3f314e1dcee2f4f7e195ad",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 0
+        },
+        "test": {
+          "native_sha256": "69b34ad7249ff8cd25adc2fb4bec41083f4e79b2c638b79353f1f28242a031b7",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 0
+        }
+      },
+      "673": {
+        "train": {
+          "native_sha256": "b32885b1183d14a30056471b3490bc459a84431e4e10fe1f6406c4702bcbbcda",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 1
+        },
+        "validation": {
+          "native_sha256": "aa9cdae26519c1b64a990162363dec90aa32f16ae72b7ee75e779c2ac4f6ff42",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 0
+        },
+        "test": {
+          "native_sha256": "9da2c391cda4542c7d5c741ba29c01e60ea68eeb015c215e6d3574a376df543b",
+          "native_bitwise_equal": false,
+          "equal_score_rows": 1
+        }
+      },
+      "677": {
+        "train": {
+          "native_sha256": "b99acedc435fca7c3793177f4e484b864de5dc628064c6f8e33607270bf6f51f",
+          "native_bitwise_equal": false,
+          "equal_score_rows": 4
+        },
+        "validation": {
+          "native_sha256": "58968b77b3e2ee9eb6ca35b64e1ff4642619dd2011d06f419677ae0443a295e0",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 0
+        },
+        "test": {
+          "native_sha256": "fae28041ef8e69fd6e647e3692aaa2830d6e4944bf93766122f1b164fe567118",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 0
+        }
+      },
+      "683": {
+        "train": {
+          "native_sha256": "20f1db375a6037c2fe3d831fe3030f570c815006c35e7311589923bbbd6ace53",
+          "native_bitwise_equal": false,
+          "equal_score_rows": 3
+        },
+        "validation": {
+          "native_sha256": "33c7295ccfa999b95de2d344b493472e8df5507450045967feb98741d57e0038",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 0
+        },
+        "test": {
+          "native_sha256": "70a2d803ef39a9bb8f68892ed933061c88f420ffd4672b072b307f273f338316",
+          "native_bitwise_equal": true,
+          "equal_score_rows": 0
+        }
+      }
+    }
+  },
+  "all_input_contexts_disjoint": true,
+  "confirmation": {
+    "bf16": [
+      {
+        "seed": 631,
+        "recipes": {
+          "adamw": {
+            "test": {
+              "ce": 0.0011915509967366233,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.0011749590012186673,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.0325927734375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.5577784625720597,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 8.77224509147645e-05,
+            "train_seconds": 4.442005691118538,
+            "peak_cuda_bytes": 140785664
+          },
+          "tiger-full": {
+            "test": {
+              "ce": 6.220942697865439e-06,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 7.2623799489690555e-06,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.0325927734375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.694573989291408,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.0001568095630780775,
+            "train_seconds": 39.86585777066648,
+            "peak_cuda_bytes": 138428928
+          },
+          "tiger-no-spectral": {
+            "test": {
+              "ce": 6.876984717507639e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.0010262373800671298,
+              "accuracy": 0.9998779296875,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.0325927734375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6945814811467699,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015795820479372224,
+            "train_seconds": 41.6228211177513,
+            "peak_cuda_bytes": 138420224
+          },
+          "tiger-spectral-fade": {
+            "test": {
+              "ce": 3.94089374253781e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 1.567216047249076e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.0325927734375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6949003815777388,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015504194614567978,
+            "train_seconds": 40.2796186581254,
+            "peak_cuda_bytes": 138428928
+          }
+        },
+        "full_fade_first_half_bitwise_equal": true
+      },
+      {
+        "seed": 641,
+        "recipes": {
+          "adamw": {
+            "test": {
+              "ce": 0.0011066717488574795,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.001103260259696981,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.027099609375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.49056572061363113,
+            "first_sampled_90_percent_step": 400,
+            "applied_qkv_rms_mean": 8.52649298610686e-05,
+            "train_seconds": 5.0413714265450835,
+            "peak_cuda_bytes": 140785664
+          },
+          "tiger-full": {
+            "test": {
+              "ce": 0.0018317831517435934,
+              "accuracy": 0.9996337890625,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.005558054506224153,
+              "accuracy": 0.9991455078125,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.027587890625,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6636951809012395,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00014918404290149568,
+            "train_seconds": 40.631262698210776,
+            "peak_cuda_bytes": 138428928
+          },
+          "tiger-no-spectral": {
+            "test": {
+              "ce": 0.0007359840427341169,
+              "accuracy": 0.9996337890625,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.001823358765221883,
+              "accuracy": 0.999267578125,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.027099609375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6625070062606646,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015509924457496994,
+            "train_seconds": 40.171266795136034,
+            "peak_cuda_bytes": 138420224
+          },
+          "tiger-spectral-fade": {
+            "test": {
+              "ce": 1.3437399793758686e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 6.3395968794566215e-06,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.027099609375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6625895529386021,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.0001518467508294208,
+            "train_seconds": 40.079596866853535,
+            "peak_cuda_bytes": 138428928
+          }
+        },
+        "full_fade_first_half_bitwise_equal": true
+      },
+      {
+        "seed": 653,
+        "recipes": {
+          "adamw": {
+            "test": {
+              "ce": 0.0010769238251668867,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.0010938950290437788,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.029541015625,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.46493067971186974,
+            "first_sampled_90_percent_step": 400,
+            "applied_qkv_rms_mean": 8.303903731009755e-05,
+            "train_seconds": 4.408841121010482,
+            "peak_cuda_bytes": 140785664
+          },
+          "tiger-full": {
+            "test": {
+              "ce": 5.543610605229787e-06,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 3.5872915660206672e-06,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.029541015625,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6540292734242596,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015486881042470202,
+            "train_seconds": 40.483537301421165,
+            "peak_cuda_bytes": 138428928
+          },
+          "tiger-no-spectral": {
+            "test": {
+              "ce": 0.002053256642142287,
+              "accuracy": 0.9993896484375,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.002937665971273873,
+              "accuracy": 0.99951171875,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.029541015625,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6551860606851942,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015467520737153962,
+            "train_seconds": 40.935899667441845,
+            "peak_cuda_bytes": 138420224
+          },
+          "tiger-spectral-fade": {
+            "test": {
+              "ce": 0.010642470344578214,
+              "accuracy": 0.9981689453125,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.01583957866952801,
+              "accuracy": 0.9976806640625,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.0299072265625,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6549892691228223,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.0001540150979604249,
+            "train_seconds": 40.05978867225349,
+            "peak_cuda_bytes": 138428928
+          }
+        },
+        "full_fade_first_half_bitwise_equal": true
+      },
+      {
+        "seed": 659,
+        "recipes": {
+          "adamw": {
+            "test": {
+              "ce": 0.0010315826257283334,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.00103456530632684,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.03369140625,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.472788205879624,
+            "first_sampled_90_percent_step": 400,
+            "applied_qkv_rms_mean": 7.942068648834067e-05,
+            "train_seconds": 4.323899796232581,
+            "peak_cuda_bytes": 140785664
+          },
+          "tiger-full": {
+            "test": {
+              "ce": 0.0012119234533116696,
+              "accuracy": 0.9998779296875,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.0012579866256530181,
+              "accuracy": 0.999755859375,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.0338134765625,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6408691796029942,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.0001589149166088788,
+            "train_seconds": 40.074482809752226,
+            "peak_cuda_bytes": 138428928
+          },
+          "tiger-no-spectral": {
+            "test": {
+              "ce": 4.009080343791993e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 7.568596479501366e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.03369140625,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6403924493800268,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015445053862528368,
+            "train_seconds": 40.21617706026882,
+            "peak_cuda_bytes": 138420224
+          },
+          "tiger-spectral-fade": {
+            "test": {
+              "ce": 0.0006040184109394886,
+              "accuracy": 0.9996337890625,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.0007203976368970189,
+              "accuracy": 0.9996337890625,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.03369140625,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6395328029848777,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015954187321632674,
+            "train_seconds": 40.44609484728426,
+            "peak_cuda_bytes": 138428928
+          }
+        },
+        "full_fade_first_half_bitwise_equal": true
+      },
+      {
+        "seed": 673,
+        "recipes": {
+          "adamw": {
+            "test": {
+              "ce": 0.0011942376695515122,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.0011976718560617883,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.0323486328125,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.5865386977111484,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 9.061282354775102e-05,
+            "train_seconds": 4.350380705669522,
+            "peak_cuda_bytes": 140785664
+          },
+          "tiger-full": {
+            "test": {
+              "ce": 0.00014582837498977597,
+              "accuracy": 0.9998779296875,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.0005347240953739174,
+              "accuracy": 0.999755859375,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.0323486328125,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6692199364829179,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015159995007422823,
+            "train_seconds": 40.50006497930735,
+            "peak_cuda_bytes": 138428928
+          },
+          "tiger-no-spectral": {
+            "test": {
+              "ce": 0.0004691183917628905,
+              "accuracy": 0.9998779296875,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 9.770516139440133e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.0323486328125,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.670587822607029,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015386452378947978,
+            "train_seconds": 40.42886187043041,
+            "peak_cuda_bytes": 138420224
+          },
+          "tiger-spectral-fade": {
+            "test": {
+              "ce": 0.00044400308260605925,
+              "accuracy": 0.9998779296875,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.001104786129275226,
+              "accuracy": 0.99951171875,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.032470703125,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6695729970340203,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015355557397981557,
+            "train_seconds": 42.467828104272485,
+            "peak_cuda_bytes": 138428928
+          }
+        },
+        "full_fade_first_half_bitwise_equal": true
+      },
+      {
+        "seed": 677,
+        "recipes": {
+          "adamw": {
+            "test": {
+              "ce": 0.0014368790616572369,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.0014401163680304307,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.029541015625,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.7333614032922924,
+            "first_sampled_90_percent_step": 600,
+            "applied_qkv_rms_mean": 0.00010363083369465897,
+            "train_seconds": 4.302336811088026,
+            "peak_cuda_bytes": 140785664
+          },
+          "tiger-full": {
+            "test": {
+              "ce": 0.0011069926895714843,
+              "accuracy": 0.999755859375,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.0013196533727324322,
+              "accuracy": 0.9996337890625,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.02978515625,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.7124823018756441,
+            "first_sampled_90_percent_step": 600,
+            "applied_qkv_rms_mean": 0.00015166506866787444,
+            "train_seconds": 40.414917601272464,
+            "peak_cuda_bytes": 138428928
+          },
+          "tiger-no-spectral": {
+            "test": {
+              "ce": 0.006942087599725255,
+              "accuracy": 0.9984130859375,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.009863298261223008,
+              "accuracy": 0.9974365234375,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.0299072265625,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.7117962081764624,
+            "first_sampled_90_percent_step": 600,
+            "applied_qkv_rms_mean": 0.00015538104034842348,
+            "train_seconds": 40.248540974222124,
+            "peak_cuda_bytes": 138420224
+          },
+          "tiger-spectral-fade": {
+            "test": {
+              "ce": 0.001663780868085496,
+              "accuracy": 0.9996337890625,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.000317563504751206,
+              "accuracy": 0.9998779296875,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.029541015625,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.7101189982293761,
+            "first_sampled_90_percent_step": 600,
+            "applied_qkv_rms_mean": 0.00015175229326953144,
+            "train_seconds": 42.78641547169536,
+            "peak_cuda_bytes": 138428928
+          }
+        },
+        "full_fade_first_half_bitwise_equal": true
+      },
+      {
+        "seed": 683,
+        "recipes": {
+          "adamw": {
+            "test": {
+              "ce": 0.0011817108061222825,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.0011603080165514257,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.029296875,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.5950845040151762,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 8.945328231781957e-05,
+            "train_seconds": 4.370371025055647,
+            "peak_cuda_bytes": 140785664
+          },
+          "tiger-full": {
+            "test": {
+              "ce": 0.02497535011484331,
+              "accuracy": 0.9949951171875,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.02007700885022956,
+              "accuracy": 0.995849609375,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.0306396484375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6260719855655381,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015854015667507326,
+            "train_seconds": 40.228327019140124,
+            "peak_cuda_bytes": 138428928
+          },
+          "tiger-no-spectral": {
+            "test": {
+              "ce": 3.3767319365551884e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 1.6545739796924863e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.029296875,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6243609916422663,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015345527888818822,
+            "train_seconds": 40.12937190569937,
+            "peak_cuda_bytes": 138420224
+          },
+          "tiger-spectral-fade": {
+            "test": {
+              "ce": 0.00012361255440396235,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 2.5665031280652784e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.029296875,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6244611346008337,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015582232464673496,
+            "train_seconds": 40.145967232994735,
+            "peak_cuda_bytes": 138428928
+          }
+        },
+        "full_fade_first_half_bitwise_equal": true
+      }
+    ],
+    "fp32": [
+      {
+        "seed": 631,
+        "recipes": {
+          "adamw": {
+            "test": {
+              "ce": 0.001189164278912358,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.0011704098178597633,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.0325927734375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.5535367581878745,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 8.765203011334321e-05,
+            "train_seconds": 4.528254088945687,
+            "peak_cuda_bytes": 163998720
+          },
+          "tiger-full": {
+            "test": {
+              "ce": 2.7842158701218978e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.00015833507185192275,
+              "accuracy": 0.9998779296875,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.0325927734375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6937891007210624,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015718826319414348,
+            "train_seconds": 40.734432293102145,
+            "peak_cuda_bytes": 161641984
+          },
+          "tiger-no-spectral": {
+            "test": {
+              "ce": 6.833047894616584e-06,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 2.0060964047274865e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.0325927734375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6952489693463626,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015498918174955634,
+            "train_seconds": 39.707676608115435,
+            "peak_cuda_bytes": 161633280
+          },
+          "tiger-spectral-fade": {
+            "test": {
+              "ce": 0.0032238397835726573,
+              "accuracy": 0.9993896484375,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.003007892786939692,
+              "accuracy": 0.99951171875,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.03271484375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6932846225514986,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.0001542605102440575,
+            "train_seconds": 40.00454227346927,
+            "peak_cuda_bytes": 161641984
+          }
+        },
+        "full_fade_first_half_bitwise_equal": true
+      },
+      {
+        "seed": 641,
+        "recipes": {
+          "adamw": {
+            "test": {
+              "ce": 0.0011072649504058063,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.001103519771277206,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.027099609375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.490502042081971,
+            "first_sampled_90_percent_step": 400,
+            "applied_qkv_rms_mean": 8.521933457457109e-05,
+            "train_seconds": 4.576834192499518,
+            "peak_cuda_bytes": 163998720
+          },
+          "tiger-full": {
+            "test": {
+              "ce": 2.412995553413566e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 6.431146070440263e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.027099609375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6622180917587457,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015179980886998124,
+            "train_seconds": 40.065987824462354,
+            "peak_cuda_bytes": 161641984
+          },
+          "tiger-no-spectral": {
+            "test": {
+              "ce": 0.0037024213692475882,
+              "accuracy": 0.9991455078125,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 0.002397914775272625,
+              "accuracy": 0.99951171875,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.027099609375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6637349547207076,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015187631006526202,
+            "train_seconds": 40.037691408768296,
+            "peak_cuda_bytes": 161633280
+          },
+          "tiger-spectral-fade": {
+            "test": {
+              "ce": 0.004272423406547432,
+              "accuracy": 0.999267578125,
+              "queries": 8192
+            },
+            "rebound": {
+              "ce": 8.55013308296293e-05,
+              "accuracy": 1.0,
+              "queries": 8192
+            },
+            "obsolete_target_accuracy": 0.027099609375,
+            "binding_gate_passed": true,
+            "sampled_validation_ce_mean": 0.6621988523859699,
+            "first_sampled_90_percent_step": 500,
+            "applied_qkv_rms_mean": 0.00015242299581800012,
+            "train_seconds": 40.38682947680354,
+            "peak_cuda_bytes": 161641984
+          }
+        },
+        "full_fade_first_half_bitwise_equal": true
+      }
+    ]
+  },
+  "aggregate": {
+    "bf16": {
+      "adamw": {
+        "test_ce_mean": 0.001174222390545765,
+        "test_ce_median": 0.0011817108061222825,
+        "test_accuracy_mean": 1.0,
+        "rebound_accuracy_mean": 1.0,
+        "binding_gate_pass_count": 7,
+        "sampled_validation_ce_mean": 0.5572925248279716
+      },
+      "tiger-full": {
+        "test_ce_mean": 0.004183377476823276,
+        "test_ce_median": 0.0011069926895714843,
+        "test_accuracy_mean": 0.9991629464285714,
+        "rebound_accuracy_mean": 0.9991629464285714,
+        "binding_gate_pass_count": 7,
+        "sampled_validation_ce_mean": 0.6658488353062859
+      },
+      "tiger-no-spectral": {
+        "test_ce_mean": 0.0014775820923347283,
+        "test_ce_median": 0.0004691183917628905,
+        "test_accuracy_mean": 0.9996163504464286,
+        "rebound_accuracy_mean": 0.9994419642857143,
+        "binding_gate_pass_count": 7,
+        "sampled_validation_ce_mean": 0.6656302885569162
+      },
+      "tiger-spectral-fade": {
+        "test_ce_mean": 0.001932961656833194,
+        "test_ce_median": 0.00044400308260605925,
+        "test_accuracy_mean": 0.9996163504464286,
+        "rebound_accuracy_mean": 0.9995291573660714,
+        "binding_gate_pass_count": 7,
+        "sampled_validation_ce_mean": 0.665166448069753
+      }
+    },
+    "fp32": {
+      "adamw": {
+        "test_ce_mean": 0.0011482146146590821,
+        "test_ce_median": 0.0011482146146590821,
+        "test_accuracy_mean": 1.0,
+        "rebound_accuracy_mean": 1.0,
+        "binding_gate_pass_count": 2,
+        "sampled_validation_ce_mean": 0.5220194001349228
+      },
+      "tiger-full": {
+        "test_ce_mean": 2.598605711767732e-05,
+        "test_ce_median": 2.598605711767732e-05,
+        "test_accuracy_mean": 1.0,
+        "rebound_accuracy_mean": 0.99993896484375,
+        "binding_gate_pass_count": 2,
+        "sampled_validation_ce_mean": 0.678003596239904
+      },
+      "tiger-no-spectral": {
+        "test_ce_mean": 0.0018546272085711024,
+        "test_ce_median": 0.0018546272085711024,
+        "test_accuracy_mean": 0.99957275390625,
+        "rebound_accuracy_mean": 0.999755859375,
+        "binding_gate_pass_count": 2,
+        "sampled_validation_ce_mean": 0.6794919620335351
+      },
+      "tiger-spectral-fade": {
+        "test_ce_mean": 0.0037481315950600447,
+        "test_ce_median": 0.0037481315950600447,
+        "test_accuracy_mean": 0.99932861328125,
+        "rebound_accuracy_mean": 0.999755859375,
+        "binding_gate_pass_count": 2,
+        "sampled_validation_ce_mean": 0.6777417374687342
+      }
+    }
+  },
+  "paired_deltas": {
+    "bf16": {
+      "tiger-full_minus_tiger-no-spectral": {
+        "by_seed": {
+          "631": -6.254890447721095e-05,
+          "641": 0.0010957991090094765,
+          "653": -0.0020477130315370573,
+          "659": 0.0011718326498737497,
+          "673": -0.00032329001677311453,
+          "677": -0.005835094910153771,
+          "683": 0.024941582795477757
+        },
+        "mean": 0.002705795384488547,
+        "lower_ce_count": 4
+      },
+      "tiger-spectral-fade_minus_tiger-full": {
+        "by_seed": {
+          "631": 3.318799472751266e-05,
+          "641": -0.0018183457519498347,
+          "653": 0.010636926733972984,
+          "659": -0.000607905042372181,
+          "673": 0.0002981747076162833,
+          "677": 0.0005567881785140116,
+          "683": -0.024851737560439346
+        },
+        "mean": -0.0022504158199900814,
+        "lower_ce_count": 3
+      }
+    },
+    "fp32": {
+      "tiger-full_minus_tiger-no-spectral": {
+        "by_seed": {
+          "631": 2.1009110806602393e-05,
+          "641": -0.0036782914137134526
+        },
+        "mean": -0.001828641151453425,
+        "lower_ce_count": 1
+      },
+      "tiger-spectral-fade_minus_tiger-full": {
+        "by_seed": {
+          "631": 0.0031959976248714383,
+          "641": 0.004248293451013296
+        },
+        "mean": 0.0037221455379423674,
+        "lower_ce_count": 0
+      }
+    }
+  },
+  "scope": "Controlled retrieval, not language modeling. BF16 is CUDA autocast with FP32 parameter storage and optimizer buffers. Seven primary seeds and two FP32 supplements are not a general optimizer or hardware-parity claim. AdamW is a learned task control. Keep all failures; production defaults remain unchanged."
+}

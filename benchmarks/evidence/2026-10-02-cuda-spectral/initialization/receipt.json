@@ -1,0 +1,56 @@
+{
+  "source_commit": "2cf24451e722d69a61c5b1e89aac4fec2a370e4c",
+  "benchmark_sha256": "9c37fc49332aca3c63331f440af6c323237e40ea2eb96aeca7e54ca87a7bd5a0",
+  "replayer_sha256": "1b5902ffba7f208a488e64d366260a9b31a0c5bac7eb8bfa9f288e58c232fbf3",
+  "environment": {
+    "python": "3.14.4",
+    "torch": "2.13.0+cu132",
+    "architecture": "x86_64",
+    "device": "cpu",
+    "cpu_threads": 2
+  },
+  "seeds": {
+    "631": {
+      "initial_state_sha256": "e89e042be07d0368b9f784a89d125690bb652c6d4a8c2efa600bb670814f4cac",
+      "native_replay_bitwise_equal": true,
+      "embedding_file": "embeddings-631.npz",
+      "embedding_file_sha256": "e1c69b5d84c799cede1c097899d26de58e2fa74e1c0f0b964e5de94881932991"
+    },
+    "641": {
+      "initial_state_sha256": "e9c7518ff5e1968d2c484cc03672a945cbff3cd05846113c015cf3eeeaa289fe",
+      "native_replay_bitwise_equal": true,
+      "embedding_file": "embeddings-641.npz",
+      "embedding_file_sha256": "01018aaeae1a9e0a0291f5dc101eec5672e07ee80181971127675c1866a4b1ab"
+    },
+    "653": {
+      "initial_state_sha256": "2ca60abcd21f6bf4f1b946733f17c1d490ed93f59eb99000d07bdaee39133de9",
+      "native_replay_bitwise_equal": true,
+      "embedding_file": "embeddings-653.npz",
+      "embedding_file_sha256": "c42ce5026b82a936376e1b8988e162c8c8232b3bf914b1ab826defdf46cdcb45"
+    },
+    "659": {
+      "initial_state_sha256": "7ca80666928a009a2e65de88d7d7d5503724288b9467f6eb75fdb379b103297e",
+      "native_replay_bitwise_equal": true,
+      "embedding_file": "embeddings-659.npz",
+      "embedding_file_sha256": "abfd8a373da361ef4d0de60133dec12de32642024f3a0d588b58104cd67047ab"
+    },
+    "673": {
+      "initial_state_sha256": "17ad7419ba2d7e5633f5dc95c8efe6d78dbdfcb95920d242ebf32d5675862d76",
+      "native_replay_bitwise_equal": true,
+      "embedding_file": "embeddings-673.npz",
+      "embedding_file_sha256": "5bd66c4ce259c6791d98a28e9b5a325dac7dc43275a6eb2d89de59002c6af2d7"
+    },
+    "677": {
+      "initial_state_sha256": "c4775702b2cc001e261558dea6196913f3f93bdc4a8437abbe9b271f515bd755",
+      "native_replay_bitwise_equal": true,
+      "embedding_file": "embeddings-677.npz",
+      "embedding_file_sha256": "19bdeb1f14e56d606fdd6f4f47847b021adf8d96b146707d73ef970936b635aa"
+    },
+    "683": {
+      "initial_state_sha256": "3fddc91e92fdec456b68b7a83e63dd1843035b3c35ea3f399fd701740b39c551",
+      "native_replay_bitwise_equal": true,
+      "embedding_file": "embeddings-683.npz",
+      "embedding_file_sha256": "c063f04cb56b26ff25ddfc34f889a5b0794bf82582723979a9626336c38cdc10"
+    }
+  }
+}
