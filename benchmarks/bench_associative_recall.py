@@ -28,7 +28,7 @@ from tiger_optim import Tiger, build_tagged_param_groups
 
 MODES = ("adamw", "tiger-full", "tiger-no-spectral", "tiger-fixed-qkv",
          "tiger-uniform-qkv", "tiger-global-trust", "tiger-normalized-qkv",
-         "tiger-uniform-low-qkv")
+         "tiger-uniform-low-qkv", "tiger-spectral-fade")
 
 
 def corpus(seed, count, *, symbols, pairs, gap, queries):
@@ -130,8 +130,8 @@ def optimizer_for(model, mode, lr):
     return Tiger(
         groups, lr=lr, weight_decay=0.0, trust_space="precond", trust_clip=5.0,
         update_buffer_dtype="fp32", auto_lr=False, auto_blend=False,
-        lora_cross_adapt=False, qkv_lr_autoadapt=mode in ("tiger-full", "tiger-no-spectral"),
-        qkv_spectral_adapt=mode == "tiger-full", qkv_lr_interval=25,
+        lora_cross_adapt=False, qkv_lr_autoadapt=mode in ("tiger-full", "tiger-no-spectral", "tiger-spectral-fade"),
+        qkv_spectral_adapt=mode in ("tiger-full", "tiger-spectral-fade"), qkv_lr_interval=25,
     )
 
 
@@ -141,6 +141,19 @@ def lr_factor(completed, total):
         return (completed + 1) / warmup
     progress = min(1.0, (completed - warmup) / max(1, total - warmup))
     return 0.1 + 0.9 * 0.5 * (1.0 + math.cos(math.pi * progress))
+
+
+def spectral_strength_factor(completed, total):
+    """Full feedback for the first half, cosine fade to zero at three quarters.
+
+    Like the LR schedule, completed counts updates before the next update.
+    """
+    progress = completed / total
+    if progress <= 0.5:
+        return 1.0
+    if progress >= 0.75:
+        return 0.0
+    return 0.5 * (1.0 + math.cos(math.pi * (progress - 0.5) / 0.25))
 
 
 def evaluate(model, data, batch_size, autocast):
@@ -244,11 +257,12 @@ def run(args):
         "initial_qkv_scales": dict(qkv["qkv_lr_scales"]),
         "qkv_lr_interval": optimizer.defaults["qkv_lr_interval"],
         "qkv_lr_gain": optimizer.defaults["qkv_lr_gain"],
+        "initial_qkv_spectral_strength": optimizer.qkv_spectral_strength,
         "trust_space": qkv["trust_space"], "trust_clip": qkv["trust_clip"],
     }
     source_paths = [Path(__file__), *sorted((ROOT / "src/tiger_optim").rglob("*.py"))]
     result = {
-        "schema": 4, "status": "running", "config": {k: v.name if isinstance(v, Path) else v for k, v in vars(args).items()},
+        "schema": 5, "status": "running", "config": {k: v.name if isinstance(v, Path) else v for k, v in vars(args).items()},
         "model": model_config, "parameter_count": sum(p.numel() for p in model.parameters()),
         "git": {"head": git("rev-parse", "HEAD"), "status": git("status", "--porcelain")},
         "source_sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in source_paths},
@@ -298,7 +312,8 @@ def run(args):
                     "qkv_disp", "qkv_gamma_eff", "qkv_freq_factor", "qkv_phase_boost", "qkv_step_clip_eff",
                 )}
                 result["evaluations"].append({"step": completed, "validation": score,
-                                               "qkv_scales": scales, "qkv_feedback": feedback})
+                                               "qkv_scales": scales, "qkv_feedback": feedback,
+                                               "model_state_sha256": tensor_hash(model.state_dict().items())})
                 save()
                 print(json.dumps({"mode": args.mode, "seed": args.seed, "step": completed, **score}), flush=True)
             if completed == args.steps:
@@ -317,6 +332,9 @@ def run(args):
             if not math.isfinite(loss.item()):
                 raise FloatingPointError("nonfinite training loss")
             lr = optimizer.param_groups[0]["lr"]
+            if args.mode == "tiger-spectral-fade":
+                optimizer.set_qkv_spectral_strength(spectral_strength_factor(completed, args.steps))
+            strength = optimizer.qkv_spectral_strength if isinstance(optimizer, Tiger) else None
             before = [block.qkv.weight.detach().clone() for block in model.blocks] if args.measure_qkv_updates else None
             optimizer.step()
             rms_match = match_qkv_update_rms(model, before, reference["steps"][completed]["qkv_update"]["combined_rms"]) if reference is not None else None
@@ -325,7 +343,8 @@ def run(args):
             elapsed = time.perf_counter() - began
             train_seconds += elapsed
             point = {"step": completed + 1, "loss": loss.item(), "lr": lr,
-                     "grad_norm": grad_norm.item(), "seconds": elapsed}
+                     "grad_norm": grad_norm.item(), "seconds": elapsed,
+                     "qkv_spectral_strength": strength}
             if before is not None:
                 point["qkv_update"] = qkv_update_metrics(model, before)
             if rms_match is not None:

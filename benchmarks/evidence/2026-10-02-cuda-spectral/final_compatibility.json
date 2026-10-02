@@ -1,0 +1,8 @@
+{
+  "plan_sha256": "8de157c9de28dc45adc2cd7515bf0708696d08186ad2a790ad681f7322348587",
+  "source_commit": "2cf24451e722d69a61c5b1e89aac4fec2a370e4c",
+  "reference_sha256": "9755080eb72f7def6bb339fefc3da23ba8130cf374dcaf6df3e983528c68ce76",
+  "result_sha256": "522a30ff5bbaca1d619d216ec9a5214ccf0d3a85e57fcb62ffbd501bfbc1d4d2",
+  "all_numeric_traces_equal": true,
+  "final_weights_bitwise_equal": true
+}

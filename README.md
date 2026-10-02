@@ -112,6 +112,22 @@ adaptation counters still advance. To hold QKV multipliers fixed, pass
 `qkv_lr_autoadapt=False, qkv_spectral_adapt=False`. To isolate spectral feedback,
 leave QKV adaptation enabled and set only `qkv_spectral_adapt=False`.
 
+For experiments that reduce spectral feedback during training, keep the feature
+enabled and set its strength between zero and one:
+
+```python
+optimizer.set_qkv_spectral_strength(0.5)
+```
+
+`qkv_spectral_strength=1.0` is the constructor default. Strength blends the
+clipped frequency and phase corrections toward one; it does not directly scale
+the learning rate. Zero skips FFT collection while RMS/trust adaptation keeps
+running. Spectral EMA history is retained through a pause, and the current
+strength is saved with optimizer state. Change strength eagerly before a step.
+The recall probe's `tiger-spectral-fade` recipe keeps full strength for half the
+budget, fades to zero over the next quarter, then finishes without spectral
+feedback. Its timing is an experiment, not a recommended training preset.
+
 The default cadence is 25 updates with gain 0.02. Increasing cadence and gain
 did not consistently improve the [matched Mac probe](benchmarks/evidence/2026-09-30-qkv-learning/README.md).
 The [learnable Mac retrieval control](benchmarks/evidence/2026-10-01-mac-qkv-ablation/README.md)
@@ -124,6 +140,14 @@ With [physical QKV RMS matched each step](benchmarks/evidence/2026-10-01-qkv-rms
 asymmetric allocation improves final CE in three of five new seeds, with a
 mean gain driven by one seed. These results keep allocation and magnitude
 effects separately observable.
+
+The [learned CUDA follow-up](benchmarks/evidence/2026-10-02-cuda-spectral/README.md)
+uses a 608,256-parameter model with eight pairs and an eight-token gap. All
+four controls pass binding in seven BF16 seeds and two FP32 supplements.
+Full spectral lowers final CE in 4/7 BF16 seeds but worsens the average; fading
+lowers CE versus full in 3/7 and worsens both FP32 supplements. The study
+supports a controllable feedback mechanism, with its learning effect still
+dependent on the recipe and seed.
 
 ### Schedule and resume
 

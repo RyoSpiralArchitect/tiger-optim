@@ -10,10 +10,10 @@ modeling.
 
 Defaults: 16 pairs, 64 symbols, a 64-token gap, four queries, four layers,
 width 192, six heads, batch 64, 1000 updates. CUDA uses BF16 autocast with FP32
-parameters and optimizer buffers; CPU and MPS use FP32. The eight modes
+parameters and optimizer buffers; CPU and MPS use FP32. The nine modes
 `adamw`, `tiger-full`, `tiger-no-spectral`, `tiger-fixed-qkv`,
-`tiger-uniform-qkv`, `tiger-global-trust`, `tiger-normalized-qkv`, and
-`tiger-uniform-low-qkv` share model/data
+`tiger-uniform-qkv`, `tiger-global-trust`, `tiger-normalized-qkv`,
+`tiger-uniform-low-qkv`, and `tiger-spectral-fade` share model/data
 seeds, gradient clipping, and a warmup/cosine schedule. Tiger retains its tag
 scales and trust recipe; the AdamW row is a configured reference. FFN asymmetry
 and LoRA cross-adaptation are disabled to isolate the QKV comparison.
@@ -21,11 +21,13 @@ and LoRA cross-adaptation are disabled to isolate the QKV comparison.
 ```sh
 python benchmarks/bench_associative_recall.py \
   --device cuda --precision bf16 --mode tiger-full \
-  --lr 0.003 --seed 211 --steps 1000 \
-  --output benchmarks/results/recall-tiger-211.json
+  --lr 0.001 --seed 631 --steps 1600 --width 128 --layers 3 --heads 4 \
+  --symbols 32 --pairs 8 --gap 8 --queries 4 --batch-size 64 \
+  --measure-qkv-updates --output benchmarks/results/recall-tiger-631.json
 ```
 
-The LR above is an example. For comparison, use a separate development search,
+The example uses the [learned medium CUDA control](evidence/2026-10-02-cuda-spectral/README.md).
+For comparison, use a separate development search,
 lock its selection, then evaluate new confirmation seeds. `--development`
 never creates or evaluates test data. Confirmation evaluates test data once
 after training. A [frozen plan and results](evidence/2026-09-30-cuda-recall/README.md)
@@ -89,6 +91,26 @@ Schema 3 receipts add measured applied deltas; schema 4 adds reference
 provenance and per-step candidate/target/applied RMS and rescale factors.
 The source commits and protocols are frozen separately for the two studies.
 
+### Learned CUDA spectral control
+
+The [CUDA spectral study](evidence/2026-10-02-cuda-spectral/README.md) uses
+eight pairs, 32 symbols, an eight-token gap, and 608,256 parameters. An
+eight-run validation-only development ladder qualifies both AdamW and Tiger
+at LR 0.001 before freezing seven new paired BF16 seeds. Two of these seeds
+also run all four controls in FP32. The new `tiger-spectral-fade` recipe keeps
+full spectral strength for half the budget, fades during the next quarter,
+then finishes at zero; RMS/trust adaptation continues.
+
+Schema 5 records per-update feedback strength and sampled model hashes. A
+separate 1,600-update compatibility replay exactly reproduces the prior
+default recipe's numeric traces and final weights. The opt-in strength API
+keeps the default value one; the fade endpoints are experimental.
+
+All 36 confirmation runs pass the binding gates. Full spectral lowers final
+CE in 4/7 BF16 seeds while worsening the mean; fade lowers CE versus full in
+3/7 BF16 seeds and worsens both FP32 supplements. The raw receipts include
+these mixed outcomes, supporting further controlled experiments.
+
 ### Harder CUDA stress task
 
 The [Sep 30 CUDA recipes](evidence/2026-09-30-cuda-recall/README.md) did not beat
@@ -115,6 +137,7 @@ file per mode/device and does not estimate variation across runs.
 
 | Record | Scope |
 | --- | --- |
+| [CUDA spectral controls, Oct 2](evidence/2026-10-02-cuda-spectral/README.md) | Learned medium retrieval, seven BF16 seeds, two FP32 supplements, and opt-in feedback strength |
 | [Matched QKV RMS, Oct 1](evidence/2026-10-01-qkv-rms-matched/README.md) | Five new seeds with equal applied QKV magnitude and a common rescaling control |
 | [QKV mean-scale factorial, Oct 1](evidence/2026-10-01-qkv-scale-factorial/README.md) | Allocation versus coefficient mean, actual update traces and negative MPS replay |
 | [Mac QKV ablation, Oct 1](evidence/2026-10-01-mac-qkv-ablation/README.md) | Learnable retrieval, binding checks, six component controls and MPS replay |

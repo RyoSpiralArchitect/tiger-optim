@@ -1,0 +1,10 @@
+{
+  "purpose": "Verify final full-strength implementation after removing interpolation at strength one",
+  "reason": "Self-review found that interpolating 1 + (correction - 1) can cancel digits for extreme custom clips. Full strength now uses the clipped correction directly; partial strength still interpolates. This post-study implementation guard must preserve the normal default development trajectory.",
+  "reference_file": "preflight-medium-tiger-full-0.001.json",
+  "reference_sha256": "9755080eb72f7def6bb339fefc3da23ba8130cf374dcaf6df3e983528c68ce76",
+  "output_file": "compatibility-final-tiger.json",
+  "source_of_recipe": "Exact medium development configuration from the frozen reference; BF16, Tiger full, seed 607, 1600 updates, LR 0.001, validation only, measured QKV updates",
+  "gate": "Exact equality of initial/final weight hashes, input hashes, binding outcomes, and every loss/LR/gradient/QKV update and sampled validation/feedback trace. Timing and new diagnostic fields are excluded.",
+  "scope": "Compatibility only; no new held-out test data or confirmation selection"
+}
