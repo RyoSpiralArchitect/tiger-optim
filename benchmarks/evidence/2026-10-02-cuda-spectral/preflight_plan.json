@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-02",
+  "purpose": "Establish a learned CUDA retrieval control before comparing spectral feedback",
+  "device": "cuda",
+  "precision": "bf16",
+  "cpu_threads": 2,
+  "eval_interval": 100,
+  "eval_size": 256,
+  "test_size": 2048,
+  "development_only": true,
+  "tasks": {
+    "short": {"seed": 601, "steps": 1200, "batch_size": 32, "model": {"symbols": 16, "pairs": 4, "gap": 0, "queries": 2, "width": 64, "layers": 2, "heads": 4}},
+    "medium": {"seed": 607, "steps": 1600, "batch_size": 64, "model": {"symbols": 32, "pairs": 8, "gap": 8, "queries": 4, "width": 128, "layers": 3, "heads": 4}}
+  },
+  "learning_rates": {"adamw": [0.001, 0.003], "tiger-full": [0.001, 0.003]},
+  "binding_gate": {"original_min": 0.9, "rebound_min": 0.9, "obsolete_max": 0.2},
+  "selection": "Choose medium if each optimizer has at least one development run passing all binding gates; otherwise choose short if both have a passing run. Within the selected task choose each optimizer's passing LR with lowest final validation CE. If neither task passes for both optimizers, retain all failures and freeze a new diagnostic plan before further data. Never use test data during this phase.",
+  "timing": "Diagnostic only; no speed claim from sequential learning runs"
+}
