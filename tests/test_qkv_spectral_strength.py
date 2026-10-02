@@ -47,8 +47,10 @@ def test_half_strength_blends_clipped_corrections_toward_one():
     torch.manual_seed(23)
     weight = torch.randn(12, 4, device="cpu")
     grad = torch.randn_like(weight)
-    full_param, full = build(weight)
-    half_param, half = build(weight, qkv_spectral_strength=0.5)
+    settings = {"qkv_lr_gain": 10.0, "qkv_gamma_spectral_clip": (0.9, 0.9),
+                "qkv_phase_boost_clip": (1.4, 1.4)}
+    full_param, full = build(weight, **settings)
+    half_param, half = build(weight, qkv_spectral_strength=0.5, **settings)
     full_param.grad = grad.clone()
     half_param.grad = grad.clone()
     full.step()
@@ -56,6 +58,15 @@ def test_half_strength_blends_clipped_corrections_toward_one():
     for key in ("qkv_freq_factor", "qkv_phase_boost"):
         assert half._last_metrics[key] == pytest.approx(1 + 0.5 * (full._last_metrics[key] - 1))
     assert full._qkv_spec_ema.keys() == half._qkv_spec_ema.keys()
+    assert half._last_metrics["qkv_freq_factor"] == pytest.approx(0.95)
+    assert half._last_metrics["qkv_phase_boost"] == pytest.approx(1.2)
+    assert full.param_groups[0]["qkv_lr_scales"] != half.param_groups[0]["qkv_lr_scales"]
+    # Adaptation is applied after the step; its scales affect the next update.
+    full_param.grad = grad.clone()
+    half_param.grad = grad.clone()
+    full.step()
+    half.step()
+    assert not torch.equal(full_param, half_param)
 
 
 @pytest.mark.parametrize("device", DEVICES)
@@ -102,6 +113,16 @@ def test_checkpoint_without_strength_retains_full_feedback():
     restored.step()
     torch.testing.assert_close(restored_param, param, rtol=0, atol=0)
     assert restored.param_groups[0]["qkv_lr_scales"] == optimizer.param_groups[0]["qkv_lr_scales"]
+
+
+def test_full_strength_keeps_extreme_custom_corrections_without_cancellation():
+    param, optimizer = build(torch.ones(12, 4, device="cpu"),
+                             qkv_gamma_spectral_clip=(1e-12, 1e-12),
+                             qkv_phase_boost_clip=(1e-12, 1e-12))
+    param.grad = torch.arange(48, device="cpu", dtype=torch.float32).reshape(12, 4) + 1
+    optimizer.step()
+    assert optimizer._last_metrics["qkv_freq_factor"] == 1e-12
+    assert optimizer._last_metrics["qkv_phase_boost"] == 1e-12
 
 
 @pytest.mark.parametrize("invalid", [float("nan"), float("inf"), -0.01, 1.01])

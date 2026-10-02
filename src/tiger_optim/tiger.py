@@ -1993,7 +1993,8 @@ class Tiger(Optimizer):
                         if freq_gain != 0.0:
                             freq_factor = math.exp(freq_gain * freq_disp_mean)
                             freq_factor = max(float(clip_lo), min(float(clip_hi), freq_factor))
-                            freq_factor = 1.0 + spec_strength * (freq_factor - 1.0)
+                            if spec_strength < 1.0:
+                                freq_factor = 1.0 + spec_strength * (freq_factor - 1.0)
                             gamma_eff *= freq_factor
                     # step-clip shrink by positive acceleration
                     step_clip_eff = base_clip / (1.0 + k_shrink * max(0.0, accel))
@@ -2006,7 +2007,8 @@ class Tiger(Optimizer):
                         if phase_gain != 0.0:
                             phase_boost = 1.0 + phase_gain * (phase_mean - phase_target)
                             phase_boost = max(float(clip_lo), min(float(clip_hi), phase_boost))
-                            phase_boost = 1.0 + spec_strength * (phase_boost - 1.0)
+                            if spec_strength < 1.0:
+                                phase_boost = 1.0 + spec_strength * (phase_boost - 1.0)
                     step_clip_eff = max(cmin, min(cmax, step_clip_eff * phase_boost))
 
                     med_r = sorted(rms)[1]; med_t = sorted(trs)[1]
