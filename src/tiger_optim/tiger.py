@@ -803,10 +803,14 @@ class Tiger(Optimizer):
         gi: int,
         params: List[torch.Tensor],
         reference: torch.Tensor,
+        factored_flags: Optional[List[bool]] = None,
     ) -> Dict[str, object]:
         """Persistent flat fp32 moment buffers + segment metadata for the
-        fused Triton fast path. State m/v entries are views into flat_m/flat_v
-        so kernel writes commit in place."""
+        fused Triton fast path. State m entries (and v for non-factored)
+        are views into flat_m/flat_v so kernel writes commit in place.
+        Factored params keep their vr/vc state outside the flat buffers."""
+        if factored_flags is None:
+            factored_flags = [False] * len(params)
         ids = tuple(id(p) for p in params)
         cache = self._flat_cache.setdefault(gi, {})
         key = ("flat", ids)
@@ -814,16 +818,21 @@ class Tiger(Optimizer):
         if F is not None:
             # Re-sync params whose moments are no longer views into THIS
             # buffer (membership changed since last use).
-            for p, o, n in zip(params, F["offsets"], F["lengths"]):
+            for p, o, n, fct in zip(params, F["offsets"], F["lengths"], F["factored"]):
                 st = self.state[p]
-                if st.get("m") is None or st["m"].untyped_storage().data_ptr() != F["flat_m"].untyped_storage().data_ptr():
+                if st.get("m") is None:
+                    st["m"] = F["flat_m"][o:o + n].view_as(p).zero_()
+                elif st["m"].untyped_storage().data_ptr() != F["flat_m"].untyped_storage().data_ptr():
                     mv = F["flat_m"][o:o + n].view_as(p)
                     mv.copy_(st["m"].to(torch.float32))
                     st["m"] = mv
-                if st.get("v") is None or st["v"].untyped_storage().data_ptr() != F["flat_v"].untyped_storage().data_ptr():
-                    vv = F["flat_v"][o:o + n].view_as(p)
-                    vv.copy_(st["v"].to(torch.float32))
-                    st["v"] = vv
+                if not fct:
+                    if st.get("v") is None:
+                        st["v"] = F["flat_v"][o:o + n].view_as(p).zero_()
+                    elif st["v"].untyped_storage().data_ptr() != F["flat_v"].untyped_storage().data_ptr():
+                        vv = F["flat_v"][o:o + n].view_as(p)
+                        vv.copy_(st["v"].to(torch.float32))
+                        st["v"] = vv
             return F
         dev = reference.device
         lengths = [int(p.numel()) for p in params]
@@ -832,22 +841,21 @@ class Tiger(Optimizer):
         flat_v = torch.empty(total, dtype=torch.float32, device=dev)
         offsets: List[int] = []
         off = 0
-        for p, n in zip(params, lengths):
+        for p, n, fct in zip(params, lengths, factored_flags):
             st = self.state[p]
             mv = flat_m[off:off + n].view_as(p)
-            vv = flat_v[off:off + n].view_as(p)
             if "m" in st:
                 mv.copy_(st["m"].to(torch.float32))
             else:
                 mv.zero_()
-                st["m"] = mv
-            if "v" in st:
-                vv.copy_(st["v"].to(torch.float32))
-            else:
-                vv.zero_()
-                st["v"] = vv
             st["m"] = mv
-            st["v"] = vv
+            if not fct:
+                vv = flat_v[off:off + n].view_as(p)
+                if "v" in st:
+                    vv.copy_(st["v"].to(torch.float32))
+                else:
+                    vv.zero_()
+                st["v"] = vv
             offsets.append(off)
             off += n
         lens_t = torch.tensor(lengths, device=dev, dtype=torch.long)
@@ -862,6 +870,7 @@ class Tiger(Optimizer):
             "starts": starts, "ends": ends,
             "numel_f": lens_t.to(torch.float32),
             "offsets": offsets, "total": total, "ind": ind,
+            "factored": factored_flags,
         }
         cache[key] = F
         return F
@@ -1278,19 +1287,32 @@ class Tiger(Optimizer):
                         flat_apply, flat_fused_supported,
                     )
                     if flat_fused_supported():
-                        fast_params = [
-                            p for p in active_params
-                            if p.dtype == torch.float32
-                            and p.grad is not None and p.grad.dtype == torch.float32
-                            and p.is_contiguous() and p.grad.is_contiguous()
-                            and self.state[p].get("_state_sane")
-                            and "m" in self.state[p] and "v" in self.state[p]
-                            and not (factored and p.ndim >= 2)
-                            and qkv_rules.get(id(p)) is None
-                            and not (blk_chunks > 0 and p.ndim == 2
-                                     and p.shape[0] % blk_chunks == 0)
-                        ]
-                        slow_params = [p for p in active_params if not any(p is q for q in fast_params)]
+                        _elig = []
+                        _fact_flags = []
+                        for p in active_params:
+                            if not (p.dtype == torch.float32
+                                    and p.grad is not None and p.grad.dtype == torch.float32
+                                    and p.is_contiguous() and p.grad.is_contiguous()
+                                    and self.state[p].get("_state_sane")
+                                    and "m" in self.state[p]
+                                    and qkv_rules.get(id(p)) is None
+                                    and not (blk_chunks > 0 and p.ndim == 2
+                                             and p.shape[0] % blk_chunks == 0)):
+                                continue
+                            if factored and p.ndim >= 2:
+                                # Measured: per-param vr/vc/vhat preamble costs
+                                # more than the flat tail saves (5.79 -> 6.15ms
+                                # on RTX 5090) — keep factored on the slow path.
+                                continue
+                            if "v" in self.state[p]:
+                                _elig.append(p); _fact_flags.append(False)
+                        # Dense params first so flat_v maps cleanly.
+                        fast_params = [p for p, f in zip(_elig, _fact_flags) if not f] + \
+                                      [p for p, f in zip(_elig, _fact_flags) if f]
+                        fact_flags = [f for _, f in sorted(
+                            enumerate(_fact_flags), key=lambda kv: kv[1])]
+                        slow_params = [p for p in active_params
+                                       if not any(p is q for q in fast_params)]
                 except Exception:
                     fast_params = []
                     slow_params = list(active_params)
@@ -1301,7 +1323,7 @@ class Tiger(Optimizer):
                 from .triton_kernels import (
                     flat_step_candidates, flat_seg_stats, flat_direction, flat_apply,
                 )
-                F = self._flat_group(gi, fast_params, group_ref)
+                F = self._flat_group(gi, fast_params, group_ref, factored_flags=fact_flags)
                 dev_f = group_ref.device
                 Nf = len(fast_params)
                 seg = F["seg_idx"]; lens = F["lens_t"]; numel_f = F["numel_f"]
@@ -1316,6 +1338,36 @@ class Tiger(Optimizer):
                                      pp_b, ds_b, b1=b1, b2=b2, eps=eps, alpha=alpha,
                                      sign_tau=float(group["sign_tau"]))
                 flat_p = torch.cat([p.detach().reshape(-1) for p in fast_params])
+                # Factored 2D preamble: per-param vr/vc/vhat (unavoidable
+                # reductions); vhat lands in its cand_v segment so the shared
+                # flat tail (stats, direction, guard, apply) stays uniform.
+                fact_cands: Dict[int, Tuple[torch.Tensor, torch.Tensor]] = {}
+                extra_ok = torch.ones(Nf, dtype=torch.bool, device=dev_f)
+                for _i, (_p, _fct) in enumerate(zip(fast_params, fact_flags)):
+                    if not _fct:
+                        continue
+                    _o = F["offsets"][_i]; _n = _p.numel()
+                    _R, _C = _p.shape[0], _p.numel() // _p.shape[0]
+                    _st = self.state[_p]
+                    _g2 = flat_g[_o:_o + _n].view(_R, _C).square()
+                    _vr32 = _st["vr"].to(torch.float32)
+                    _vc32 = _st["vc"].to(torch.float32)
+                    _vr32 = _vr32.clone(); _vc32 = _vc32.clone()
+                    _vr32.mul_(b2).add_((_g2 / float(_C)).sum(dim=1), alpha=1.0 - b2)
+                    _vc32.mul_(b2).add_((_g2 / float(_R)).sum(dim=0), alpha=1.0 - b2)
+                    _vr_mean = (_vr32 / float(_R)).sum()
+                    _vhat = (_vr32 / torch.maximum(_vr_mean, scalar_vtiny)).unsqueeze(1) * _vc32.unsqueeze(0)
+                    cand_v[_o:_o + _n] = _vhat.reshape(-1)
+                    # pp_b/ds_b were computed from the dense cand_v in K1;
+                    # recompute them from vhat so the shared tail is correct.
+                    _pp = (cand_v[_o:_o + _n].sqrt().add_(eps)).pow(-float(alpha)).clamp_(1e-8, 1e8)
+                    pp_b[_o:_o + _n] = _pp
+                    _cm = cand_m[_o:_o + _n]
+                    ds_b[_o:_o + _n] = _cm / (_cm.abs() + float(group["sign_tau"])) * _pp
+                    fact_cands[_i] = (_vr32, _vc32)
+                    extra_ok[_i] = (torch.isfinite(_vr32).all()
+                                    & torch.isfinite(_vc32).all()
+                                    & torch.isfinite(_vhat).all())
                 stats = torch.empty(Nf * 5, device=dev_f)
                 flat_seg_stats(cand_m, cand_v, flat_p, ds_b, F["starts"], F["ends"], stats)
                 st5 = stats.view(Nf, 5)
@@ -1331,6 +1383,7 @@ class Tiger(Optimizer):
                 checks_ok = (
                     torch.isfinite(am_m) & torch.isfinite(am_v)
                     & torch.isfinite(am_d) & torch.isfinite(am_ds)
+                    & extra_ok
                 )
                 decay_rate = lr * lr_scale * float(group["weight_decay"])
                 decay_growth = abs(1.0 - decay_rate) + (
@@ -1397,7 +1450,7 @@ class Tiger(Optimizer):
                     "cand_v": cand_v, "pp": pp_b, "ds": ds_b, "d": d_f,
                     "decay_rate": decay_rate, "pn_g": pn_g, "dn_g": dn_g,
                     "pre_n": pre_n, "emas": emas, "has_ema_idx": has_ema_idx,
-                    "ind": ind, "Nf": Nf, "dev": dev_f,
+                    "ind": ind, "Nf": Nf, "dev": dev_f, "fact_cands": fact_cands,
                 }
 
             for p in slow_params:
@@ -2010,6 +2063,12 @@ class Tiger(Optimizer):
                                fast_ctx["cand_m"], fast_ctx["cand_v"], d_f, eff,
                                F["seg_idx"], ok_t, upd,
                                decay=0.0, lr=lr * lr_scale)
+                    for i in valid_idx:
+                        fc = fast_ctx["fact_cands"].get(i)
+                        if fc is not None:
+                            st_f = self.state[fast_params[i]]
+                            st_f["vr"].copy_(fc[0].to(st_f["vr"].dtype))
+                            st_f["vc"].copy_(fc[1].to(st_f["vc"].dtype))
                     if use_foreach_upd:
                         for i in valid_idx:
                             p = fast_params[i]
