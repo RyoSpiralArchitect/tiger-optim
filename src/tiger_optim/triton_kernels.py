@@ -230,10 +230,13 @@ if triton is not None:
 
     @triton.jit
     def _flat_dir_kernel(cm_ptr, pp_ptr, ds_ptr, rms_ptr, seg_ptr, d_ptr,
-                         N, sblend, eps, BLOCK: tl.constexpr):
+                         N, sb_ptr, eps, BLOCK: tl.constexpr):
         pid = tl.program_id(0)
         offs = pid * BLOCK + tl.arange(0, BLOCK)
         mask = offs < N
+        # sblend arrives via device pointer so CUDA-graph replays see the
+        # current value even when the blend schedule changes every step.
+        sblend = tl.load(sb_ptr)
         seg = tl.load(seg_ptr + offs, mask=mask, other=0)
         rms = tl.load(rms_ptr + seg, mask=mask, other=1.0)
         cm = tl.load(cm_ptr + offs, mask=mask, other=0.0)
@@ -496,6 +499,9 @@ def flat_direction(cand_m, pp, dsign, rms, seg_idx, d, *, sblend, eps):
     _require_triton()
     _check_flat(cand_m, pp, dsign, rms, d)
     n = cand_m.numel()
+    if not torch.is_tensor(sblend):
+        sblend = torch.full((), float(sblend), dtype=torch.float32,
+                            device=d.device)
     _flat_dir_kernel[((n + 1023) // 1024,)](
         cand_m, pp, dsign, rms, seg_idx, d, n, sblend, eps, BLOCK=1024)
 
