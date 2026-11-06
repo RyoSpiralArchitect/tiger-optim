@@ -820,14 +820,19 @@ class Tiger(Optimizer):
             # buffer (membership changed since last use).
             for p, o, n, fct in zip(params, F["offsets"], F["lengths"], F["factored"]):
                 st = self.state[p]
-                if st.get("m") is None or st["m"].untyped_storage().data_ptr() != F["flat_m"].untyped_storage().data_ptr():
+                if st.get("m") is None:
+                    st["m"] = F["flat_m"][o:o + n].view_as(p).zero_()
+                elif st["m"].untyped_storage().data_ptr() != F["flat_m"].untyped_storage().data_ptr():
                     mv = F["flat_m"][o:o + n].view_as(p)
                     mv.copy_(st["m"].to(torch.float32))
                     st["m"] = mv
-                if not fct and (st.get("v") is None or st["v"].untyped_storage().data_ptr() != F["flat_v"].untyped_storage().data_ptr()):
-                    vv = F["flat_v"][o:o + n].view_as(p)
-                    vv.copy_(st["v"].to(torch.float32))
-                    st["v"] = vv
+                if not fct:
+                    if st.get("v") is None:
+                        st["v"] = F["flat_v"][o:o + n].view_as(p).zero_()
+                    elif st["v"].untyped_storage().data_ptr() != F["flat_v"].untyped_storage().data_ptr():
+                        vv = F["flat_v"][o:o + n].view_as(p)
+                        vv.copy_(st["v"].to(torch.float32))
+                        st["v"] = vv
             return F
         dev = reference.device
         lengths = [int(p.numel()) for p in params]
@@ -843,7 +848,6 @@ class Tiger(Optimizer):
                 mv.copy_(st["m"].to(torch.float32))
             else:
                 mv.zero_()
-                st["m"] = mv
             st["m"] = mv
             if not fct:
                 vv = flat_v[off:off + n].view_as(p)
@@ -851,7 +855,6 @@ class Tiger(Optimizer):
                     vv.copy_(st["v"].to(torch.float32))
                 else:
                     vv.zero_()
-                    st["v"] = vv
                 st["v"] = vv
             offsets.append(off)
             off += n
@@ -1355,6 +1358,12 @@ class Tiger(Optimizer):
                     _vr_mean = (_vr32 / float(_R)).sum()
                     _vhat = (_vr32 / torch.maximum(_vr_mean, scalar_vtiny)).unsqueeze(1) * _vc32.unsqueeze(0)
                     cand_v[_o:_o + _n] = _vhat.reshape(-1)
+                    # pp_b/ds_b were computed from the dense cand_v in K1;
+                    # recompute them from vhat so the shared tail is correct.
+                    _pp = (cand_v[_o:_o + _n].sqrt().add_(eps)).pow(-float(alpha)).clamp_(1e-8, 1e8)
+                    pp_b[_o:_o + _n] = _pp
+                    _cm = cand_m[_o:_o + _n]
+                    ds_b[_o:_o + _n] = _cm / (_cm.abs() + float(group["sign_tau"])) * _pp
                     fact_cands[_i] = (_vr32, _vc32)
                     extra_ok[_i] = (torch.isfinite(_vr32).all()
                                     & torch.isfinite(_vc32).all()
