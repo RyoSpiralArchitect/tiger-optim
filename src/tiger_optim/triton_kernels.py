@@ -402,7 +402,7 @@ if triton is not None:
     @triton.jit
     def _flat_apply_kernel(p_ptr, m_ptr, v_ptr, cm_ptr, cv_ptr, d_ptr,
                            eff_ptr, seg_ptr, ok_ptr, upd_ptr,
-                           N, decay, lr, BLOCK: tl.constexpr):
+                           N, decay_ptr, lr_ptr, BLOCK: tl.constexpr):
         pid = tl.program_id(0)
         offs = pid * BLOCK + tl.arange(0, BLOCK)
         mask = offs < N
@@ -412,6 +412,9 @@ if triton is not None:
         p = tl.load(p_ptr + offs, mask=mask, other=0.0)
         d = tl.load(d_ptr + offs, mask=mask, other=0.0)
         eff = tl.load(eff_ptr + seg, mask=mask, other=0.0)
+        # Scalar loads so CUDA-graph replays see live per-step values.
+        decay = tl.load(decay_ptr)
+        lr = tl.load(lr_ptr)
         upd = -lr * eff * d
         p = tl.where(accepted, p * (1.0 - decay) + upd, p)
         tl.store(p_ptr + offs, p, mask=mask)
@@ -516,6 +519,12 @@ def flat_apply(p_flat, m, v, cand_m, cand_v, d, eff, seg_idx, ok, upd, *,
     _require_triton()
     _check_flat(p_flat, m, v, cand_m, cand_v, d, eff, ok, upd)
     n = p_flat.numel()
+    if not torch.is_tensor(decay):
+        decay = torch.full((), float(decay), dtype=torch.float32,
+                           device=p_flat.device)
+    if not torch.is_tensor(lr):
+        lr = torch.full((), float(lr), dtype=torch.float32,
+                        device=p_flat.device)
     _flat_apply_kernel[((n + 1023) // 1024,)](
         p_flat, m, v, cand_m, cand_v, d, eff, seg_idx, ok, upd, n, decay, lr,
         BLOCK=1024)
