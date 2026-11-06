@@ -816,7 +816,8 @@ class Tiger(Optimizer):
             subsegs = [1] * len(params)
         ids = tuple(id(p) for p in params)
         cache = self._flat_cache.setdefault(gi, {})
-        key = ("flat", ids, tuple(factored_flags), tuple(subsegs))
+        key = ("flat", ids, tuple(factored_flags), tuple(subsegs),
+               reference.device)
         F = cache.get(key)
         if F is not None:
             # Re-sync params whose moments are no longer views into THIS
@@ -1742,7 +1743,8 @@ class Tiger(Optimizer):
                          bool(agc_clip and agc_clip > 0.0),
                          bucket_route, bucket_src, use_triton_stats,
                          id_seg, has_qkv_lr, qkv_split,
-                         tuple(chunked_flags), len(active_params))
+                         tuple(chunked_flags), len(active_params),
+                         sum(q.numel() for q in active_params))
                 if gs["g"] is not None and gs["key"] != _gkey:
                     gs["g"] = None; gs["warm"] = 0
                 if gs["g"] is not None:
@@ -1753,8 +1755,9 @@ class Tiger(Optimizer):
                     if gs["warm"] >= 2:
                         try:
                             gcap = torch.cuda.CUDAGraph()
-                            with torch.cuda.graph(gcap):
-                                _preguard()
+                            with torch.cuda.device(group_ref.device):
+                                with torch.cuda.graph(gcap):
+                                    _preguard()
                             gs["g"] = gcap; gs["key"] = _gkey
                             gs["g"].replay()
                         except Exception as _ge:
