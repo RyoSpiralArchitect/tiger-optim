@@ -4,6 +4,10 @@
 Design goals:
 - diagnose variance: per-step series, interquartile stats, GPU clock check
 - repeated in-process measurement with median-of-medians
+
+Diagnostic only — NOT claim-gate evidence (see README "Benchmark and Claim
+Gate"): reps share one process and GPU state, nothing is persisted, and no
+git/env identity is recorded.
 """
 import sys, time, statistics, json, subprocess
 sys.path.insert(0, "src")
@@ -86,6 +90,10 @@ def main():
     ap.add_argument("--steps", type=int, default=150)
     ap.add_argument("--reps", type=int, default=3)
     args = ap.parse_args()
+    if args.steps <= 0 or args.reps <= 0:
+        raise ValueError("--steps and --reps must be positive")
+    if args.device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("--device cuda requested but CUDA is unavailable")
     dev = torch.device(args.device)
     torch.manual_seed(0)
     if dev.type == "cuda":
