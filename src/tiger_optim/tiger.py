@@ -628,6 +628,7 @@ class Tiger(Optimizer):
         self._qkv_disp_ema_prev: Dict[int, float] = {}
         self._qkv_spec_ema: Dict[int, Dict[str, Dict[str, Union[float, torch.Tensor]]]] = {}
         self._group_scalar_cache: Dict[int, Dict[str, Tuple[float, torch.Tensor]]] = {}
+        self._flat_cache: Dict[int, Dict[object, object]] = {}
         self._fused_apply_failures: List[str] = []
 
     # ---------- Public API ----------
@@ -738,6 +739,7 @@ class Tiger(Optimizer):
             "fp32": torch.float32, "bf16": torch.bfloat16, "fp16": torch.float16,
         }[self.defaults["mom_dtype"].lower()]
         self._group_scalar_cache = {}
+        self._flat_cache = {}
         self._fused_apply_failures = []
 
     def report_metrics(self, loss: Optional[float] = None, **kwargs):
@@ -795,6 +797,74 @@ class Tiger(Optimizer):
         tensor = _scalar_like(reference, scalar_value, dtype=dtype, device=reference.device)
         cache[key] = (scalar_value, tensor)
         return tensor
+
+    def _flat_group(
+        self,
+        gi: int,
+        params: List[torch.Tensor],
+        reference: torch.Tensor,
+    ) -> Dict[str, object]:
+        """Persistent flat fp32 moment buffers + segment metadata for the
+        fused Triton fast path. State m/v entries are views into flat_m/flat_v
+        so kernel writes commit in place."""
+        ids = tuple(id(p) for p in params)
+        cache = self._flat_cache.setdefault(gi, {})
+        key = ("flat", ids)
+        F = cache.get(key)
+        if F is not None:
+            # Re-sync params whose moments are no longer views into THIS
+            # buffer (membership changed since last use).
+            for p, o, n in zip(params, F["offsets"], F["lengths"]):
+                st = self.state[p]
+                if st.get("m") is None or st["m"].untyped_storage().data_ptr() != F["flat_m"].untyped_storage().data_ptr():
+                    mv = F["flat_m"][o:o + n].view_as(p)
+                    mv.copy_(st["m"].to(torch.float32))
+                    st["m"] = mv
+                if st.get("v") is None or st["v"].untyped_storage().data_ptr() != F["flat_v"].untyped_storage().data_ptr():
+                    vv = F["flat_v"][o:o + n].view_as(p)
+                    vv.copy_(st["v"].to(torch.float32))
+                    st["v"] = vv
+            return F
+        dev = reference.device
+        lengths = [int(p.numel()) for p in params]
+        total = int(sum(lengths))
+        flat_m = torch.empty(total, dtype=torch.float32, device=dev)
+        flat_v = torch.empty(total, dtype=torch.float32, device=dev)
+        offsets: List[int] = []
+        off = 0
+        for p, n in zip(params, lengths):
+            st = self.state[p]
+            mv = flat_m[off:off + n].view_as(p)
+            vv = flat_v[off:off + n].view_as(p)
+            if "m" in st:
+                mv.copy_(st["m"].to(torch.float32))
+            else:
+                mv.zero_()
+                st["m"] = mv
+            if "v" in st:
+                vv.copy_(st["v"].to(torch.float32))
+            else:
+                vv.zero_()
+                st["v"] = vv
+            st["m"] = mv
+            st["v"] = vv
+            offsets.append(off)
+            off += n
+        lens_t = torch.tensor(lengths, device=dev, dtype=torch.long)
+        seg_idx = torch.repeat_interleave(torch.arange(len(lengths), device=dev), lens_t)
+        starts = torch.tensor(offsets, device=dev, dtype=torch.long)
+        ends = starts + lens_t
+        ind = torch.zeros(len(lengths), total, dtype=torch.float32, device=dev)
+        ind[seg_idx, torch.arange(total, device=dev)] = 1.0
+        F = {
+            "flat_m": flat_m, "flat_v": flat_v,
+            "lengths": lengths, "lens_t": lens_t, "seg_idx": seg_idx,
+            "starts": starts, "ends": ends,
+            "numel_f": lens_t.to(torch.float32),
+            "offsets": offsets, "total": total, "ind": ind,
+        }
+        cache[key] = F
+        return F
 
     def stage_group_update(self, gi: int, fields: Dict[str, object], policy: str = "replace"):
         self._pending_group_updates.setdefault(int(gi), []).append((dict(fields), str(policy)))
@@ -1188,7 +1258,149 @@ class Tiger(Optimizer):
             )
             cross_density_sum = 0.0; cross_density_count = 0
 
-            for p in active_params:
+            # ---- Fused flat fast path (opt-in via TIGER_FLAT_STEP) ----
+            # "Simple" params (fp32 p/g/state, dense v, softsign, alpha>0,
+            # no qkv/chunk/rms-clip) run on 5 flat Triton launches + 1 sync.
+            skip_checks_g = self.defaults["skip_if_nonfinite"]
+            fast_params: List[torch.Tensor] = []
+            slow_params: List[torch.Tensor] = list(active_params)
+            if (os.environ.get("TIGER_FLAT_STEP", "") not in ("", "0", "false", "False")
+                    and group_ref.is_cuda
+                    and skip_checks_g
+                    and group["sign_mode"] == "softsign"
+                    and alpha > 0.0
+                    and self._mom_storage_dtype == torch.float32
+                    and float(self.defaults["state_prune_threshold"]) == 0.0
+                    and not (rms_thr and rms_gran == "param")):
+                try:
+                    from .triton_kernels import (
+                        flat_step_candidates, flat_seg_stats, flat_direction,
+                        flat_apply, flat_fused_supported,
+                    )
+                    if flat_fused_supported():
+                        fast_params = [
+                            p for p in active_params
+                            if p.dtype == torch.float32
+                            and p.grad is not None and p.grad.dtype == torch.float32
+                            and p.is_contiguous() and p.grad.is_contiguous()
+                            and self.state[p].get("_state_sane")
+                            and "m" in self.state[p] and "v" in self.state[p]
+                            and not (factored and p.ndim >= 2)
+                            and qkv_rules.get(id(p)) is None
+                            and not (blk_chunks > 0 and p.ndim == 2
+                                     and p.shape[0] % blk_chunks == 0)
+                        ]
+                        slow_params = [p for p in active_params if not any(p is q for q in fast_params)]
+                except Exception:
+                    fast_params = []
+                    slow_params = list(active_params)
+
+            fast_ok_list: List[bool] = []
+            fast_ctx: Optional[Dict[str, object]] = None
+            if fast_params:
+                from .triton_kernels import (
+                    flat_step_candidates, flat_seg_stats, flat_direction, flat_apply,
+                )
+                F = self._flat_group(gi, fast_params, group_ref)
+                dev_f = group_ref.device
+                Nf = len(fast_params)
+                seg = F["seg_idx"]; lens = F["lens_t"]; numel_f = F["numel_f"]
+                ind = F["ind"]
+                total = F["total"]
+                flat_g = torch.cat([p.grad.detach().reshape(-1) for p in fast_params])
+                cand_m = torch.empty(total, device=dev_f)
+                cand_v = torch.empty(total, device=dev_f)
+                pp_b = torch.empty(total, device=dev_f)
+                ds_b = torch.empty(total, device=dev_f)
+                flat_step_candidates(flat_g, F["flat_m"], F["flat_v"], cand_m, cand_v,
+                                     pp_b, ds_b, b1=b1, b2=b2, eps=eps, alpha=alpha,
+                                     sign_tau=float(group["sign_tau"]))
+                flat_p = torch.cat([p.detach().reshape(-1) for p in fast_params])
+                stats = torch.empty(Nf * 5, device=dev_f)
+                flat_seg_stats(cand_m, cand_v, flat_p, ds_b, F["starts"], F["ends"], stats)
+                st5 = stats.view(Nf, 5)
+                am_m = st5[:, 0]; am_v = st5[:, 1]; am_p = st5[:, 2]
+                am_ds = st5[:, 3]; ssq_m = st5[:, 4]
+                rms_m = am_m * torch.sqrt(ssq_m / numel_f)
+                d_f = torch.empty(total, device=dev_f)
+                flat_direction(cand_m, pp_b, ds_b, rms_m, seg, d_f, sblend=sblend, eps=eps)
+                stats2 = torch.empty(Nf * 5, device=dev_f)
+                flat_seg_stats(cand_m, cand_v, flat_p, d_f, F["starts"], F["ends"], stats2)
+                am_d = stats2.view(Nf, 5)[:, 3]
+
+                checks_ok = (
+                    torch.isfinite(am_m) & torch.isfinite(am_v)
+                    & torch.isfinite(am_d) & torch.isfinite(am_ds)
+                )
+                decay_rate = lr * lr_scale * float(group["weight_decay"])
+                decay_growth = abs(1.0 - decay_rate) + (
+                    8.0 * torch.finfo(torch.float32).eps * abs(decay_rate))
+                trust_growth = max(1.0, trust_clip) if use_trust else 1.0
+                route_lr = abs(lr * lr_scale)
+                raw_bound = am_d * (trust_growth * route_lr)
+                bucket_route = (
+                    use_foreach_upd and bucket_std and hasattr(torch, "_foreach_add_")
+                    and len(active_params) >= foreach_min_bucket)
+                if bucket_route:
+                    if bucket_src == "median" and not use_triton_stats:
+                        upd_bound = raw_bound * 1e12
+                    elif use_triton_stats or bucket_src == "global":
+                        upd_bound = raw_bound.new_full((), math.sqrt(sum(q.numel() for q in active_params)))
+                    else:
+                        upd_bound = raw_bound.new_full((), len(active_params) * 1.0) * numel_f.sqrt()
+                else:
+                    upd_bound = raw_bound
+                fp32_limit = torch.finfo(torch.float32).max * (1.0 - 8.0 * torch.finfo(torch.float32).eps)
+                checks_ok &= (
+                    (am_d * trust_growth <= fp32_limit)
+                    & (raw_bound <= fp32_limit)
+                    & (am_p * decay_growth + upd_bound <= fp32_limit))
+
+                pn_g = dn_g = pre_n = None
+                am_pre = None
+                if use_trust or (agc_clip and agc_clip > 0.0):
+                    def _seg_norm(x, am):
+                        safe = torch.where(torch.isfinite(am) & (am > 0), am, torch.ones_like(am))
+                        scaled = x / torch.repeat_interleave(safe, lens)
+                        ssq = ind @ scaled.square()
+                        return safe * ssq.sqrt()
+                    pn_g = _seg_norm(flat_p, am_p)
+                    dn_g = _seg_norm(d_f, am_d)
+                    loose_ok = (am_p * (decay_growth * numel_f.sqrt()) <= fp32_limit) & (am_d * numel_f.sqrt() <= fp32_limit)
+                    exact_ok = (pn_g * decay_growth <= fp32_limit) & (dn_g <= fp32_limit)
+                    if use_trust and trust_space == "precond":
+                        pre_f = cand_m * pp_b
+                        am_pre = torch.stack(list(torch._foreach_norm(
+                            [pre_f[o:o + n] for o, n in zip(F["offsets"], F["lengths"])],
+                            ord=float("inf"))))
+                        pre_n = _seg_norm(pre_f, am_pre)
+                        loose_ok &= am_pre * numel_f.sqrt() <= fp32_limit
+                        exact_ok &= pre_n <= fp32_limit
+                    checks_ok &= loose_ok | exact_ok
+
+                emas = has_ema_idx = None
+                if use_trust and trust_beta > 0.0:
+                    _emas = [self._trust_ema.get((gi, param_indices[id(p)])) for p in fast_params]
+                    has_ema_idx = [i for i, o in enumerate(_emas) if o is not None]
+                    emas = torch.stack([
+                        (o.to(torch.float32).reshape(()) if isinstance(o, torch.Tensor)
+                         else _scalar_like(group_ref, float(o), dtype=torch.float32, device=dev_f) if o is not None
+                         else torch.ones((), device=dev_f)) for o in _emas])
+                    ema_ok = torch.isfinite(emas) & (emas >= 0)
+                    if len(has_ema_idx) != Nf:
+                        missing = [i for i in range(Nf) if i not in set(has_ema_idx)]
+                        ema_ok = ema_ok.clone(); ema_ok[missing] = True
+                    checks_ok &= ema_ok
+                fast_ok_list = checks_ok.cpu().tolist()
+                fast_ctx = {
+                    "F": F, "flat_g": flat_g, "flat_p": flat_p, "cand_m": cand_m,
+                    "cand_v": cand_v, "pp": pp_b, "ds": ds_b, "d": d_f,
+                    "decay_rate": decay_rate, "pn_g": pn_g, "dn_g": dn_g,
+                    "pre_n": pre_n, "emas": emas, "has_ema_idx": has_ema_idx,
+                    "ind": ind, "Nf": Nf, "dev": dev_f,
+                }
+
+            for p in slow_params:
                 pi = param_indices[id(p)]
                 g = p.grad
                 st = self.state[p]
@@ -1709,6 +1921,109 @@ class Tiger(Optimizer):
                             p.add_(d.to(torch.float32) * eff, alpha=-base_lr)
 
             # flush foreach bucket (combined stats & scale)
+            # ---- Fused flat apply: eff, launch K5, enqueue update views ----
+            if fast_ctx is not None:
+                F = fast_ctx["F"]; d_f = fast_ctx["d"]
+                pn_v = fast_ctx["pn_g"]; dn_v = fast_ctx["dn_g"]
+                decay_rate = fast_ctx["decay_rate"]
+                Nf = fast_ctx["Nf"]; dev_f = fast_ctx["dev"]
+                lens = F["lens_t"]; numel_f = F["numel_f"]
+                valid_idx = [i for i, b in enumerate(fast_ok_list) if b]
+                bad_idx = [i for i, b in enumerate(fast_ok_list) if not b]
+                if bad_idx:
+                    prof_c["nonfinite_skips"] += len(bad_idx)
+                if valid_idx:
+                    eff = torch.ones(Nf, device=dev_f)
+                    agc_scale = None
+                    if pn_v is not None and decay_rate != 0.0:
+                        pn_v = pn_v * abs(1.0 - decay_rate)
+                    if agc_clip and agc_clip > 0.0:
+                        agc_scale = torch.minimum(
+                            (pn_v + float(agc_eps)) * float(agc_clip) / dn_v.clamp(min=1e-12),
+                            torch.ones_like(pn_v))
+                        eff = eff * agc_scale
+                        dn_v = dn_v * agc_scale  # post-AGC norm, matches slow path
+                        if agc_clips_t is not None:
+                            _c = (agc_scale < 1.0).to(agc_clips_t.dtype).sum()
+                            if bad_idx:
+                                _c = _c - (agc_scale[bad_idx] < 1.0).to(agc_clips_t.dtype).sum()
+                            agc_clips_t.add_(_c)
+                    # Density / FFN accumulators mirror the slow path (post-AGC d).
+                    if (lora_dense_sum_t is not None or cross_density_sum_t is not None
+                            or up_s2_t is not None or dn_s2_t is not None):
+                        d_den = d_f if agc_scale is None else (
+                            d_f * torch.repeat_interleave(agc_scale, lens))
+                        ssq = ind @ d_den.square()
+                        if bad_idx:
+                            ssq[bad_idx] = 0.0
+                        if up_s2_t is not None:
+                            up_s2_t.add_(ssq.sum())
+                            up_n += sum(F["lengths"][i] for i in valid_idx)
+                        elif dn_s2_t is not None:
+                            dn_s2_t.add_(ssq.sum())
+                            dn_n += sum(F["lengths"][i] for i in valid_idx)
+                        if lora_dense_sum_t is not None or cross_density_sum_t is not None:
+                            k = float(self.defaults["lora_density_k"])
+                            drms = (ssq / numel_f).sqrt()
+                            thr = torch.repeat_interleave(drms * k, lens)
+                            dens = (ind @ (d_den.abs() > thr).to(torch.float32)) / numel_f
+                            if bad_idx:
+                                dens[bad_idx] = 0.0
+                            if lora_dense_sum_t is not None:
+                                lora_dense_sum_t.add_(dens.sum())
+                                lora_count += len(valid_idx)
+                            if cross_density_sum_t is not None:
+                                cross_density_sum_t.add_(dens.sum())
+                                cross_density_count += len(valid_idx)
+                    if use_trust:
+                        if trust_space == "update":
+                            den = dn_v
+                        elif trust_space == "precond":
+                            den = fast_ctx["pre_n"]
+                        else:
+                            den = None
+                        if den is not None:
+                            valid_v = (pn_v * den > 0).to(torch.float32)
+                            raw = 1.0 + valid_v * (pn_v / den.clamp(min=1e-12) - 1.0)
+                        else:
+                            raw = torch.ones(Nf, device=dev_f)
+                        if trust_beta > 0.0:
+                            sm = trust_beta * fast_ctx["emas"] + (1.0 - trust_beta) * raw
+                            miss = [i for i in range(Nf) if i not in set(fast_ctx["has_ema_idx"])]
+                            if miss:
+                                sm[miss] = raw[miss]
+                            for i in valid_idx:
+                                self._trust_ema[(gi, param_indices[id(fast_params[i])])] = sm[i].detach()
+                        else:
+                            sm = raw
+                        eff = eff * torch.minimum(sm, trust_cap_t)
+                    if bad_idx:
+                        eff[bad_idx] = 0.0
+                    if group["weight_decay"]:
+                        torch._foreach_mul_([fast_params[i] for i in valid_idx], 1.0 - decay_rate)
+                        prof_c["scalar_wd"] += len(valid_idx)
+                    upd = torch.empty(F["total"], device=dev_f)
+                    ok_t = torch.tensor(
+                        [1.0 if fast_ok_list[i] else 0.0 for i in range(Nf)],
+                        dtype=torch.float32, device=dev_f)
+                    flat_apply(fast_ctx["flat_p"], F["flat_m"], F["flat_v"],
+                               fast_ctx["cand_m"], fast_ctx["cand_v"], d_f, eff,
+                               F["seg_idx"], ok_t, upd,
+                               decay=0.0, lr=lr * lr_scale)
+                    if use_foreach_upd:
+                        for i in valid_idx:
+                            p = fast_params[i]
+                            o = F["offsets"][i]; n = p.numel()
+                            u = upd[o:o + n].view_as(p)
+                            b_params.append(p); b_updates.append(u)
+                            if bucket_std:
+                                b_updates_f32.append(u)
+                    else:
+                        torch._foreach_add_(
+                            [fast_params[i] for i in valid_idx],
+                            [upd[F["offsets"][i]:F["offsets"][i] + fast_params[i].numel()].view_as(fast_params[i])
+                             for i in valid_idx])
+
             if b_params and b_updates and hasattr(torch, "_foreach_add_"):
                 prof_c["foreach_bucket_size"] = len(b_params)
                 if len(b_params) >= foreach_min_bucket and bucket_std:
