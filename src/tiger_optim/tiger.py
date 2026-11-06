@@ -816,7 +816,8 @@ class Tiger(Optimizer):
             subsegs = [1] * len(params)
         ids = tuple(id(p) for p in params)
         cache = self._flat_cache.setdefault(gi, {})
-        key = ("flat", ids, tuple(factored_flags), tuple(subsegs))
+        key = ("flat", ids, tuple(factored_flags), tuple(subsegs),
+               reference.device)
         F = cache.get(key)
         if F is not None:
             # Re-sync params whose moments are no longer views into THIS
@@ -1025,6 +1026,37 @@ class Tiger(Optimizer):
             if npb:
                 fact_meta["part"] = torch.empty(npb * CBLOCK, dtype=torch.float32, device=dev)
             F["fact_meta"] = fact_meta
+        # Persistent buffers for the CUDA-graphable pre-guard pipeline.
+        # Every intermediate lives here so the K1->par_ok sequence can be
+        # captured once and replayed; per-step inputs are copied in.
+        e = lambda *s: torch.empty(*s, dtype=torch.float32, device=dev)
+        B = {
+            "g": e(total), "p": e(total),
+            "cand_m": e(total), "cand_v": e(total), "pp": e(total),
+            "ds": e(total), "d": e(total), "scaled": e(total),
+            "pre_f": e(total), "upd": e(total),
+            "stats": e(5 * nseg), "stats2": e(5 * nseg),
+            "ssq": e(nseg), "cnt": e(nseg),
+            "seg_ok": torch.empty(nseg, dtype=torch.bool, device=dev),
+            "par_ok": torch.empty(len(params), dtype=torch.bool, device=dev),
+            "pn_g": e(nseg), "dn_g": e(nseg), "pre_n": e(nseg),
+            "pn_par": e(len(params)), "dn_par": e(len(params)),
+            "pre_n_par": e(len(params)), "n_par": e(len(params)),
+            "ssq_par": e(len(params)), "am_p_par": e(len(params)),
+            "am_d_par": e(len(params)), "am_m_par": e(len(params)),
+            "am_pre_par": e(len(params)), "rms_par": e(len(params)),
+            "rms_seg": e(nseg), "rescale": e(nseg),
+            "emas_t": e(len(params)), "ema_ok": torch.empty(
+                len(params), dtype=torch.bool, device=dev),
+            "route_lr": e(len(params)),
+            "chunked_t": torch.empty(len(params), dtype=torch.bool, device=dev),
+            # [sblend, decay_growth, trust_growth] — per-step dynamic values
+            # read by the captured graph.
+            "scalars": e(3),
+            "eff": e(nseg), "ok_t": e(nseg), "tval": e(nseg),
+        }
+        F["B"] = B
+        F["graph"] = {"warm": 0, "g": None, "bad": False}
         cache[key] = F
         return F
 
@@ -1506,166 +1538,44 @@ class Tiger(Optimizer):
                 seg = F["seg_idx"]; lens = F["lens_t"]; numel_f = F["numel_f"]
                 seg_par = F["seg_param_t"]
                 total = F["total"]
-                flat_g = torch.cat([p.grad.detach().reshape(-1) for p in fast_params])
-                cand_m = torch.empty(total, device=dev_f)
-                cand_v = torch.empty(total, device=dev_f)
-                pp_b = torch.empty(total, device=dev_f)
-                ds_b = torch.empty(total, device=dev_f)
-                flat_step_candidates(flat_g, F["flat_m"], F["flat_v"], cand_m, cand_v,
-                                     pp_b, ds_b, b1=b1, b2=b2, eps=eps, alpha=alpha,
-                                     sign_tau=float(group["sign_tau"]))
-                flat_p = torch.cat([p.detach().reshape(-1) for p in fast_params])
-                # Factored preamble (all async): candidate vr/vc by segmented
-                # row/col reduces, then rank-1 vhat + pp/dsign rewritten in
-                # the shared flat buffers so the K2-K5 tail stays uniform.
-                # Nonfinite cand_vr/vc propagate into vhat and are caught by
-                # the K2 amax_v guard, so no separate finite check is needed.
-                if F.get("fact_meta") is not None:
-                    from .triton_kernels import flat_fact_moments
-                    flat_fact_moments(
-                        flat_g, F["flat_vr"], F["flat_vc"], F["cand_vr"],
-                        F["cand_vc"], F["fmean"], F["fact_meta"],
-                        cand_m, cand_v, pp_b, ds_b,
-                        b2=b2, eps=eps, alpha=alpha,
-                        sign_tau=float(group["sign_tau"]), vtiny=1e-30)
-                stats = torch.empty(Nseg * 5, device=dev_f)
-                flat_seg_stats(cand_m, cand_v, flat_p, ds_b, F["starts"], F["ends"], stats)
-                st5 = stats.view(Nseg, 5)
-                am_m = st5[:, 0]; am_v = st5[:, 1]; am_p = st5[:, 2]
-                am_ds = st5[:, 3]; ssq_m = st5[:, 4]
-                # Fast case: no chunked params, seg == param, so param-level
-                # quantities are the seg values themselves and no combine ops
-                # are needed (this keeps the all-dense path's launch count).
+                B = F["B"]
+                flat_g = B["g"]; flat_p = B["p"]
+                cand_m = B["cand_m"]; cand_v = B["cand_v"]
+                pp_b = B["pp"]; ds_b = B["ds"]
+                # Copy this step's inputs into the persistent buffers (the
+                # graph can only replay fixed addresses).
+                torch._foreach_copy_(
+                    [flat_g[o:o + n] for o, n in zip(F["offsets"], F["lengths"])],
+                    [p.grad.detach().reshape(-1) for p in fast_params])
+                torch._foreach_copy_(
+                    [flat_p[o:o + n] for o, n in zip(F["offsets"], F["lengths"])],
+                    [p.detach().reshape(-1) for p in fast_params])
                 id_seg = Nseg == Nf
-                if id_seg:
-                    rms_par = am_m * torch.sqrt(ssq_m / numel_f)
-                    rms_seg = rms_par
-                    n_par = numel_f
-                    am_p_par = am_p
-                else:
-                    # The direction's _rms(m) denominator is param-level in
-                    # the eager path; recombine the amax-scaled per-seg sums.
-                    # Rescale each seg's scaled ssq by the PARAM amax so a
-                    # finite param norm cannot overflow (ssq*am^2 would).
-                    am_m_par = torch.zeros(Nf, device=dev_f).scatter_reduce(
-                        0, seg_par, am_m, reduce="amax")
-                    am_m_safe = torch.where(
-                        torch.isfinite(am_m_par) & (am_m_par > 0),
-                        am_m_par, torch.ones_like(am_m_par))
-                    rescale = (am_m / am_m_safe[seg_par]).square()
-                    ssq_par = torch.zeros(Nf, device=dev_f).index_add_(
-                        0, seg_par, ssq_m * rescale)
-                    n_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, numel_f)
-                    rms_par = am_m_safe * torch.sqrt(ssq_par / n_par)
-                    rms_seg = rms_par[seg_par]
-                    am_p_par = torch.zeros(Nf, device=dev_f).scatter_reduce(
-                        0, seg_par, am_p, reduce="amax")
-                d_f = torch.empty(total, device=dev_f)
-                flat_direction(cand_m, pp_b, ds_b, rms_seg, seg, d_f,
-                               sblend=sblend, eps=eps)
-                stats2 = torch.empty(Nseg * 5, device=dev_f)
-                flat_seg_stats(cand_m, cand_v, flat_p, d_f, F["starts"], F["ends"], stats2)
-                am_d = stats2.view(Nseg, 5)[:, 3]
-
-                # Finite checks are per-seg; magnitude bounds are param-level
-                # (eager checks the whole tensor), ANDed per param below.
-                seg_ok = (torch.isfinite(am_m) & torch.isfinite(am_v)
-                          & torch.isfinite(am_d) & torch.isfinite(am_ds))
-                if id_seg:
-                    am_d_par = am_d
-                else:
-                    am_d_par = torch.zeros(Nf, device=dev_f).scatter_reduce(
-                        0, seg_par, am_d, reduce="amax")
                 decay_rate = lr * lr_scale * float(group["weight_decay"])
                 decay_growth = abs(1.0 - decay_rate) + (
                     8.0 * torch.finfo(torch.float32).eps * abs(decay_rate))
                 trust_growth = max(1.0, trust_clip) if use_trust else 1.0
+                # Dynamic scalars -> device buffer (graph reads live values).
+                B["scalars"].copy_(torch.tensor(
+                    [sblend, decay_growth, trust_growth], dtype=torch.float32))
                 has_qkv_lr = any(
                     qkv_rules.get(id(p)) is not None and qkv_lr is not None
                     for p in fast_params)
                 if has_qkv_lr:
-                    route_lrs = []
+                    _rls = []
                     for p in fast_params:
                         rls = [abs(lr * lr_scale)]
                         if qkv_rules.get(id(p)) is not None and qkv_lr is not None:
                             rls.extend(abs(lr * lr_scale * float(qkv_lr.get(k, 1.0)))
                                        for k in ("q", "k", "v"))
-                        route_lrs.append(max(rls) if all(math.isfinite(v) for v in rls) else math.inf)
-                    route_lr_par = torch.tensor(route_lrs, device=dev_f)
+                        _rls.append(max(rls) if all(math.isfinite(v) for v in rls) else math.inf)
+                    B["route_lr"].copy_(torch.tensor(_rls, dtype=torch.float32))
                 else:
-                    route_lr_par = abs(lr * lr_scale)
-                raw_bound_par = am_d_par * (trust_growth * route_lr_par)
+                    B["route_lr"].fill_(abs(lr * lr_scale))
+                B["chunked_t"].copy_(torch.tensor(chunked_flags))
                 bucket_route = (
                     use_foreach_upd and bucket_std and hasattr(torch, "_foreach_add_")
                     and len(active_params) >= foreach_min_bucket)
-                if bucket_route:
-                    if bucket_src == "median" and not use_triton_stats:
-                        upd_par = raw_bound_par * 1e12
-                    elif use_triton_stats or bucket_src == "global":
-                        upd_par = raw_bound_par.new_full((), math.sqrt(sum(q.numel() for q in active_params)))
-                    else:
-                        upd_par = raw_bound_par.new_full((), len(active_params) * 1.0) * n_par.sqrt()
-                    # Chunked params never enter the foreach bucket.
-                    if any(chunked_flags):
-                        chunked_par = torch.tensor(chunked_flags, device=dev_f)
-                        upd_bound_par = torch.where(chunked_par, raw_bound_par, upd_par)
-                    else:
-                        upd_bound_par = upd_par
-                else:
-                    upd_bound_par = raw_bound_par
-                fp32_limit = torch.finfo(torch.float32).max * (1.0 - 8.0 * torch.finfo(torch.float32).eps)
-                par_ok = (
-                    (am_d_par * trust_growth <= fp32_limit)
-                    & (raw_bound_par <= fp32_limit)
-                    & (am_p_par * decay_growth + upd_bound_par <= fp32_limit))
-
-                pn_g = dn_g = pre_n = None
-                pn_par = dn_par = pre_n_par = None
-                am_pre = None
-                if use_trust or (agc_clip and agc_clip > 0.0):
-                    _ssq_buf = torch.empty(Nseg, device=dev_f)
-
-                    def _seg_norm(x, am):
-                        # Segmented norm via a deterministic per-seg kernel —
-                        # a dense indicator GEMV would let one param's NaN
-                        # poison every segment (0 * NaN = NaN).
-                        safe = torch.where(torch.isfinite(am) & (am > 0), am, torch.ones_like(am))
-                        scaled = x / torch.repeat_interleave(safe, lens)
-                        flat_seg_ssq(scaled, F["starts"], F["ends"], _ssq_buf)
-                        return safe * _ssq_buf.sqrt()
-                    pn_g = _seg_norm(flat_p, am_p)
-                    dn_g = _seg_norm(d_f, am_d)
-                    if id_seg:
-                        pn_par = pn_g; dn_par = dn_g
-                    else:
-                        def _combine_norm(x):
-                            mx = torch.zeros(Nf, device=dev_f).scatter_reduce(
-                                0, seg_par, x, reduce="amax")
-                            mx = torch.where(torch.isfinite(mx) & (mx > 0),
-                                             mx, torch.ones_like(mx))
-                            s = torch.zeros(Nf, device=dev_f).index_add_(
-                                0, seg_par, (x / mx[seg_par]).square())
-                            return mx * s.sqrt()
-                        pn_par = _combine_norm(pn_g)
-                        dn_par = _combine_norm(dn_g)
-                    loose_ok = (am_p_par * (decay_growth * n_par.sqrt()) <= fp32_limit) & (am_d_par * n_par.sqrt() <= fp32_limit)
-                    exact_ok = (pn_par * decay_growth <= fp32_limit) & (dn_par <= fp32_limit)
-                    if use_trust and trust_space == "precond":
-                        pre_f = cand_m * pp_b
-                        am_pre = torch.stack(list(torch._foreach_norm(
-                            [pre_f[s:s + l] for s, l in zip(F["seg_starts_l"], F["seg_lens_l"])],
-                            ord=float("inf"))))
-                        pre_n = _seg_norm(pre_f, am_pre)
-                        if id_seg:
-                            am_pre_par = am_pre; pre_n_par = pre_n
-                        else:
-                            am_pre_par = torch.zeros(Nf, device=dev_f).scatter_reduce(
-                                0, seg_par, am_pre, reduce="amax")
-                            pre_n_par = _combine_norm(pre_n)
-                        loose_ok &= am_pre_par * n_par.sqrt() <= fp32_limit
-                        exact_ok &= pre_n_par <= fp32_limit
-                    par_ok &= loose_ok | exact_ok
-
                 emas = has_ema_idx = None
                 if use_trust and trust_beta > 0.0:
                     _emas = [
@@ -1678,14 +1588,192 @@ class Tiger(Optimizer):
                         (o.to(torch.float32).reshape(()) if isinstance(o, torch.Tensor)
                          else _scalar_like(group_ref, float(o), dtype=torch.float32, device=dev_f) if o is not None
                          else torch.ones((), device=dev_f)) for o in _emas])
-                    ema_ok = torch.isfinite(emas) & (emas >= 0)
-                    if len(has_ema_idx) != Nf:
-                        missing = [i for i in range(Nf) if i not in set(has_ema_idx)]
-                        ema_ok = ema_ok.clone(); ema_ok[missing] = True
-                    # Split-trust params validate their per-chunk EMA vector.
+                    B["emas_t"].copy_(emas)
+
+                def _preguard():
+                    flat_step_candidates(flat_g, F["flat_m"], F["flat_v"], cand_m, cand_v,
+                                         pp_b, ds_b, b1=b1, b2=b2, eps=eps, alpha=alpha,
+                                         sign_tau=float(group["sign_tau"]))
+                    # Factored preamble (all async): candidate vr/vc by
+                    # segmented row/col reduces, then rank-1 vhat + pp/dsign
+                    # rewritten into the shared flat buffers so the K2-K5
+                    # tail stays uniform. Nonfinite cand_vr/vc propagate into
+                    # vhat and are caught by the K2 amax_v guard.
+                    if F.get("fact_meta") is not None:
+                        from .triton_kernels import flat_fact_moments
+                        flat_fact_moments(
+                            flat_g, F["flat_vr"], F["flat_vc"], F["cand_vr"],
+                            F["cand_vc"], F["fmean"], F["fact_meta"],
+                            cand_m, cand_v, pp_b, ds_b,
+                            b2=b2, eps=eps, alpha=alpha,
+                            sign_tau=float(group["sign_tau"]), vtiny=1e-30)
+                    stats = B["stats"]
+                    flat_seg_stats(cand_m, cand_v, flat_p, ds_b, F["starts"], F["ends"], stats)
+                    st5 = stats.view(Nseg, 5)
+                    am_m = st5[:, 0]; am_v = st5[:, 1]; am_p = st5[:, 2]
+                    am_ds = st5[:, 3]; ssq_m = st5[:, 4]
+                    if id_seg:
+                        rms_par = am_m * torch.sqrt(ssq_m / numel_f)
+                        rms_seg = rms_par
+                        n_par = numel_f
+                        am_p_par = am_p
+                        am_d_par = None  # filled after stats2
+                    else:
+                        # Param-level _rms(m): recombine amax-scaled per-seg
+                        # sums, rescaled by the param amax so finite norms
+                        # cannot overflow.
+                        am_m_par = B["am_m_par"].zero_().scatter_reduce_(
+                            0, seg_par, am_m, reduce="amax")
+                        am_m_safe = torch.where(
+                            torch.isfinite(am_m_par) & (am_m_par > 0),
+                            am_m_par, torch.ones_like(am_m_par))
+                        rescale = (am_m / am_m_safe[seg_par]).square()
+                        ssq_par = B["ssq_par"].zero_().index_add_(0, seg_par, ssq_m * rescale)
+                        n_par = B["n_par"].zero_().index_add_(0, seg_par, numel_f)
+                        rms_par = am_m_safe * torch.sqrt(ssq_par / n_par)
+                        rms_seg = rms_par[seg_par]
+                        am_p_par = B["am_p_par"].zero_().scatter_reduce_(
+                            0, seg_par, am_p, reduce="amax")
+                    d_f = B["d"]
+                    flat_direction(cand_m, pp_b, ds_b, rms_seg, seg, d_f,
+                                   sblend=B["scalars"][0], eps=eps)
+                    stats2 = B["stats2"]
+                    flat_seg_stats(cand_m, cand_v, flat_p, d_f, F["starts"], F["ends"], stats2)
+                    am_d = stats2.view(Nseg, 5)[:, 3]
+
+                    # Finite checks are per-seg; magnitude bounds are
+                    # param-level (eager checks the whole tensor).
+                    seg_ok = (torch.isfinite(am_m) & torch.isfinite(am_v)
+                              & torch.isfinite(am_d) & torch.isfinite(am_ds))
+                    if id_seg:
+                        am_d_par = am_d
+                    else:
+                        am_d_par = B["am_d_par"].zero_().scatter_reduce_(
+                            0, seg_par, am_d, reduce="amax")
+                    raw_bound_par = am_d_par * (B["scalars"][2] * B["route_lr"])
+                    if bucket_route:
+                        if bucket_src == "median" and not use_triton_stats:
+                            upd_par = raw_bound_par * 1e12
+                        elif use_triton_stats or bucket_src == "global":
+                            upd_par = raw_bound_par.new_full((), math.sqrt(sum(q.numel() for q in active_params)))
+                        else:
+                            upd_par = raw_bound_par.new_full((), len(active_params) * 1.0) * n_par.sqrt()
+                        # Chunked params never enter the foreach bucket.
+                        if any(chunked_flags):
+                            upd_bound_par = torch.where(B["chunked_t"], raw_bound_par, upd_par)
+                        else:
+                            upd_bound_par = upd_par
+                    else:
+                        upd_bound_par = raw_bound_par
+                    fp32_limit = torch.finfo(torch.float32).max * (1.0 - 8.0 * torch.finfo(torch.float32).eps)
+                    par_ok = (
+                        (am_d_par * B["scalars"][2] <= fp32_limit)
+                        & (raw_bound_par <= fp32_limit)
+                        & (am_p_par * B["scalars"][1] + upd_bound_par <= fp32_limit))
+
+                    pn_par = dn_par = pre_n_par = None
+                    if use_trust or (agc_clip and agc_clip > 0.0):
+                        ssq_buf = B["ssq"]
+
+                        def _seg_norm(x, am):
+                            # Segmented norm via a deterministic per-seg
+                            # kernel — a dense indicator GEMV would let one
+                            # param's NaN poison every segment (0*NaN=NaN).
+                            safe = torch.where(torch.isfinite(am) & (am > 0), am, torch.ones_like(am))
+                            # Gather via seg_idx (repeat_interleave would
+                            # sync for its output size — illegal in capture).
+                            scaled = B["scaled"].copy_(x / safe[seg])
+                            flat_seg_ssq(scaled, F["starts"], F["ends"], ssq_buf)
+                            return safe * ssq_buf.sqrt()
+                        pn_g = _seg_norm(flat_p, am_p)
+                        dn_g = _seg_norm(d_f, am_d)
+                        if id_seg:
+                            pn_par = pn_g; dn_par = dn_g
+                        else:
+                            def _combine_norm(x):
+                                mx = torch.zeros(Nf, device=dev_f).scatter_reduce(
+                                    0, seg_par, x, reduce="amax")
+                                mx = torch.where(torch.isfinite(mx) & (mx > 0),
+                                                 mx, torch.ones_like(mx))
+                                s = torch.zeros(Nf, device=dev_f).index_add_(
+                                    0, seg_par, (x / mx[seg_par]).square())
+                                return mx * s.sqrt()
+                            pn_par = _combine_norm(pn_g)
+                            dn_par = _combine_norm(dn_g)
+                        loose_ok = (am_p_par * (B["scalars"][1] * n_par.sqrt()) <= fp32_limit) & (am_d_par * n_par.sqrt() <= fp32_limit)
+                        exact_ok = (pn_par * B["scalars"][1] <= fp32_limit) & (dn_par <= fp32_limit)
+                        if use_trust and trust_space == "precond":
+                            pre_f = B["pre_f"].copy_(cand_m * pp_b)
+                            am_pre = torch.stack(list(torch._foreach_norm(
+                                [pre_f[s:s + l] for s, l in zip(F["seg_starts_l"], F["seg_lens_l"])],
+                                ord=float("inf"))))
+                            pre_n = _seg_norm(pre_f, am_pre)
+                            if id_seg:
+                                am_pre_par = am_pre; pre_n_par = pre_n
+                            else:
+                                am_pre_par = torch.zeros(Nf, device=dev_f).scatter_reduce(
+                                    0, seg_par, am_pre, reduce="amax")
+                                pre_n_par = _combine_norm(pre_n)
+                            loose_ok &= am_pre_par * n_par.sqrt() <= fp32_limit
+                            exact_ok &= pre_n_par <= fp32_limit
+                        par_ok &= loose_ok | exact_ok
+                        B["pn_g"].copy_(pn_g); B["dn_g"].copy_(dn_g)
+                        B["pn_par"].copy_(pn_par); B["dn_par"].copy_(dn_par)
+                        if pre_n_par is not None:
+                            B["pre_n"].copy_(pre_n); B["pre_n_par"].copy_(pre_n_par)
+                        else:
+                            B["pre_n"].zero_(); B["pre_n_par"].zero_()
+
+                    if use_trust and trust_beta > 0.0:
+                        par_ok &= torch.isfinite(B["emas_t"]) & (B["emas_t"] >= 0)
+                    if id_seg:
+                        par_ok &= seg_ok
+                    else:
+                        seg_ok_par = torch.ones(Nf, dtype=torch.float32, device=dev_f)
+                        seg_ok_par.scatter_reduce_(0, seg_par, seg_ok.to(torch.float32), reduce="amin")
+                        par_ok &= seg_ok_par > 0.5
+                    B["par_ok"].copy_(par_ok)
+
+                # Capture-or-replay: the whole K1->par_ok pipeline runs as one
+                # CUDA graph after two eager warmup steps. Any failure falls
+                # back to the plain eager launches permanently.
+                gs = F["graph"]
+                _gkey = (b1, b2, eps, alpha, float(group["sign_tau"]),
+                         use_trust, trust_space, trust_beta > 0.0,
+                         bool(agc_clip and agc_clip > 0.0),
+                         bucket_route, bucket_src, use_triton_stats,
+                         id_seg, has_qkv_lr, qkv_split,
+                         tuple(chunked_flags), len(active_params),
+                         sum(q.numel() for q in active_params))
+                if gs["g"] is not None and gs["key"] != _gkey:
+                    gs["g"] = None; gs["warm"] = 0
+                if gs["g"] is not None:
+                    gs["g"].replay()
+                elif gs["bad"]:
+                    _preguard()
+                else:
+                    if gs["warm"] >= 2:
+                        try:
+                            gcap = torch.cuda.CUDAGraph()
+                            with torch.cuda.device(group_ref.device):
+                                with torch.cuda.graph(gcap):
+                                    _preguard()
+                            gs["g"] = gcap; gs["key"] = _gkey
+                            gs["g"].replay()
+                        except Exception as _ge:
+                            gs["bad"] = True; gs["g"] = None; gs["err"] = repr(_ge)
+                            _preguard()
+                    else:
+                        gs["warm"] += 1
+                        _preguard()
+
+                # Vector-EMA check for split-trust params (host dict access —
+                # kept outside the graph; two small ops).
+                par_ok = B["par_ok"]
+                if use_trust and trust_beta > 0.0 and qkv_split:
                     qok = []; qidx = []
                     for i, p in enumerate(fast_params):
-                        if not (chunked_flags[i] and qkv_split
+                        if not (chunked_flags[i]
                                 and qkv_rules.get(id(p)) is not None):
                             continue
                         prev = self._qkv_trust_ema.get((gi, param_indices[id(p)]))
@@ -1695,23 +1783,23 @@ class Tiger(Optimizer):
                         prev_f = prev.reshape(-1).to(torch.float32)
                         qok.append((torch.isfinite(prev_f) & (prev_f >= 0)).all())
                     if qok:
-                        ema_ok = ema_ok.clone()
-                        ema_ok[torch.tensor(qidx, device=dev_f)] &= torch.stack(
+                        par_ok = par_ok.clone()
+                        par_ok[torch.tensor(qidx, device=dev_f)] &= torch.stack(
                             [q.reshape(()) for q in qok])
-                    par_ok &= ema_ok
-                if id_seg:
-                    par_ok &= seg_ok
-                else:
-                    seg_ok_par = torch.ones(Nf, dtype=torch.float32, device=dev_f)
-                    seg_ok_par.scatter_reduce_(0, seg_par, seg_ok.to(torch.float32), reduce="amin")
-                    par_ok &= seg_ok_par > 0.5
                 fast_ok_list = par_ok.cpu().tolist()
+                _norms = use_trust or (agc_clip and agc_clip > 0.0)
+                _precond = use_trust and trust_space == "precond" and _norms
                 fast_ctx = {
                     "F": F, "flat_g": flat_g, "flat_p": flat_p, "cand_m": cand_m,
-                    "cand_v": cand_v, "pp": pp_b, "ds": ds_b, "d": d_f,
-                    "decay_rate": decay_rate, "pn_g": pn_g, "dn_g": dn_g,
-                    "pre_n": pre_n, "pn_par": pn_par, "dn_par": dn_par,
-                    "pre_n_par": pre_n_par, "emas": emas, "has_ema_idx": has_ema_idx,
+                    "cand_v": cand_v, "pp": pp_b, "ds": ds_b, "d": B["d"],
+                    "decay_rate": decay_rate,
+                    "pn_g": B["pn_g"] if _norms else None,
+                    "dn_g": B["dn_g"] if _norms else None,
+                    "pre_n": B["pre_n"] if _precond else None,
+                    "pn_par": B["pn_par"] if _norms else None,
+                    "dn_par": B["dn_par"] if _norms else None,
+                    "pre_n_par": B["pre_n_par"] if _precond else None,
+                    "emas": emas, "has_ema_idx": has_ema_idx,
                     "Nf": Nf, "dev": dev_f, "chunked": chunked_flags,
                     "id_seg": id_seg, "par_ok": par_ok,
                 }
