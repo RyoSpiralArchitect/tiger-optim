@@ -227,6 +227,106 @@ if triton is not None:
         tl.store(d_ptr + offs, d, mask=mask)
 
     @triton.jit
+    def _flat_fact_rows_kernel(g_ptr, vr_ptr, cvr_ptr, rstart_ptr, rlen_ptr,
+                               b2, BLOCK: tl.constexpr):
+        # One program per matrix row across all factored params: reduce the
+        # row's g^2 mean and EMA-update the candidate row factor.
+        j = tl.program_id(0)
+        s = tl.load(rstart_ptr + j)
+        n = tl.load(rlen_ptr + j)
+        acc = 0.0
+        for off in range(0, n, BLOCK):
+            idx = s + off + tl.arange(0, BLOCK)
+            mask = off + tl.arange(0, BLOCK) < n
+            g = tl.load(g_ptr + idx, mask=mask, other=0.0)
+            acc += tl.sum(tl.where(mask, g * g, 0.0), axis=0)
+        vr = tl.load(vr_ptr + j)
+        tl.store(cvr_ptr + j, vr * b2 + (acc / n) * (1.0 - b2))
+
+    @triton.jit
+    def _flat_fact_cols_kernel(g_ptr, vc_ptr, cvc_ptr, cstart_ptr, cc0_ptr,
+                               cr_ptr, cc_ptr, cvc_ptr_off,
+                               b2, BLOCK: tl.constexpr):
+        # One program per column block: accumulate g^2 down the rows
+        # (stride C) and EMA-update the candidate column factor.
+        j = tl.program_id(0)
+        s = tl.load(cstart_ptr + j)
+        c0 = tl.load(cc0_ptr + j)
+        R = tl.load(cr_ptr + j)
+        C = tl.load(cc_ptr + j)
+        vo = tl.load(cvc_ptr_off + j)
+        cols = c0 + tl.arange(0, BLOCK)
+        cmask = cols < C
+        acc = tl.zeros([BLOCK], dtype=tl.float32)
+        for r in range(0, R):
+            g = tl.load(g_ptr + s + r * C + cols, mask=cmask, other=0.0)
+            acc += g * g
+        vc = tl.load(vc_ptr + vo + tl.arange(0, BLOCK), mask=cmask, other=0.0)
+        tl.store(cvc_ptr + vo + tl.arange(0, BLOCK),
+                 vc * b2 + (acc / R) * (1.0 - b2), mask=cmask)
+
+    @triton.jit
+    def _flat_fact_mean_kernel(cvr_ptr, fvroff_ptr, fr_ptr, fmean_ptr,
+                               BLOCK: tl.constexpr):
+        # Per factored param: mean of the candidate row factor (scalar).
+        j = tl.program_id(0)
+        off = tl.load(fvroff_ptr + j)
+        R = tl.load(fr_ptr + j)
+        acc = 0.0
+        for o in range(0, R, BLOCK):
+            mask = o + tl.arange(0, BLOCK) < R
+            acc += tl.sum(tl.load(cvr_ptr + off + o + tl.arange(0, BLOCK),
+                                  mask=mask, other=0.0), axis=0)
+        tl.store(fmean_ptr + j, acc / R)
+
+    @triton.jit
+    def _flat_fact_vhat_kernel(cm_ptr, cvr_ptr, cvc_ptr, fmean_ptr,
+                               pos_ptr, vridx_ptr, vcidx_ptr, fidx_ptr,
+                               cv_ptr, pp_ptr, ds_ptr,
+                               M, eps, alpha, sign_tau, vtiny,
+                               BLOCK: tl.constexpr):
+        # Elementwise over factored elements only: write the rank-1 vhat into
+        # the shared cand_v segment, then recompute pp/dsign from it so the
+        # uniform tail (K2-K5) sees the same values as the eager path.
+        pid = tl.program_id(0)
+        offs = pid * BLOCK + tl.arange(0, BLOCK)
+        mask = offs < M
+        pos = tl.load(pos_ptr + offs, mask=mask, other=0)
+        vr = tl.load(cvr_ptr + tl.load(vridx_ptr + offs, mask=mask, other=0),
+                     mask=mask, other=0.0)
+        vc = tl.load(cvc_ptr + tl.load(vcidx_ptr + offs, mask=mask, other=0),
+                     mask=mask, other=0.0)
+        fm = tl.load(fmean_ptr + tl.load(fidx_ptr + offs, mask=mask, other=0),
+                     mask=mask, other=1.0)
+        vh = (vr / tl.maximum(fm, vtiny)) * vc
+        tl.store(cv_ptr + pos, vh, mask=mask)
+        pp = tl.sqrt(vh) + eps
+        pp = tl.exp(-alpha * tl.log(tl.maximum(pp, 1e-30)))
+        pp = tl.minimum(tl.maximum(pp, 1e-8), 1e8)
+        tl.store(pp_ptr + pos, pp, mask=mask)
+        cm = tl.load(cm_ptr + pos, mask=mask, other=0.0)
+        tl.store(ds_ptr + pos, cm / (tl.abs(cm) + sign_tau) * pp, mask=mask)
+
+    @triton.jit
+    def _flat_fact_commit_kernel(vr_ptr, vc_ptr, cvr_ptr, cvc_ptr,
+                                 ok_ptr, rok_ptr, NR, NC, BLOCK: tl.constexpr):
+        # Where the owning segment was accepted, commit candidate row/col
+        # factors into the persistent flat_vr/flat_vc state buffers.
+        pid = tl.program_id(0)
+        offs = pid * BLOCK + tl.arange(0, BLOCK)
+        total = NR + NC
+        mask = offs < total
+        is_r = offs < NR
+        ok = tl.load(ok_ptr + tl.load(rok_ptr + offs, mask=mask, other=0),
+                     mask=mask, other=0.0) > 0.5
+        rmask = mask & is_r & ok
+        cmask = mask & (~is_r) & ok
+        cvr = tl.load(cvr_ptr + offs, mask=rmask, other=0.0)
+        tl.store(vr_ptr + offs, cvr, mask=rmask)
+        cvc = tl.load(cvc_ptr + offs - NR, mask=cmask, other=0.0)
+        tl.store(vc_ptr + offs - NR, cvc, mask=cmask)
+
+    @triton.jit
     def _flat_apply_kernel(p_ptr, m_ptr, v_ptr, cm_ptr, cv_ptr, d_ptr,
                            eff_ptr, seg_ptr, ok_ptr, upd_ptr,
                            N, decay, lr, BLOCK: tl.constexpr):
@@ -327,3 +427,52 @@ def flat_apply(p_flat, m, v, cand_m, cand_v, d, eff, seg_idx, ok, upd, *,
     _flat_apply_kernel[((n + 1023) // 1024,)](
         p_flat, m, v, cand_m, cand_v, d, eff, seg_idx, ok, upd, n, decay, lr,
         BLOCK=1024)
+
+
+def flat_fact_moments(g, flat_vr, flat_vc, cand_vr, cand_vc, fmean, meta,
+                      cand_m, cand_v, pp, dsign, *,
+                      b2, eps, alpha, sign_tau, vtiny):
+    """Fused factored preamble: candidate vr/vc via segmented row/col
+    reduces, per-param row-factor mean, then rank-1 vhat + pp/dsign
+    rewritten in the shared flat buffers. All launches are async.
+
+    `meta` is the dict built once by Tiger._flat_group; see it for the
+    layout of the row/col-block/fact-element index tensors.
+    """
+    _require_triton()
+    _check_flat(g, flat_vr, flat_vc, cand_vr, cand_vc, cand_v)
+    nr = meta["row_start"].numel()
+    if nr:
+        _flat_fact_rows_kernel[(nr,)](
+            g, flat_vr, cand_vr, meta["row_start"], meta["row_len"],
+            b2, BLOCK=1024)
+    ncb = meta["cb_start"].numel()
+    if ncb:
+        _flat_fact_cols_kernel[(ncb,)](
+            g, flat_vc, cand_vc, meta["cb_start"], meta["cb_c0"],
+            meta["cb_R"], meta["cb_C"], meta["cb_vc"],
+            b2, BLOCK=128)
+    nfact = fmean.numel()
+    if nfact:
+        _flat_fact_mean_kernel[(nfact,)](
+            cand_vr, meta["fact_vroff"], meta["fact_R"], fmean, BLOCK=1024)
+    m = meta["elem_pos"].numel()
+    if m:
+        _check_flat(pp, dsign)
+        _flat_fact_vhat_kernel[((m + 1023) // 1024,)](
+            cand_m, cand_vr, cand_vc, fmean,
+            meta["elem_pos"], meta["elem_vr"], meta["elem_vc"], meta["elem_fact"],
+            cand_v, pp, dsign, m, eps, alpha, sign_tau, vtiny, BLOCK=1024)
+
+
+def flat_fact_commit(flat_vr, flat_vc, cand_vr, cand_vc, rok, ok):
+    """Commit candidate vr/vc into the persistent flat state buffers for
+    segments whose ok flag is set. `rok` maps each row entry then each
+    column entry to its fast-param index."""
+    _require_triton()
+    _check_flat(flat_vr, flat_vc, cand_vr, cand_vc, ok)
+    nr = flat_vr.numel(); nc = flat_vc.numel()
+    total = nr + nc
+    if total:
+        _flat_fact_commit_kernel[((total + 1023) // 1024,)](
+            flat_vr, flat_vc, cand_vr, cand_vc, ok, rok, nr, nc, BLOCK=1024)
