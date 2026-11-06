@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 import math, time, os, json
 from copy import deepcopy
+from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from typing import Dict, List, Optional, Tuple, Union
 import torch
@@ -628,7 +629,17 @@ class Tiger(Optimizer):
         self._qkv_disp_ema_prev: Dict[int, float] = {}
         self._qkv_spec_ema: Dict[int, Dict[str, Dict[str, Union[float, torch.Tensor]]]] = {}
         self._group_scalar_cache: Dict[int, Dict[str, Tuple[float, torch.Tensor]]] = {}
-        self._flat_cache: Dict[int, Dict[object, object]] = {}
+        self._flat_cache: Dict[int, "OrderedDict[object, object]"] = {}
+        # Flat-entry cap per group: membership changes (e.g. periodic qkv
+        # stat capture) would otherwise accumulate F + graph + pool without
+        # bound. Entries are LRU-evicted; st["m"]/["v"] views keep an evicted
+        # buffer alive until the next membership re-syncs them.
+        self._flat_cache_max = max(
+            1, int(os.environ.get("TIGER_FLAT_CACHE_MAX", "4")))
+        # One graph pool per device, shared by every captured flat graph, so
+        # transient capture allocations are recycled instead of each graph
+        # keeping a private pool.
+        self._graph_pools: Dict[torch.device, object] = {}
         self._fused_apply_failures: List[str] = []
 
     # ---------- Public API ----------
@@ -815,11 +826,12 @@ class Tiger(Optimizer):
         if subsegs is None:
             subsegs = [1] * len(params)
         ids = tuple(id(p) for p in params)
-        cache = self._flat_cache.setdefault(gi, {})
+        cache = self._flat_cache.setdefault(gi, OrderedDict())
         key = ("flat", ids, tuple(factored_flags), tuple(subsegs),
                reference.device)
         F = cache.get(key)
         if F is not None:
+            cache.move_to_end(key)
             # Re-sync params whose moments are no longer views into THIS
             # buffer (membership changed since last use).
             for p, o, n, fct in zip(params, F["offsets"], F["lengths"], F["factored"]):
@@ -1057,6 +1069,11 @@ class Tiger(Optimizer):
         }
         F["B"] = B
         F["graph"] = {"warm": 0, "g": None, "bad": False}
+        while len(cache) >= self._flat_cache_max:
+            evicted = cache.popitem(last=False)[1]
+            eg = evicted.get("graph")
+            if eg is not None:
+                eg["g"] = None
         cache[key] = F
         return F
 
@@ -1754,9 +1771,13 @@ class Tiger(Optimizer):
                 else:
                     if gs["warm"] >= 2:
                         try:
+                            pool = self._graph_pools.get(group_ref.device)
+                            if pool is None:
+                                pool = torch.cuda.graph_pool_handle()
+                                self._graph_pools[group_ref.device] = pool
                             gcap = torch.cuda.CUDAGraph()
                             with torch.cuda.device(group_ref.device):
-                                with torch.cuda.graph(gcap):
+                                with torch.cuda.graph(gcap, pool=pool):
                                     _preguard()
                             gs["g"] = gcap; gs["key"] = _gkey
                             gs["g"].replay()
