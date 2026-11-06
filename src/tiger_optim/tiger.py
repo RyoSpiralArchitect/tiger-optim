@@ -812,6 +812,18 @@ class Tiger(Optimizer):
         key = ("flat", ids)
         F = cache.get(key)
         if F is not None:
+            # Re-sync params whose moments are no longer views into THIS
+            # buffer (membership changed since last use).
+            for p, o, n in zip(params, F["offsets"], F["lengths"]):
+                st = self.state[p]
+                if st.get("m") is None or st["m"].untyped_storage().data_ptr() != F["flat_m"].untyped_storage().data_ptr():
+                    mv = F["flat_m"][o:o + n].view_as(p)
+                    mv.copy_(st["m"].to(torch.float32))
+                    st["m"] = mv
+                if st.get("v") is None or st["v"].untyped_storage().data_ptr() != F["flat_v"].untyped_storage().data_ptr():
+                    vv = F["flat_v"][o:o + n].view_as(p)
+                    vv.copy_(st["v"].to(torch.float32))
+                    st["v"] = vv
             return F
         dev = reference.device
         lengths = [int(p.numel()) for p in params]
@@ -842,12 +854,14 @@ class Tiger(Optimizer):
         seg_idx = torch.repeat_interleave(torch.arange(len(lengths), device=dev), lens_t)
         starts = torch.tensor(offsets, device=dev, dtype=torch.long)
         ends = starts + lens_t
+        ind = torch.zeros(len(lengths), total, dtype=torch.float32, device=dev)
+        ind[seg_idx, torch.arange(total, device=dev)] = 1.0
         F = {
             "flat_m": flat_m, "flat_v": flat_v,
             "lengths": lengths, "lens_t": lens_t, "seg_idx": seg_idx,
             "starts": starts, "ends": ends,
             "numel_f": lens_t.to(torch.float32),
-            "offsets": offsets, "total": total, "ind": None,
+            "offsets": offsets, "total": total, "ind": ind,
         }
         cache[key] = F
         return F
@@ -1291,10 +1305,6 @@ class Tiger(Optimizer):
                 dev_f = group_ref.device
                 Nf = len(fast_params)
                 seg = F["seg_idx"]; lens = F["lens_t"]; numel_f = F["numel_f"]
-                if F["ind"] is None:
-                    ind = torch.zeros(Nf, F["total"], dtype=torch.float32, device=dev_f)
-                    ind.scatter_(1, seg.unsqueeze(0).expand(Nf, -1), 1.0)
-                    F["ind"] = ind
                 ind = F["ind"]
                 total = F["total"]
                 flat_g = torch.cat([p.grad.detach().reshape(-1) for p in fast_params])
@@ -1924,18 +1934,47 @@ class Tiger(Optimizer):
                     prof_c["nonfinite_skips"] += len(bad_idx)
                 if valid_idx:
                     eff = torch.ones(Nf, device=dev_f)
+                    agc_scale = None
                     if pn_v is not None and decay_rate != 0.0:
                         pn_v = pn_v * abs(1.0 - decay_rate)
                     if agc_clip and agc_clip > 0.0:
-                        scale = torch.minimum(
+                        agc_scale = torch.minimum(
                             (pn_v + float(agc_eps)) * float(agc_clip) / dn_v.clamp(min=1e-12),
                             torch.ones_like(pn_v))
-                        eff = eff * scale
+                        eff = eff * agc_scale
+                        dn_v = dn_v * agc_scale  # post-AGC norm, matches slow path
                         if agc_clips_t is not None:
-                            _c = (scale < 1.0).to(agc_clips_t.dtype).sum()
+                            _c = (agc_scale < 1.0).to(agc_clips_t.dtype).sum()
                             if bad_idx:
-                                _c = _c - (scale[bad_idx] < 1.0).to(agc_clips_t.dtype).sum()
+                                _c = _c - (agc_scale[bad_idx] < 1.0).to(agc_clips_t.dtype).sum()
                             agc_clips_t.add_(_c)
+                    # Density / FFN accumulators mirror the slow path (post-AGC d).
+                    if (lora_dense_sum_t is not None or cross_density_sum_t is not None
+                            or up_s2_t is not None or dn_s2_t is not None):
+                        d_den = d_f if agc_scale is None else (
+                            d_f * torch.repeat_interleave(agc_scale, lens))
+                        ssq = ind @ d_den.square()
+                        if bad_idx:
+                            ssq[bad_idx] = 0.0
+                        if up_s2_t is not None:
+                            up_s2_t.add_(ssq.sum())
+                            up_n += sum(F["lengths"][i] for i in valid_idx)
+                        elif dn_s2_t is not None:
+                            dn_s2_t.add_(ssq.sum())
+                            dn_n += sum(F["lengths"][i] for i in valid_idx)
+                        if lora_dense_sum_t is not None or cross_density_sum_t is not None:
+                            k = float(self.defaults["lora_density_k"])
+                            drms = (ssq / numel_f).sqrt()
+                            thr = torch.repeat_interleave(drms * k, lens)
+                            dens = (ind @ (d_den.abs() > thr).to(torch.float32)) / numel_f
+                            if bad_idx:
+                                dens[bad_idx] = 0.0
+                            if lora_dense_sum_t is not None:
+                                lora_dense_sum_t.add_(dens.sum())
+                                lora_count += len(valid_idx)
+                            if cross_density_sum_t is not None:
+                                cross_density_sum_t.add_(dens.sum())
+                                cross_density_count += len(valid_idx)
                     if use_trust:
                         if trust_space == "update":
                             den = dn_v
@@ -1946,16 +1985,18 @@ class Tiger(Optimizer):
                         if den is not None:
                             valid_v = (pn_v * den > 0).to(torch.float32)
                             raw = 1.0 + valid_v * (pn_v / den.clamp(min=1e-12) - 1.0)
-                            if trust_beta > 0.0:
-                                sm = trust_beta * fast_ctx["emas"] + (1.0 - trust_beta) * raw
-                                miss = [i for i in range(Nf) if i not in set(fast_ctx["has_ema_idx"])]
-                                if miss:
-                                    sm[miss] = raw[miss]
-                                for i in valid_idx:
-                                    self._trust_ema[(gi, param_indices[id(fast_params[i])])] = sm[i].detach()
-                            else:
-                                sm = raw
-                            eff = eff * torch.minimum(sm, trust_cap_t)
+                        else:
+                            raw = torch.ones(Nf, device=dev_f)
+                        if trust_beta > 0.0:
+                            sm = trust_beta * fast_ctx["emas"] + (1.0 - trust_beta) * raw
+                            miss = [i for i in range(Nf) if i not in set(fast_ctx["has_ema_idx"])]
+                            if miss:
+                                sm[miss] = raw[miss]
+                            for i in valid_idx:
+                                self._trust_ema[(gi, param_indices[id(fast_params[i])])] = sm[i].detach()
+                        else:
+                            sm = raw
+                        eff = eff * torch.minimum(sm, trust_cap_t)
                     if bad_idx:
                         eff[bad_idx] = 0.0
                     if group["weight_decay"]:
@@ -1969,13 +2010,19 @@ class Tiger(Optimizer):
                                fast_ctx["cand_m"], fast_ctx["cand_v"], d_f, eff,
                                F["seg_idx"], ok_t, upd,
                                decay=0.0, lr=lr * lr_scale)
-                    for i in valid_idx:
-                        p = fast_params[i]
-                        o = F["offsets"][i]; n = p.numel()
-                        u = upd[o:o + n].view_as(p)
-                        b_params.append(p); b_updates.append(u)
-                        if bucket_std:
-                            b_updates_f32.append(u)
+                    if use_foreach_upd:
+                        for i in valid_idx:
+                            p = fast_params[i]
+                            o = F["offsets"][i]; n = p.numel()
+                            u = upd[o:o + n].view_as(p)
+                            b_params.append(p); b_updates.append(u)
+                            if bucket_std:
+                                b_updates_f32.append(u)
+                    else:
+                        torch._foreach_add_(
+                            [fast_params[i] for i in valid_idx],
+                            [upd[F["offsets"][i]:F["offsets"][i] + fast_params[i].numel()].view_as(fast_params[i])
+                             for i in valid_idx])
 
             if b_params and b_updates and hasattr(torch, "_foreach_add_"):
                 prof_c["foreach_bucket_size"] = len(b_params)
