@@ -1067,8 +1067,11 @@ class Tiger(Optimizer):
             "chunked_t": torch.empty(len(params), dtype=torch.bool, device=dev),
             # Per-step dynamic values read by the captured graphs:
             # [sblend, decay_growth, trust_growth, decay_rate, agc_clip,
-            #  agc_eps, trust_beta, trust_cap, lora_density_k, lr_eff]
-            "scalars": e(10),
+            #  agc_eps, trust_beta, trust_cap, lora_density_k, lr_eff,
+            #  1-trust_beta, 1-decay_rate, |1-decay_rate|]
+            # The last three are computed on the host in float64 so the
+            # captured graph matches the eager tail's rounding exactly.
+            "scalars": e(13),
             "eff": e(nseg), "ok_t": e(nseg), "tval": e(nseg),
             # Apply-graph (graph B) state.
             "qemas": e(nseg), "hasemq": torch.zeros(nseg, device=dev),
@@ -1592,7 +1595,9 @@ class Tiger(Optimizer):
                     [sblend, decay_growth, trust_growth, decay_rate,
                      agc_clip if agc_clip and agc_clip > 0.0 else 0.0,
                      agc_eps, trust_beta, trust_clip,
-                     float(self.defaults["lora_density_k"]), lr * lr_scale],
+                     float(self.defaults["lora_density_k"]), lr * lr_scale,
+                     1.0 - trust_beta, 1.0 - decay_rate,
+                     abs(1.0 - decay_rate)],
                     dtype=torch.float32))
                 has_qkv_lr = any(
                     qkv_rules.get(id(p)) is not None and qkv_lr is not None
@@ -2495,7 +2500,7 @@ class Tiger(Optimizer):
                         eff = B2["eff"].fill_(1.0)
                         pn_use = dn_use = None
                         if pn_par is not None:
-                            pn_use = pn_par * (1.0 - sc[3]).abs()
+                            pn_use = pn_par * sc[12]
                             dn_use = dn_par
                         agc_scale = None
                         if _agc_on:
@@ -2545,7 +2550,7 @@ class Tiger(Optimizer):
                             # the slow path.
                             pn_g_use = fast_ctx["pn_g"]
                             if pn_g_use is not None:
-                                pn_g_use = pn_g_use * (1.0 - sc[3]).abs()
+                                pn_g_use = pn_g_use * sc[12]
                             if trust_space == "update":
                                 den_par = dn_use
                                 den_seg = fast_ctx["dn_g"]
@@ -2570,14 +2575,14 @@ class Tiger(Optimizer):
                             if trust_beta > 0.0:
                                 sm = torch.where(
                                     B2["hasem"] > 0,
-                                    sc[6] * B2["emas_t"] + (1.0 - sc[6]) * raw_par,
+                                    sc[6] * B2["emas_t"] + sc[10] * raw_par,
                                     raw_par)
                                 B2["sm"].copy_(sm)
                                 base = sm[seg_par]
                                 if _any_split and raw_seg is not None:
                                     qsm = torch.where(
                                         B2["hasemq"] > 0,
-                                        sc[6] * B2["qemas"] + (1.0 - sc[6]) * raw_seg,
+                                        sc[6] * B2["qemas"] + sc[10] * raw_seg,
                                         raw_seg)
                                     B2["qsm"].copy_(qsm)
                                     base = torch.where(B2["split_t"], qsm, base)
@@ -2590,7 +2595,7 @@ class Tiger(Optimizer):
                         eff *= B2["qscale"]
                         eff *= ok_seg
                         # Rejected params keep factor 1.0 — no decay, no update.
-                        B2["fac"].copy_(1.0 - sc[3] * ok_par)
+                        B2["fac"].copy_(sc[11] * ok_par + (1.0 - ok_par))
                         torch._foreach_mul_(
                             fast_params, [B2["fac"][i] for i in range(Nf)])
                         flat_apply(fast_ctx["flat_p"], F["flat_m"], F["flat_v"],
