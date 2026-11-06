@@ -804,6 +804,7 @@ class Tiger(Optimizer):
         params: List[torch.Tensor],
         reference: torch.Tensor,
         factored_flags: Optional[List[bool]] = None,
+        subsegs: Optional[List[int]] = None,
     ) -> Dict[str, object]:
         """Persistent flat fp32 moment buffers + segment metadata for the
         fused Triton fast path. State m entries (and v for non-factored)
@@ -811,9 +812,11 @@ class Tiger(Optimizer):
         flat_vr/flat_vc so kernel writes commit in place."""
         if factored_flags is None:
             factored_flags = [False] * len(params)
+        if subsegs is None:
+            subsegs = [1] * len(params)
         ids = tuple(id(p) for p in params)
         cache = self._flat_cache.setdefault(gi, {})
-        key = ("flat", ids, tuple(factored_flags))
+        key = ("flat", ids, tuple(factored_flags), tuple(subsegs))
         F = cache.get(key)
         if F is not None:
             # Re-sync params whose moments are no longer views into THIS
@@ -861,17 +864,24 @@ class Tiger(Optimizer):
         flat_vr = torch.empty(total_r, dtype=torch.float32, device=dev) if total_r else None
         flat_vc = torch.empty(total_c, dtype=torch.float32, device=dev) if total_c else None
         offsets: List[int] = []
+        seg_starts: List[int] = []
+        seg_lens: List[int] = []
         off = 0
         vr_off = 0; vc_off = 0
         fact_meta_lists = {
             "row_start": [], "row_len": [],
             "cb_start": [], "cb_c0": [], "cb_R": [], "cb_C": [], "cb_vc": [],
+            "pb_start": [], "pb_c0": [], "pb_r0": [], "pb_r1": [],
+            "pb_C": [], "pb_R": [],
+            "cbf_vc": [], "cbf_p0": [], "cbf_np": [], "cbf_rem": [],
             "fact_vroff": [], "fact_R": [],
             "elem_pos": [], "elem_fact": [],
             "rok": [],
         }
         off_to_fact: Dict[int, int] = {}
         CBLOCK = 128
+        RBLOCK = 4096  # taller matrices switch to the two-phase col reduce
+        npb = 0
         for i, (p, n, fct) in enumerate(zip(params, lengths, factored_flags)):
             st = self.state[p]
             mv = flat_m[off:off + n].view_as(p)
@@ -904,32 +914,61 @@ class Tiger(Optimizer):
                     vc_v.zero_()
                 st["vc"] = vc_v
                 fm = fact_meta_lists
+                seg0 = len(seg_starts)
                 for r in range(R):
                     fm["row_start"].append(off + r * C)
                     fm["row_len"].append(C)
-                    fm["rok"].append(i)
+                    fm["rok"].append(seg0)
                 for c0 in range(0, C, CBLOCK):
-                    fm["cb_start"].append(off)
-                    fm["cb_c0"].append(c0)
-                    fm["cb_R"].append(R)
-                    fm["cb_C"].append(C)
-                    fm["cb_vc"].append(vc_off + c0)
+                    if R <= RBLOCK:
+                        fm["cb_start"].append(off)
+                        fm["cb_c0"].append(c0)
+                        fm["cb_R"].append(R)
+                        fm["cb_C"].append(C)
+                        fm["cb_vc"].append(vc_off + c0)
+                    else:
+                        fm["cbf_vc"].append(vc_off + c0)
+                        fm["cbf_p0"].append(npb)
+                        nrb = (R + RBLOCK - 1) // RBLOCK
+                        fm["cbf_np"].append(nrb)
+                        fm["cbf_rem"].append(min(CBLOCK, C - c0))
+                        for r0 in range(0, R, RBLOCK):
+                            fm["pb_start"].append(off)
+                            fm["pb_c0"].append(c0)
+                            fm["pb_r0"].append(r0)
+                            fm["pb_r1"].append(min(r0 + RBLOCK, R))
+                            fm["pb_C"].append(C)
+                            fm["pb_R"].append(R)
+                            npb += 1
                 for c in range(C):
-                    fm["rok"].append(i)
+                    fm["rok"].append(seg0)
                 fm["fact_vroff"].append(vr_off)
                 fm["fact_R"].append(R)
                 ar = torch.arange(n, dtype=torch.long)
                 fm["elem_pos"].append(off + ar)
                 fm["elem_fact"].append(torch.full((n,), fo, dtype=torch.int32))
                 vr_off += R; vc_off += C
+            # Sub-segment (chunk) boundaries along dim 0. torch.chunk
+            # semantics: the first D%k chunks get one extra element.
+            D = int(p.shape[0]) if p.ndim else 1
+            per = n // D if D else n
+            base, rem = divmod(D, subsegs[i])
+            ro = 0
+            for j in range(subsegs[i]):
+                rows_j = base + (1 if j < rem else 0)
+                seg_starts.append(off + ro * per)
+                seg_lens.append(rows_j * per)
+                ro += rows_j
             offsets.append(off)
             off += n
-        lens_t = torch.tensor(lengths, device=dev, dtype=torch.long)
-        seg_idx = torch.repeat_interleave(torch.arange(len(lengths), device=dev), lens_t)
-        starts = torch.tensor(offsets, device=dev, dtype=torch.long)
+        lens_t = torch.tensor(seg_lens, device=dev, dtype=torch.long)
+        nseg = len(seg_lens)
+        seg_idx = torch.repeat_interleave(torch.arange(nseg, device=dev), lens_t)
+        starts = torch.tensor(seg_starts, device=dev, dtype=torch.long)
         ends = starts + lens_t
-        ind = torch.zeros(len(lengths), total, dtype=torch.float32, device=dev)
+        ind = torch.zeros(nseg, total, dtype=torch.float32, device=dev)
         ind[seg_idx, torch.arange(total, device=dev)] = 1.0
+        seg_param = [i for i, k in enumerate(subsegs) for _ in range(k)]
         F = {
             "flat_m": flat_m, "flat_v": flat_v,
             "lengths": lengths, "lens_t": lens_t, "seg_idx": seg_idx,
@@ -937,6 +976,10 @@ class Tiger(Optimizer):
             "numel_f": lens_t.to(torch.float32),
             "offsets": offsets, "total": total, "ind": ind,
             "factored": factored_flags,
+            "seg_param": seg_param,
+            "seg_param_t": torch.tensor(seg_param, device=dev, dtype=torch.long),
+            "param_nseg": subsegs,
+            "seg_starts_l": seg_starts, "seg_lens_l": seg_lens,
         }
         if fact_idx:
             fm = fact_meta_lists
@@ -948,6 +991,16 @@ class Tiger(Optimizer):
                 "cb_R": torch.tensor(fm["cb_R"], device=dev, dtype=torch.long),
                 "cb_C": torch.tensor(fm["cb_C"], device=dev, dtype=torch.long),
                 "cb_vc": torch.tensor(fm["cb_vc"], device=dev, dtype=torch.long),
+                "pb_start": torch.tensor(fm["pb_start"], device=dev, dtype=torch.long),
+                "pb_c0": torch.tensor(fm["pb_c0"], device=dev, dtype=torch.long),
+                "pb_r0": torch.tensor(fm["pb_r0"], device=dev, dtype=torch.long),
+                "pb_r1": torch.tensor(fm["pb_r1"], device=dev, dtype=torch.long),
+                "pb_C": torch.tensor(fm["pb_C"], device=dev, dtype=torch.long),
+                "pb_R": torch.tensor(fm["pb_R"], device=dev, dtype=torch.long),
+                "cbf_vc": torch.tensor(fm["cbf_vc"], device=dev, dtype=torch.long),
+                "cbf_p0": torch.tensor(fm["cbf_p0"], device=dev, dtype=torch.long),
+                "cbf_np": torch.tensor(fm["cbf_np"], device=dev, dtype=torch.long),
+                "cbf_rem": torch.tensor(fm["cbf_rem"], device=dev, dtype=torch.long),
                 "fact_vroff": torch.tensor(fm["fact_vroff"], device=dev, dtype=torch.long),
                 "fact_R": torch.tensor(fm["fact_R"], device=dev, dtype=torch.long),
                 "elem_pos": torch.cat(fm["elem_pos"]).to(dev),
@@ -969,6 +1022,8 @@ class Tiger(Optimizer):
             F["cand_vr"] = torch.empty(total_r, dtype=torch.float32, device=dev)
             F["cand_vc"] = torch.empty(total_c, dtype=torch.float32, device=dev)
             F["fmean"] = torch.empty(len(fact_idx), dtype=torch.float32, device=dev)
+            if npb:
+                fact_meta["part"] = torch.empty(npb * CBLOCK, dtype=torch.float32, device=dev)
             F["fact_meta"] = fact_meta
         cache[key] = F
         return F
@@ -1387,16 +1442,31 @@ class Tiger(Optimizer):
                     if flat_fused_supported():
                         _elig = []
                         _fact_flags = []
+                        _subsegs = []
+                        _chunked = []
                         for p in active_params:
                             if not (p.dtype == torch.float32
                                     and p.grad is not None and p.grad.dtype == torch.float32
                                     and p.is_contiguous() and p.grad.is_contiguous()
                                     and self.state[p].get("_state_sane")
-                                    and "m" in self.state[p]
-                                    and qkv_rules.get(id(p)) is None
-                                    and not (blk_chunks > 0 and p.ndim == 2
-                                             and p.shape[0] % blk_chunks == 0)):
+                                    and "m" in self.state[p]):
                                 continue
+                            # Chunked routes map to sub-segments along dim 0
+                            # (the only dim whose chunks are contiguous). A
+                            # qkv rule without an active route needs no split;
+                            # stats collection keeps the param on the slow path.
+                            rule = qkv_rules.get(id(p))
+                            route = rule is not None and (
+                                qkv_lr is not None or (qkv_split and use_trust))
+                            nseg = 1; ch = False
+                            if route:
+                                if (capture_qkv_stats or rule[0] != 0
+                                        or p.shape[0] % rule[1] != 0):
+                                    continue
+                                nseg = rule[1]; ch = True
+                            if (blk_chunks > 0 and p.ndim == 2
+                                    and p.shape[0] % blk_chunks == 0):
+                                ch = True
                             if factored and p.ndim >= 2 and p.shape[0] > 0:
                                 vr = self.state[p].get("vr"); vc = self.state[p].get("vc")
                                 if (vr is None or vc is None
@@ -1406,11 +1476,15 @@ class Tiger(Optimizer):
                                 _elig.append(p); _fact_flags.append(True)
                             elif "v" in self.state[p]:
                                 _elig.append(p); _fact_flags.append(False)
+                            else:
+                                continue
+                            _subsegs.append(nseg); _chunked.append(ch)
                         # Dense params first so flat_v maps cleanly.
-                        fast_params = [p for p, f in zip(_elig, _fact_flags) if not f] + \
-                                      [p for p, f in zip(_elig, _fact_flags) if f]
-                        fact_flags = [f for _, f in sorted(
-                            enumerate(_fact_flags), key=lambda kv: kv[1])]
+                        _order = sorted(range(len(_elig)), key=lambda i: _fact_flags[i])
+                        fast_params = [_elig[i] for i in _order]
+                        fact_flags = [_fact_flags[i] for i in _order]
+                        subseg_counts = [_subsegs[i] for i in _order]
+                        chunked_flags = [_chunked[i] for i in _order]
                         slow_params = [p for p in active_params
                                        if not any(p is q for q in fast_params)]
                 except Exception:
@@ -1423,10 +1497,13 @@ class Tiger(Optimizer):
                 from .triton_kernels import (
                     flat_step_candidates, flat_seg_stats, flat_direction, flat_apply,
                 )
-                F = self._flat_group(gi, fast_params, group_ref, factored_flags=fact_flags)
+                F = self._flat_group(gi, fast_params, group_ref,
+                                     factored_flags=fact_flags, subsegs=subseg_counts)
                 dev_f = group_ref.device
                 Nf = len(fast_params)
+                Nseg = F["lens_t"].numel()
                 seg = F["seg_idx"]; lens = F["lens_t"]; numel_f = F["numel_f"]
+                seg_par = F["seg_param_t"]
                 ind = F["ind"]
                 total = F["total"]
                 flat_g = torch.cat([p.grad.detach().reshape(-1) for p in fast_params])
@@ -1451,47 +1528,91 @@ class Tiger(Optimizer):
                         cand_m, cand_v, pp_b, ds_b,
                         b2=b2, eps=eps, alpha=alpha,
                         sign_tau=float(group["sign_tau"]), vtiny=1e-30)
-                stats = torch.empty(Nf * 5, device=dev_f)
+                stats = torch.empty(Nseg * 5, device=dev_f)
                 flat_seg_stats(cand_m, cand_v, flat_p, ds_b, F["starts"], F["ends"], stats)
-                st5 = stats.view(Nf, 5)
+                st5 = stats.view(Nseg, 5)
                 am_m = st5[:, 0]; am_v = st5[:, 1]; am_p = st5[:, 2]
                 am_ds = st5[:, 3]; ssq_m = st5[:, 4]
-                rms_m = am_m * torch.sqrt(ssq_m / numel_f)
+                # Fast case: no chunked params, seg == param, so param-level
+                # quantities are the seg values themselves and no combine ops
+                # are needed (this keeps the all-dense path's launch count).
+                id_seg = Nseg == Nf
+                if id_seg:
+                    rms_par = am_m * torch.sqrt(ssq_m / numel_f)
+                    rms_seg = rms_par
+                    n_par = numel_f
+                    am_p_par = am_p
+                else:
+                    # The direction's _rms(m) denominator is param-level in
+                    # the eager path; recombine the amax-scaled per-seg sums.
+                    ssq_true = ssq_m * am_m * am_m
+                    ssq_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, ssq_true)
+                    n_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, numel_f)
+                    rms_par = torch.sqrt(ssq_par / n_par)
+                    rms_seg = rms_par[seg_par]
+                    am_p_par = torch.zeros(Nf, device=dev_f).scatter_reduce(
+                        0, seg_par, am_p, reduce="amax")
                 d_f = torch.empty(total, device=dev_f)
-                flat_direction(cand_m, pp_b, ds_b, rms_m, seg, d_f, sblend=sblend, eps=eps)
-                stats2 = torch.empty(Nf * 5, device=dev_f)
+                flat_direction(cand_m, pp_b, ds_b, rms_seg, seg, d_f,
+                               sblend=sblend, eps=eps)
+                stats2 = torch.empty(Nseg * 5, device=dev_f)
                 flat_seg_stats(cand_m, cand_v, flat_p, d_f, F["starts"], F["ends"], stats2)
-                am_d = stats2.view(Nf, 5)[:, 3]
+                am_d = stats2.view(Nseg, 5)[:, 3]
 
-                checks_ok = (
-                    torch.isfinite(am_m) & torch.isfinite(am_v)
-                    & torch.isfinite(am_d) & torch.isfinite(am_ds)
-                )
+                # Finite checks are per-seg; magnitude bounds are param-level
+                # (eager checks the whole tensor), ANDed per param below.
+                seg_ok = (torch.isfinite(am_m) & torch.isfinite(am_v)
+                          & torch.isfinite(am_d) & torch.isfinite(am_ds))
+                if id_seg:
+                    am_d_par = am_d
+                else:
+                    am_d_par = torch.zeros(Nf, device=dev_f).scatter_reduce(
+                        0, seg_par, am_d, reduce="amax")
                 decay_rate = lr * lr_scale * float(group["weight_decay"])
                 decay_growth = abs(1.0 - decay_rate) + (
                     8.0 * torch.finfo(torch.float32).eps * abs(decay_rate))
                 trust_growth = max(1.0, trust_clip) if use_trust else 1.0
-                route_lr = abs(lr * lr_scale)
-                raw_bound = am_d * (trust_growth * route_lr)
+                has_qkv_lr = any(
+                    qkv_rules.get(id(p)) is not None and qkv_lr is not None
+                    for p in fast_params)
+                if has_qkv_lr:
+                    route_lrs = []
+                    for p in fast_params:
+                        rls = [abs(lr * lr_scale)]
+                        if qkv_rules.get(id(p)) is not None and qkv_lr is not None:
+                            rls.extend(abs(lr * lr_scale * float(qkv_lr.get(k, 1.0)))
+                                       for k in ("q", "k", "v"))
+                        route_lrs.append(max(rls) if all(math.isfinite(v) for v in rls) else math.inf)
+                    route_lr_par = torch.tensor(route_lrs, device=dev_f)
+                else:
+                    route_lr_par = abs(lr * lr_scale)
+                raw_bound_par = am_d_par * (trust_growth * route_lr_par)
                 bucket_route = (
                     use_foreach_upd and bucket_std and hasattr(torch, "_foreach_add_")
                     and len(active_params) >= foreach_min_bucket)
                 if bucket_route:
                     if bucket_src == "median" and not use_triton_stats:
-                        upd_bound = raw_bound * 1e12
+                        upd_par = raw_bound_par * 1e12
                     elif use_triton_stats or bucket_src == "global":
-                        upd_bound = raw_bound.new_full((), math.sqrt(sum(q.numel() for q in active_params)))
+                        upd_par = raw_bound_par.new_full((), math.sqrt(sum(q.numel() for q in active_params)))
                     else:
-                        upd_bound = raw_bound.new_full((), len(active_params) * 1.0) * numel_f.sqrt()
+                        upd_par = raw_bound_par.new_full((), len(active_params) * 1.0) * n_par.sqrt()
+                    # Chunked params never enter the foreach bucket.
+                    if any(chunked_flags):
+                        chunked_par = torch.tensor(chunked_flags, device=dev_f)
+                        upd_bound_par = torch.where(chunked_par, raw_bound_par, upd_par)
+                    else:
+                        upd_bound_par = upd_par
                 else:
-                    upd_bound = raw_bound
+                    upd_bound_par = raw_bound_par
                 fp32_limit = torch.finfo(torch.float32).max * (1.0 - 8.0 * torch.finfo(torch.float32).eps)
-                checks_ok &= (
-                    (am_d * trust_growth <= fp32_limit)
-                    & (raw_bound <= fp32_limit)
-                    & (am_p * decay_growth + upd_bound <= fp32_limit))
+                par_ok = (
+                    (am_d_par * trust_growth <= fp32_limit)
+                    & (raw_bound_par <= fp32_limit)
+                    & (am_p_par * decay_growth + upd_bound_par <= fp32_limit))
 
                 pn_g = dn_g = pre_n = None
+                pn_par = dn_par = pre_n_par = None
                 am_pre = None
                 if use_trust or (agc_clip and agc_clip > 0.0):
                     def _seg_norm(x, am):
@@ -1501,17 +1622,28 @@ class Tiger(Optimizer):
                         return safe * ssq.sqrt()
                     pn_g = _seg_norm(flat_p, am_p)
                     dn_g = _seg_norm(d_f, am_d)
-                    loose_ok = (am_p * (decay_growth * numel_f.sqrt()) <= fp32_limit) & (am_d * numel_f.sqrt() <= fp32_limit)
-                    exact_ok = (pn_g * decay_growth <= fp32_limit) & (dn_g <= fp32_limit)
+                    if id_seg:
+                        pn_par = pn_g; dn_par = dn_g
+                    else:
+                        pn_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, pn_g * pn_g).sqrt()
+                        dn_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, dn_g * dn_g).sqrt()
+                    loose_ok = (am_p_par * (decay_growth * n_par.sqrt()) <= fp32_limit) & (am_d_par * n_par.sqrt() <= fp32_limit)
+                    exact_ok = (pn_par * decay_growth <= fp32_limit) & (dn_par <= fp32_limit)
                     if use_trust and trust_space == "precond":
                         pre_f = cand_m * pp_b
                         am_pre = torch.stack(list(torch._foreach_norm(
-                            [pre_f[o:o + n] for o, n in zip(F["offsets"], F["lengths"])],
+                            [pre_f[s:s + l] for s, l in zip(F["seg_starts_l"], F["seg_lens_l"])],
                             ord=float("inf"))))
                         pre_n = _seg_norm(pre_f, am_pre)
-                        loose_ok &= am_pre * numel_f.sqrt() <= fp32_limit
-                        exact_ok &= pre_n <= fp32_limit
-                    checks_ok &= loose_ok | exact_ok
+                        if id_seg:
+                            am_pre_par = am_pre; pre_n_par = pre_n
+                        else:
+                            am_pre_par = torch.zeros(Nf, device=dev_f).scatter_reduce(
+                                0, seg_par, am_pre, reduce="amax")
+                            pre_n_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, pre_n * pre_n).sqrt()
+                        loose_ok &= am_pre_par * n_par.sqrt() <= fp32_limit
+                        exact_ok &= pre_n_par <= fp32_limit
+                    par_ok &= loose_ok | exact_ok
 
                 emas = has_ema_idx = None
                 if use_trust and trust_beta > 0.0:
@@ -1525,14 +1657,38 @@ class Tiger(Optimizer):
                     if len(has_ema_idx) != Nf:
                         missing = [i for i in range(Nf) if i not in set(has_ema_idx)]
                         ema_ok = ema_ok.clone(); ema_ok[missing] = True
-                    checks_ok &= ema_ok
-                fast_ok_list = checks_ok.cpu().tolist()
+                    # Split-trust params validate their per-chunk EMA vector.
+                    qok = []; qidx = []
+                    for i, p in enumerate(fast_params):
+                        if not (chunked_flags[i] and qkv_split
+                                and qkv_rules.get(id(p)) is not None):
+                            continue
+                        prev = self._qkv_trust_ema.get((gi, param_indices[id(p)]))
+                        if prev is None:
+                            continue
+                        qidx.append(i)
+                        prev_f = prev.reshape(-1).to(torch.float32)
+                        qok.append((torch.isfinite(prev_f) & (prev_f >= 0)).all())
+                    if qok:
+                        ema_ok = ema_ok.clone()
+                        ema_ok[torch.tensor(qidx, device=dev_f)] &= torch.stack(
+                            [q.reshape(()) for q in qok])
+                    par_ok &= ema_ok
+                if id_seg:
+                    par_ok &= seg_ok
+                else:
+                    seg_ok_par = torch.ones(Nf, dtype=torch.float32, device=dev_f)
+                    seg_ok_par.scatter_reduce_(0, seg_par, seg_ok.to(torch.float32), reduce="amin")
+                    par_ok &= seg_ok_par > 0.5
+                fast_ok_list = par_ok.cpu().tolist()
                 fast_ctx = {
                     "F": F, "flat_g": flat_g, "flat_p": flat_p, "cand_m": cand_m,
                     "cand_v": cand_v, "pp": pp_b, "ds": ds_b, "d": d_f,
                     "decay_rate": decay_rate, "pn_g": pn_g, "dn_g": dn_g,
-                    "pre_n": pre_n, "emas": emas, "has_ema_idx": has_ema_idx,
-                    "ind": ind, "Nf": Nf, "dev": dev_f,
+                    "pre_n": pre_n, "pn_par": pn_par, "dn_par": dn_par,
+                    "pre_n_par": pre_n_par, "emas": emas, "has_ema_idx": has_ema_idx,
+                    "ind": ind, "Nf": Nf, "dev": dev_f, "chunked": chunked_flags,
+                    "id_seg": id_seg,
                 }
 
             for p in slow_params:
@@ -2059,25 +2215,30 @@ class Tiger(Optimizer):
             # ---- Fused flat apply: eff, launch K5, enqueue update views ----
             if fast_ctx is not None:
                 F = fast_ctx["F"]; d_f = fast_ctx["d"]
-                pn_v = fast_ctx["pn_g"]; dn_v = fast_ctx["dn_g"]
                 decay_rate = fast_ctx["decay_rate"]
                 Nf = fast_ctx["Nf"]; dev_f = fast_ctx["dev"]
+                Nseg = F["lens_t"].numel()
+                seg_par = F["seg_param_t"]
+                param_nseg = F["param_nseg"]
+                chunked_fl = fast_ctx["chunked"]
+                id_seg = fast_ctx["id_seg"]
                 lens = F["lens_t"]; numel_f = F["numel_f"]
+                pn_par = fast_ctx["pn_par"]; dn_par = fast_ctx["dn_par"]
                 valid_idx = [i for i, b in enumerate(fast_ok_list) if b]
                 bad_idx = [i for i, b in enumerate(fast_ok_list) if not b]
                 if bad_idx:
                     prof_c["nonfinite_skips"] += len(bad_idx)
                 if valid_idx:
-                    eff = torch.ones(Nf, device=dev_f)
+                    eff = torch.ones(Nseg, device=dev_f)
                     agc_scale = None
-                    if pn_v is not None and decay_rate != 0.0:
-                        pn_v = pn_v * abs(1.0 - decay_rate)
+                    if pn_par is not None and decay_rate != 0.0:
+                        pn_par = pn_par * abs(1.0 - decay_rate)
                     if agc_clip and agc_clip > 0.0:
                         agc_scale = torch.minimum(
-                            (pn_v + float(agc_eps)) * float(agc_clip) / dn_v.clamp(min=1e-12),
-                            torch.ones_like(pn_v))
-                        eff = eff * agc_scale
-                        dn_v = dn_v * agc_scale  # post-AGC norm, matches slow path
+                            (pn_par + float(agc_eps)) * float(agc_clip) / dn_par.clamp(min=1e-12),
+                            torch.ones_like(pn_par))
+                        eff = eff * (agc_scale if id_seg else agc_scale[seg_par])
+                        dn_par = dn_par * agc_scale  # post-AGC norm, matches slow path
                         if agc_clips_t is not None:
                             _c = (agc_scale < 1.0).to(agc_clips_t.dtype).sum()
                             if bad_idx:
@@ -2087,21 +2248,29 @@ class Tiger(Optimizer):
                     if (lora_dense_sum_t is not None or cross_density_sum_t is not None
                             or up_s2_t is not None or dn_s2_t is not None):
                         d_den = d_f if agc_scale is None else (
-                            d_f * torch.repeat_interleave(agc_scale, lens))
-                        ssq = ind @ d_den.square()
+                            d_f * torch.repeat_interleave(
+                                agc_scale if id_seg else agc_scale[seg_par], lens))
+                        ssq_par = ind @ d_den.square()
+                        n_par = numel_f
+                        if not id_seg:
+                            n_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, numel_f)
+                            ssq_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, ssq_par)
                         if bad_idx:
-                            ssq[bad_idx] = 0.0
+                            ssq_par[bad_idx] = 0.0
                         if up_s2_t is not None:
-                            up_s2_t.add_(ssq.sum())
+                            up_s2_t.add_(ssq_par.sum())
                             up_n += sum(F["lengths"][i] for i in valid_idx)
                         elif dn_s2_t is not None:
-                            dn_s2_t.add_(ssq.sum())
+                            dn_s2_t.add_(ssq_par.sum())
                             dn_n += sum(F["lengths"][i] for i in valid_idx)
                         if lora_dense_sum_t is not None or cross_density_sum_t is not None:
                             k = float(self.defaults["lora_density_k"])
-                            drms = (ssq / numel_f).sqrt()
-                            thr = torch.repeat_interleave(drms * k, lens)
-                            dens = (ind @ (d_den.abs() > thr).to(torch.float32)) / numel_f
+                            drms = (ssq_par / n_par).sqrt()
+                            thr = torch.repeat_interleave(
+                                drms * k if id_seg else (drms * k)[seg_par], lens)
+                            cnt = ind @ (d_den.abs() > thr).to(torch.float32)
+                            dens = cnt / n_par if id_seg else (
+                                torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, cnt) / n_par)
                             if bad_idx:
                                 dens[bad_idx] = 0.0
                             if lora_dense_sum_t is not None:
@@ -2111,35 +2280,95 @@ class Tiger(Optimizer):
                                 cross_density_sum_t.add_(dens.sum())
                                 cross_density_count += len(valid_idx)
                     if use_trust:
+                        # Split-trust params use per-chunk norms and a vector
+                        # EMA; all others use param-level scalar trust. Norms
+                        # are post-decay (p) and post-AGC (d), as in the slow
+                        # path.
+                        split = [chunked_fl[i] and qkv_split
+                                 and qkv_rules.get(id(fast_params[i])) is not None
+                                 for i in range(Nf)]
+                        pn_g_use = fast_ctx["pn_g"]
+                        if pn_g_use is not None and decay_rate != 0.0:
+                            pn_g_use = pn_g_use * abs(1.0 - decay_rate)
                         if trust_space == "update":
-                            den = dn_v
+                            den_par = dn_par
+                            den_seg = fast_ctx["dn_g"]
+                            if den_seg is not None and agc_scale is not None:
+                                den_seg = den_seg * (
+                                    agc_scale if id_seg else agc_scale[seg_par])
                         elif trust_space == "precond":
-                            den = fast_ctx["pre_n"]
+                            den_par = fast_ctx["pre_n_par"]; den_seg = fast_ctx["pre_n"]
                         else:
-                            den = None
-                        if den is not None:
-                            valid_v = (pn_v * den > 0).to(torch.float32)
-                            raw = 1.0 + valid_v * (pn_v / den.clamp(min=1e-12) - 1.0)
+                            den_par = den_seg = None
+                        if den_par is not None:
+                            valid_v = (pn_par * den_par > 0).to(torch.float32)
+                            raw_par = 1.0 + valid_v * (pn_par / den_par.clamp(min=1e-12) - 1.0)
+                            if any(split):
+                                valid_s = (pn_g_use * den_seg > 0).to(torch.float32)
+                                raw_seg = 1.0 + valid_s * (pn_g_use / den_seg.clamp(min=1e-12) - 1.0)
                         else:
-                            raw = torch.ones(Nf, device=dev_f)
+                            raw_par = torch.ones(Nf, device=dev_f)
+                        if not any(split):
+                            raw_seg = None
+                        tval = torch.ones(Nseg, device=dev_f)
+                        s0 = 0
+                        seg_of_param: List[int] = []
+                        for k in param_nseg:
+                            seg_of_param.append(s0)
+                            s0 += k
                         if trust_beta > 0.0:
-                            sm = trust_beta * fast_ctx["emas"] + (1.0 - trust_beta) * raw
+                            sm = trust_beta * fast_ctx["emas"] + (1.0 - trust_beta) * raw_par
                             miss = [i for i in range(Nf) if i not in set(fast_ctx["has_ema_idx"])]
                             if miss:
-                                sm[miss] = raw[miss]
+                                sm[miss] = raw_par[miss]
                             for i in valid_idx:
-                                self._trust_ema[(gi, param_indices[id(fast_params[i])])] = sm[i].detach()
+                                a = seg_of_param[i]; b = a + param_nseg[i]
+                                tkey = (gi, param_indices[id(fast_params[i])])
+                                if split[i]:
+                                    prev = self._qkv_trust_ema.get(tkey)
+                                    r = raw_seg[a:b]
+                                    sm_i = (trust_beta * prev.to(r.dtype) + (1.0 - trust_beta) * r
+                                            if prev is not None and prev.numel() == r.numel() else r)
+                                    self._qkv_trust_ema[tkey] = sm_i.detach()
+                                    tval[a:b] = torch.minimum(sm_i, trust_cap_t)
+                                else:
+                                    self._trust_ema[tkey] = sm[i].detach()
+                                    tval[a:b] = torch.minimum(sm[i].expand(b - a), trust_cap_t)
                         else:
-                            sm = raw
-                        eff = eff * torch.minimum(sm, trust_cap_t)
+                            tval = torch.minimum(
+                                raw_par if id_seg else raw_par[seg_par], trust_cap_t)
+                            for i in valid_idx:
+                                if split[i]:
+                                    a = seg_of_param[i]; b = a + param_nseg[i]
+                                    tval[a:b] = torch.minimum(raw_seg[a:b], trust_cap_t)
+                        eff = eff * tval
+                    # Per-chunk lr scales ride on the per-seg eff.
+                    if qkv_lr is not None and any(k > 1 for k in param_nseg):
+                        _keys = ("q", "k", "v")
+                        qscale = []
+                        for i, p in enumerate(fast_params):
+                            k = param_nseg[i]
+                            if k > 1 and qkv_rules.get(id(p)) is not None:
+                                qscale.extend(float(qkv_lr.get(_keys[j], 1.0))
+                                              if j < 3 else 1.0 for j in range(k))
+                            else:
+                                qscale.extend([1.0] * k)
+                        if any(s != 1.0 for s in qscale):
+                            eff = eff * torch.tensor(qscale, device=dev_f)
                     if bad_idx:
-                        eff[bad_idx] = 0.0
+                        ok_par_t = torch.tensor(
+                            [1.0 if fast_ok_list[i] else 0.0 for i in range(Nf)],
+                            dtype=torch.float32, device=dev_f)
+                        eff = eff * (ok_par_t if id_seg else ok_par_t[seg_par])
                     if group["weight_decay"]:
                         torch._foreach_mul_([fast_params[i] for i in valid_idx], 1.0 - decay_rate)
                         prof_c["scalar_wd"] += len(valid_idx)
                     upd = torch.empty(F["total"], device=dev_f)
                     ok_t = torch.tensor(
-                        [1.0 if fast_ok_list[i] else 0.0 for i in range(Nf)],
+                        [1.0 if fast_ok_list[i] else 0.0 for i in range(Nf)]
+                        if id_seg else
+                        [1.0 if fast_ok_list[F["seg_param"][s]] else 0.0
+                         for s in range(Nseg)],
                         dtype=torch.float32, device=dev_f)
                     flat_apply(fast_ctx["flat_p"], F["flat_m"], F["flat_v"],
                                fast_ctx["cand_m"], fast_ctx["cand_v"], d_f, eff,
@@ -2151,13 +2380,20 @@ class Tiger(Optimizer):
                                          F["cand_vr"], F["cand_vc"],
                                          F["fact_meta"]["rok"], ok_t)
                     if use_foreach_upd:
+                        direct = []
+                        direct_upd = []
                         for i in valid_idx:
                             p = fast_params[i]
                             o = F["offsets"][i]; n = p.numel()
                             u = upd[o:o + n].view_as(p)
-                            b_params.append(p); b_updates.append(u)
-                            if bucket_std:
-                                b_updates_f32.append(u)
+                            if chunked_fl[i]:
+                                direct.append(p); direct_upd.append(u)
+                            else:
+                                b_params.append(p); b_updates.append(u)
+                                if bucket_std:
+                                    b_updates_f32.append(u)
+                        if direct:
+                            torch._foreach_add_(direct, direct_upd)
                     else:
                         torch._foreach_add_(
                             [fast_params[i] for i in valid_idx],
