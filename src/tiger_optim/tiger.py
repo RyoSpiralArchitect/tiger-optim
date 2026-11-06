@@ -634,8 +634,11 @@ class Tiger(Optimizer):
         # stat capture) would otherwise accumulate F + graph + pool without
         # bound. Entries are LRU-evicted; st["m"]/["v"] views keep an evicted
         # buffer alive until the next membership re-syncs them.
-        self._flat_cache_max = max(
-            1, int(os.environ.get("TIGER_FLAT_CACHE_MAX", "4")))
+        try:
+            self._flat_cache_max = max(
+                1, int(os.environ.get("TIGER_FLAT_CACHE_MAX", "4")))
+        except ValueError:
+            self._flat_cache_max = 4
         # One graph pool per device, shared by every captured flat graph, so
         # transient capture allocations are recycled instead of each graph
         # keeping a private pool.
@@ -1771,6 +1774,10 @@ class Tiger(Optimizer):
                 else:
                     if gs["warm"] >= 2:
                         try:
+                            # Sharing one pool across graphs is safe here
+                            # because _preguard outputs only into persistent
+                            # pre-capture buffers — no capture-pool tensor
+                            # escapes — and replays never run concurrently.
                             pool = self._graph_pools.get(group_ref.device)
                             if pool is None:
                                 pool = torch.cuda.graph_pool_handle()
