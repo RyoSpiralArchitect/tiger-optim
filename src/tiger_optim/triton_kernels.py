@@ -234,14 +234,16 @@ if triton is not None:
         j = tl.program_id(0)
         s = tl.load(rstart_ptr + j)
         n = tl.load(rlen_ptr + j)
+        # Divide before summing, matching the eager (g2 / n).sum(dim=1):
+        # a finite mean must not overflow in the intermediate sum.
         acc = 0.0
         for off in range(0, n, BLOCK):
             idx = s + off + tl.arange(0, BLOCK)
             mask = off + tl.arange(0, BLOCK) < n
             g = tl.load(g_ptr + idx, mask=mask, other=0.0)
-            acc += tl.sum(tl.where(mask, g * g, 0.0), axis=0)
+            acc += tl.sum(tl.where(mask, g * g / n, 0.0), axis=0)
         vr = tl.load(vr_ptr + j)
-        tl.store(cvr_ptr + j, vr * b2 + (acc / n) * (1.0 - b2))
+        tl.store(cvr_ptr + j, vr * b2 + acc * (1.0 - b2))
 
     @triton.jit
     def _flat_fact_cols_kernel(g_ptr, vc_ptr, cvc_ptr, cstart_ptr, cc0_ptr,
@@ -260,10 +262,10 @@ if triton is not None:
         acc = tl.zeros([BLOCK], dtype=tl.float32)
         for r in range(0, R):
             g = tl.load(g_ptr + s + r * C + cols, mask=cmask, other=0.0)
-            acc += g * g
+            acc += g * g / R
         vc = tl.load(vc_ptr + vo + tl.arange(0, BLOCK), mask=cmask, other=0.0)
         tl.store(cvc_ptr + vo + tl.arange(0, BLOCK),
-                 vc * b2 + (acc / R) * (1.0 - b2), mask=cmask)
+                 vc * b2 + acc * (1.0 - b2), mask=cmask)
 
     @triton.jit
     def _flat_fact_mean_kernel(cvr_ptr, fvroff_ptr, fr_ptr, fmean_ptr,
@@ -272,32 +274,41 @@ if triton is not None:
         j = tl.program_id(0)
         off = tl.load(fvroff_ptr + j)
         R = tl.load(fr_ptr + j)
+        # Divide before summing so a finite mean cannot overflow the
+        # intermediate accumulator (matches eager (vr / R).sum()).
         acc = 0.0
         for o in range(0, R, BLOCK):
             mask = o + tl.arange(0, BLOCK) < R
-            acc += tl.sum(tl.load(cvr_ptr + off + o + tl.arange(0, BLOCK),
-                                  mask=mask, other=0.0), axis=0)
-        tl.store(fmean_ptr + j, acc / R)
+            v = tl.load(cvr_ptr + off + o + tl.arange(0, BLOCK),
+                        mask=mask, other=0.0)
+            acc += tl.sum(tl.where(mask, v / R, 0.0), axis=0)
+        tl.store(fmean_ptr + j, acc)
 
     @triton.jit
     def _flat_fact_vhat_kernel(cm_ptr, cvr_ptr, cvc_ptr, fmean_ptr,
-                               pos_ptr, vridx_ptr, vcidx_ptr, fidx_ptr,
+                               pos_ptr, fidx_ptr, fstart_ptr, fc_ptr,
+                               fvroff_ptr, fvcoff_ptr,
                                cv_ptr, pp_ptr, ds_ptr,
                                M, eps, alpha, sign_tau, vtiny,
                                BLOCK: tl.constexpr):
         # Elementwise over factored elements only: write the rank-1 vhat into
         # the shared cand_v segment, then recompute pp/dsign from it so the
         # uniform tail (K2-K5) sees the same values as the eager path.
+        # Row/col factor indices are derived from the element position and
+        # per-param tables, so no per-element index tensors are needed.
         pid = tl.program_id(0)
         offs = pid * BLOCK + tl.arange(0, BLOCK)
         mask = offs < M
         pos = tl.load(pos_ptr + offs, mask=mask, other=0)
-        vr = tl.load(cvr_ptr + tl.load(vridx_ptr + offs, mask=mask, other=0),
-                     mask=mask, other=0.0)
-        vc = tl.load(cvc_ptr + tl.load(vcidx_ptr + offs, mask=mask, other=0),
-                     mask=mask, other=0.0)
-        fm = tl.load(fmean_ptr + tl.load(fidx_ptr + offs, mask=mask, other=0),
-                     mask=mask, other=1.0)
+        j = tl.load(fidx_ptr + offs, mask=mask, other=0)
+        s = tl.load(fstart_ptr + j, mask=mask, other=0)
+        C = tl.load(fc_ptr + j, mask=mask, other=1)
+        vro = tl.load(fvroff_ptr + j, mask=mask, other=0)
+        vco = tl.load(fvcoff_ptr + j, mask=mask, other=0)
+        rel = pos - s
+        vr = tl.load(cvr_ptr + vro + rel // C, mask=mask, other=0.0)
+        vc = tl.load(cvc_ptr + vco + rel % C, mask=mask, other=0.0)
+        fm = tl.load(fmean_ptr + j, mask=mask, other=1.0)
         vh = (vr / tl.maximum(fm, vtiny)) * vc
         tl.store(cv_ptr + pos, vh, mask=mask)
         pp = tl.sqrt(vh) + eps
@@ -461,7 +472,9 @@ def flat_fact_moments(g, flat_vr, flat_vc, cand_vr, cand_vc, fmean, meta,
         _check_flat(pp, dsign)
         _flat_fact_vhat_kernel[((m + 1023) // 1024,)](
             cand_m, cand_vr, cand_vc, fmean,
-            meta["elem_pos"], meta["elem_vr"], meta["elem_vc"], meta["elem_fact"],
+            meta["elem_pos"], meta["elem_fact"],
+            meta["fact_start"], meta["fact_C"],
+            meta["fact_vroff"], meta["fact_vcoff"],
             cand_v, pp, dsign, m, eps, alpha, sign_tau, vtiny, BLOCK=1024)
 
 

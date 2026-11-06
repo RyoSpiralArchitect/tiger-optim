@@ -813,7 +813,7 @@ class Tiger(Optimizer):
             factored_flags = [False] * len(params)
         ids = tuple(id(p) for p in params)
         cache = self._flat_cache.setdefault(gi, {})
-        key = ("flat", ids)
+        key = ("flat", ids, tuple(factored_flags))
         F = cache.get(key)
         if F is not None:
             # Re-sync params whose moments are no longer views into THIS
@@ -867,7 +867,7 @@ class Tiger(Optimizer):
             "row_start": [], "row_len": [],
             "cb_start": [], "cb_c0": [], "cb_R": [], "cb_C": [], "cb_vc": [],
             "fact_vroff": [], "fact_R": [],
-            "elem_pos": [], "elem_vr": [], "elem_vc": [], "elem_fact": [],
+            "elem_pos": [], "elem_fact": [],
             "rok": [],
         }
         off_to_fact: Dict[int, int] = {}
@@ -920,9 +920,7 @@ class Tiger(Optimizer):
                 fm["fact_R"].append(R)
                 ar = torch.arange(n, dtype=torch.long)
                 fm["elem_pos"].append(off + ar)
-                fm["elem_vr"].append(vr_off + ar // C)
-                fm["elem_vc"].append(vc_off + ar % C)
-                fm["elem_fact"].append(torch.full((n,), fo, dtype=torch.long))
+                fm["elem_fact"].append(torch.full((n,), fo, dtype=torch.int32))
                 vr_off += R; vc_off += C
             offsets.append(off)
             off += n
@@ -953,10 +951,14 @@ class Tiger(Optimizer):
                 "fact_vroff": torch.tensor(fm["fact_vroff"], device=dev, dtype=torch.long),
                 "fact_R": torch.tensor(fm["fact_R"], device=dev, dtype=torch.long),
                 "elem_pos": torch.cat(fm["elem_pos"]).to(dev),
-                "elem_vr": torch.cat(fm["elem_vr"]).to(dev),
-                "elem_vc": torch.cat(fm["elem_vc"]).to(dev),
                 "elem_fact": torch.cat(fm["elem_fact"]).to(dev),
                 "rok": torch.tensor(fm["rok"], device=dev, dtype=torch.long),
+                "fact_start": torch.tensor(
+                    [offsets[i] for i in fact_idx], device=dev, dtype=torch.long),
+                "fact_C": torch.tensor(cols_l, device=dev, dtype=torch.long),
+                "fact_vcoff": torch.tensor(
+                    [sum(cols_l[:k]) for k in range(len(cols_l))],
+                    device=dev, dtype=torch.long),
                 "off_to_fact": off_to_fact,
                 "fact_vroff_l": fm["fact_vroff"],
                 "fact_R_l": fm["fact_R"],
@@ -1395,7 +1397,7 @@ class Tiger(Optimizer):
                                     and not (blk_chunks > 0 and p.ndim == 2
                                              and p.shape[0] % blk_chunks == 0)):
                                 continue
-                            if factored and p.ndim >= 2:
+                            if factored and p.ndim >= 2 and p.shape[0] > 0:
                                 vr = self.state[p].get("vr"); vc = self.state[p].get("vc")
                                 if (vr is None or vc is None
                                         or vr.dtype != torch.float32 or vc.dtype != torch.float32
