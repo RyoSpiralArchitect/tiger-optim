@@ -268,6 +268,48 @@ if triton is not None:
                  vc * b2 + acc * (1.0 - b2), mask=cmask)
 
     @triton.jit
+    def _flat_fact_cols_partial_kernel(g_ptr, part_ptr, pb_start_ptr, pb_c0_ptr,
+                                     pb_r0_ptr, pb_r1_ptr, pb_C_ptr, pb_R_ptr,
+                                     BLOCK: tl.constexpr):
+        # Phase 1 of the two-phase column reduce for tall matrices: each
+        # program covers one (col-block, row-block) pair and writes a scaled
+        # partial sum (already divided by R, matching eager (g2/R).sum(dim=0)).
+        j = tl.program_id(0)
+        s = tl.load(pb_start_ptr + j)
+        c0 = tl.load(pb_c0_ptr + j)
+        r0 = tl.load(pb_r0_ptr + j)
+        r1 = tl.load(pb_r1_ptr + j)
+        C = tl.load(pb_C_ptr + j)
+        R = tl.load(pb_R_ptr + j)
+        cols = c0 + tl.arange(0, BLOCK)
+        cmask = cols < C
+        acc = tl.zeros([BLOCK], dtype=tl.float32)
+        for r in range(r0, r1):
+            g = tl.load(g_ptr + s + r * C + cols, mask=cmask, other=0.0)
+            acc += g * g / R
+        tl.store(part_ptr + j * BLOCK + tl.arange(0, BLOCK), acc, mask=cmask)
+
+    @triton.jit
+    def _flat_fact_cols_finish_kernel(vc_ptr, cvc_ptr, part_ptr, cbf_vc_ptr,
+                                      cbf_p0_ptr, cbf_np_ptr, cbf_rem_ptr,
+                                      b2, BLOCK: tl.constexpr):
+        # Phase 2: fold a col-block's row-block partials into the candidate
+        # column factor EMA update.
+        j = tl.program_id(0)
+        vo = tl.load(cbf_vc_ptr + j)
+        p0 = tl.load(cbf_p0_ptr + j)
+        np_ = tl.load(cbf_np_ptr + j)
+        rem = tl.load(cbf_rem_ptr + j)
+        cmask = tl.arange(0, BLOCK) < rem
+        acc = tl.zeros([BLOCK], dtype=tl.float32)
+        for t in range(0, np_):
+            acc += tl.load(part_ptr + (p0 + t) * BLOCK + tl.arange(0, BLOCK),
+                           mask=cmask, other=0.0)
+        vc = tl.load(vc_ptr + vo + tl.arange(0, BLOCK), mask=cmask, other=0.0)
+        tl.store(cvc_ptr + vo + tl.arange(0, BLOCK), vc * b2 + acc * (1.0 - b2),
+                 mask=cmask)
+
+    @triton.jit
     def _flat_fact_mean_kernel(cvr_ptr, fvroff_ptr, fr_ptr, fmean_ptr,
                                BLOCK: tl.constexpr):
         # Per factored param: mean of the candidate row factor (scalar).
@@ -457,12 +499,26 @@ def flat_fact_moments(g, flat_vr, flat_vc, cand_vr, cand_vc, fmean, meta,
         _flat_fact_rows_kernel[(nr,)](
             g, flat_vr, cand_vr, meta["row_start"], meta["row_len"],
             b2, BLOCK=1024)
-    ncb = meta["cb_start"].numel()
+    ncb = meta["cb_start"].numel() if "cb_start" in meta else 0
     if ncb:
         _flat_fact_cols_kernel[(ncb,)](
             g, flat_vc, cand_vc, meta["cb_start"], meta["cb_c0"],
             meta["cb_R"], meta["cb_C"], meta["cb_vc"],
             b2, BLOCK=128)
+    if "pb_start" in meta:
+        # Tall matrices: two-phase column reduce over (col, row) blocks.
+        npb = meta["pb_start"].numel()
+        if npb:
+            _flat_fact_cols_partial_kernel[(npb,)](
+                g, meta["part"], meta["pb_start"], meta["pb_c0"],
+                meta["pb_r0"], meta["pb_r1"], meta["pb_C"], meta["pb_R"],
+                BLOCK=128)
+        ncbf = meta["cbf_vc"].numel()
+        if ncbf:
+            _flat_fact_cols_finish_kernel[(ncbf,)](
+                flat_vc, cand_vc, meta["part"], meta["cbf_vc"],
+                meta["cbf_p0"], meta["cbf_np"], meta["cbf_rem"],
+                b2, BLOCK=128)
     nfact = fmean.numel()
     if nfact:
         _flat_fact_mean_kernel[(nfact,)](
