@@ -966,15 +966,13 @@ class Tiger(Optimizer):
         seg_idx = torch.repeat_interleave(torch.arange(nseg, device=dev), lens_t)
         starts = torch.tensor(seg_starts, device=dev, dtype=torch.long)
         ends = starts + lens_t
-        ind = torch.zeros(nseg, total, dtype=torch.float32, device=dev)
-        ind[seg_idx, torch.arange(total, device=dev)] = 1.0
         seg_param = [i for i, k in enumerate(subsegs) for _ in range(k)]
         F = {
             "flat_m": flat_m, "flat_v": flat_v,
             "lengths": lengths, "lens_t": lens_t, "seg_idx": seg_idx,
             "starts": starts, "ends": ends,
             "numel_f": lens_t.to(torch.float32),
-            "offsets": offsets, "total": total, "ind": ind,
+            "offsets": offsets, "total": total,
             "factored": factored_flags,
             "seg_param": seg_param,
             "seg_param_t": torch.tensor(seg_param, device=dev, dtype=torch.long),
@@ -1498,6 +1496,7 @@ class Tiger(Optimizer):
             if fast_params:
                 from .triton_kernels import (
                     flat_step_candidates, flat_seg_stats, flat_direction, flat_apply,
+                    flat_seg_ssq,
                 )
                 F = self._flat_group(gi, fast_params, group_ref,
                                      factored_flags=fact_flags, subsegs=subseg_counts)
@@ -1506,7 +1505,6 @@ class Tiger(Optimizer):
                 Nseg = F["lens_t"].numel()
                 seg = F["seg_idx"]; lens = F["lens_t"]; numel_f = F["numel_f"]
                 seg_par = F["seg_param_t"]
-                ind = F["ind"]
                 total = F["total"]
                 flat_g = torch.cat([p.grad.detach().reshape(-1) for p in fast_params])
                 cand_m = torch.empty(total, device=dev_f)
@@ -1625,11 +1623,16 @@ class Tiger(Optimizer):
                 pn_par = dn_par = pre_n_par = None
                 am_pre = None
                 if use_trust or (agc_clip and agc_clip > 0.0):
+                    _ssq_buf = torch.empty(Nseg, device=dev_f)
+
                     def _seg_norm(x, am):
+                        # Segmented norm via a deterministic per-seg kernel —
+                        # a dense indicator GEMV would let one param's NaN
+                        # poison every segment (0 * NaN = NaN).
                         safe = torch.where(torch.isfinite(am) & (am > 0), am, torch.ones_like(am))
                         scaled = x / torch.repeat_interleave(safe, lens)
-                        ssq = ind @ scaled.square()
-                        return safe * ssq.sqrt()
+                        flat_seg_ssq(scaled, F["starts"], F["ends"], _ssq_buf)
+                        return safe * _ssq_buf.sqrt()
                     pn_g = _seg_norm(flat_p, am_p)
                     dn_g = _seg_norm(d_f, am_d)
                     if id_seg:
@@ -1709,7 +1712,7 @@ class Tiger(Optimizer):
                     "decay_rate": decay_rate, "pn_g": pn_g, "dn_g": dn_g,
                     "pre_n": pre_n, "pn_par": pn_par, "dn_par": dn_par,
                     "pre_n_par": pre_n_par, "emas": emas, "has_ema_idx": has_ema_idx,
-                    "ind": ind, "Nf": Nf, "dev": dev_f, "chunked": chunked_flags,
+                    "Nf": Nf, "dev": dev_f, "chunked": chunked_flags,
                     "id_seg": id_seg, "par_ok": par_ok,
                 }
 
@@ -2272,7 +2275,8 @@ class Tiger(Optimizer):
                         d_den = d_f if agc_scale is None else (
                             d_f * torch.repeat_interleave(
                                 agc_scale if id_seg else agc_scale[seg_par], lens))
-                        ssq_par = ind @ d_den.square()
+                        ssq_par = torch.empty(Nseg, device=dev_f)
+                        flat_seg_ssq(d_den, F["starts"], F["ends"], ssq_par)
                         n_par = numel_f
                         if not id_seg:
                             n_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, numel_f)
@@ -2290,7 +2294,9 @@ class Tiger(Optimizer):
                             drms = (ssq_par / n_par).sqrt()
                             thr = torch.repeat_interleave(
                                 drms * k if id_seg else (drms * k)[seg_par], lens)
-                            cnt = ind @ (d_den.abs() > thr).to(torch.float32)
+                            cnt = torch.empty(Nseg, device=dev_f)
+                            flat_seg_ssq((d_den.abs() > thr).to(torch.float32),
+                                         F["starts"], F["ends"], cnt)
                             dens = cnt / n_par if id_seg else (
                                 torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, cnt) / n_par)
                             if bad_idx:

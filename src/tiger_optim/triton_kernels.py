@@ -212,6 +212,23 @@ if triton is not None:
         tl.store(out_ptr + j * 5 + 4, ssq_m)
 
     @triton.jit
+    def _flat_seg_ssq_kernel(x_ptr, start, end, out_ptr, BLOCK: tl.constexpr):
+        # Per-segment sum of squares, sequential within each segment so the
+        # result is deterministic — and, unlike a dense indicator GEMV, a
+        # nonfinite element contaminates only its own segment.
+        j = tl.program_id(0)
+        s = tl.load(start + j)
+        e = tl.load(end + j)
+        n = e - s
+        acc = 0.0
+        for off in range(0, n, BLOCK):
+            idx = s + off + tl.arange(0, BLOCK)
+            mask = idx < e
+            x = tl.load(x_ptr + idx, mask=mask, other=0.0)
+            acc += tl.sum(tl.where(mask, x * x, 0.0), axis=0)
+        tl.store(out_ptr + j, acc)
+
+    @triton.jit
     def _flat_dir_kernel(cm_ptr, pp_ptr, ds_ptr, rms_ptr, seg_ptr, d_ptr,
                          N, sblend, eps, BLOCK: tl.constexpr):
         pid = tl.program_id(0)
@@ -452,6 +469,22 @@ def flat_seg_stats(cand_m, cand_v, p_flat, x, starts, ends, out):
         raise ValueError("starts/ends must be integer tensors")
     _flat_seg_stats_kernel[(starts.numel(),)](
         cand_m, cand_v, p_flat, x, starts, ends, out, BLOCK=1024)
+
+
+def flat_seg_ssq(x, starts, ends, out):
+    """Per-segment sum of squares for an arbitrary flat vector.
+
+    Deterministic (sequential per segment) and NaN-localizing: unlike a
+    dense indicator-matrix GEMV, a nonfinite element contaminates only
+    the segment it belongs to.
+    """
+    _require_triton()
+    _check_flat(x, out)
+    if starts.numel() != ends.numel():
+        raise ValueError("starts/ends length mismatch")
+    if out.numel() < starts.numel():
+        raise ValueError("out buffer too small")
+    _flat_seg_ssq_kernel[(starts.numel(),)](x, starts, ends, out, BLOCK=1024)
 
 
 def flat_direction(cand_m, pp, dsign, rms, seg_idx, d, *, sblend, eps):
