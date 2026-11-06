@@ -137,6 +137,7 @@ file per mode/device and does not estimate variation across runs.
 
 | Record | Scope |
 | --- | --- |
+| [CUDA flat graph, Nov 6](evidence/2026-11-06-cuda-flat-graph/README.md) | Flat fused Triton + CUDA-graphed optimizer step, ~40% off step latency on RTX 5090 |
 | [CUDA spectral controls, Oct 2](evidence/2026-10-02-cuda-spectral/README.md) | Learned medium retrieval, seven BF16 seeds, two FP32 supplements, and opt-in feedback strength |
 | [Matched QKV RMS, Oct 1](evidence/2026-10-01-qkv-rms-matched/README.md) | Five new seeds with equal applied QKV magnitude and a common rescaling control |
 | [QKV mean-scale factorial, Oct 1](evidence/2026-10-01-qkv-scale-factorial/README.md) | Allocation versus coefficient mean, actual update traces and negative MPS replay |
