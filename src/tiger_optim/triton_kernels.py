@@ -132,3 +132,198 @@ def fused_apply_updates(params, updates):
     # NOTE: This 'fused' path focuses on in-place apply; bucket-wide stats are recommended
     # via bucket_stats_triton to avoid a second global memory pass.
     return True, "ok"
+
+
+# ============================================================================
+# Flat fused candidate/apply path.
+#
+# Fuses the per-parameter moment/direction math for "simple" parameters
+# (fp32 param/grad/state, dense v, softsign blending, positive alpha) onto
+# concatenated flat buffers. Sequence, all async:
+#   K1 _flat_cand_kernel : cand_m, cand_v, Pbuf, dsign
+#   K2 _flat_seg_stats_kernel : per-param amax_m/amax_v/amax_p/amax_dsign/ssq_m
+#   K3 _flat_dir_kernel : d = (1-sb)*dsign + sb*(m/rms)*P
+#   K4 _flat_seg_stats_kernel : amax_d
+#   K5 _flat_apply_kernel : p = p*(1-decay) - lr*eff*d ; M,V <- cand (ok only)
+# The host performs one guard sync per group between K4 and K5.
+# ============================================================================
+
+if triton is not None:
+
+    @triton.jit
+    def _flat_cand_kernel(g_ptr, m_ptr, v_ptr, cm_ptr, cv_ptr, pp_ptr, ds_ptr,
+                          N, b1, b2, eps, alpha, sign_tau, BLOCK: tl.constexpr):
+        pid = tl.program_id(0)
+        offs = pid * BLOCK + tl.arange(0, BLOCK)
+        mask = offs < N
+        g = tl.load(g_ptr + offs, mask=mask, other=0.0)
+        m = tl.load(m_ptr + offs, mask=mask, other=0.0)
+        v = tl.load(v_ptr + offs, mask=mask, other=0.0)
+        cm = m * b1 + g * (1.0 - b1)
+        cv = v * b2 + g * g * (1.0 - b2)
+        pp = tl.sqrt(cv) + eps
+        pp = tl.exp(-alpha * tl.log(tl.maximum(pp, 1e-30)))
+        pp = tl.minimum(tl.maximum(pp, 1e-8), 1e8)
+        ds = cm / (tl.abs(cm) + sign_tau) * pp
+        tl.store(cm_ptr + offs, cm, mask=mask)
+        tl.store(cv_ptr + offs, cv, mask=mask)
+        tl.store(pp_ptr + offs, pp, mask=mask)
+        tl.store(ds_ptr + offs, ds, mask=mask)
+
+    @triton.jit
+    def _flat_seg_stats_kernel(cm_ptr, cv_ptr, p_ptr, x_ptr, start, end,
+                               out_ptr, BLOCK: tl.constexpr):
+        # Program j reduces param j's segment [start_j, end_j) passed via
+        # two pointer arrays indexed by program id.
+        j = tl.program_id(0)
+        s = tl.load(start + j)
+        e = tl.load(end + j)
+        n = e - s
+        am_m = 0.0
+        am_v = 0.0
+        am_p = 0.0
+        am_x = 0.0
+        for off in range(0, n, BLOCK):
+            idx = s + off + tl.arange(0, BLOCK)
+            mask = idx < e
+            cm = tl.load(cm_ptr + idx, mask=mask, other=0.0)
+            cv = tl.load(cv_ptr + idx, mask=mask, other=0.0)
+            pp = tl.load(p_ptr + idx, mask=mask, other=0.0)
+            xx = tl.load(x_ptr + idx, mask=mask, other=0.0)
+            am_m = tl.maximum(am_m, tl.max(tl.abs(cm), axis=0))
+            am_v = tl.maximum(am_v, tl.max(tl.abs(cv), axis=0))
+            am_p = tl.maximum(am_p, tl.max(tl.abs(pp), axis=0))
+            am_x = tl.maximum(am_x, tl.max(tl.abs(xx), axis=0))
+        # Second pass: scaled sum-of-squares so finite moments near the FP32
+        # limit do not overflow (norm = am_m * sqrt(ssq_scaled / n)).
+        ssq_m = 0.0
+        if am_m > 0.0:
+            inv = 1.0 / am_m
+            for off in range(0, n, BLOCK):
+                idx = s + off + tl.arange(0, BLOCK)
+                mask = idx < e
+                cm = tl.load(cm_ptr + idx, mask=mask, other=0.0)
+                cs = cm * inv
+                ssq_m += tl.sum(tl.where(mask, cs * cs, 0.0), axis=0)
+        tl.store(out_ptr + j * 5 + 0, am_m)
+        tl.store(out_ptr + j * 5 + 1, am_v)
+        tl.store(out_ptr + j * 5 + 2, am_p)
+        tl.store(out_ptr + j * 5 + 3, am_x)
+        tl.store(out_ptr + j * 5 + 4, ssq_m)
+
+    @triton.jit
+    def _flat_dir_kernel(cm_ptr, pp_ptr, ds_ptr, rms_ptr, seg_ptr, d_ptr,
+                         N, sblend, eps, BLOCK: tl.constexpr):
+        pid = tl.program_id(0)
+        offs = pid * BLOCK + tl.arange(0, BLOCK)
+        mask = offs < N
+        seg = tl.load(seg_ptr + offs, mask=mask, other=0)
+        rms = tl.load(rms_ptr + seg, mask=mask, other=1.0)
+        cm = tl.load(cm_ptr + offs, mask=mask, other=0.0)
+        pp = tl.load(pp_ptr + offs, mask=mask, other=0.0)
+        ds = tl.load(ds_ptr + offs, mask=mask, other=0.0)
+        dmag = cm / (rms + eps) * pp
+        d = ds * (1.0 - sblend) + dmag * sblend
+        tl.store(d_ptr + offs, d, mask=mask)
+
+    @triton.jit
+    def _flat_apply_kernel(p_ptr, m_ptr, v_ptr, cm_ptr, cv_ptr, d_ptr,
+                           eff_ptr, seg_ptr, ok_ptr, upd_ptr,
+                           N, decay, lr, BLOCK: tl.constexpr):
+        pid = tl.program_id(0)
+        offs = pid * BLOCK + tl.arange(0, BLOCK)
+        mask = offs < N
+        seg = tl.load(seg_ptr + offs, mask=mask, other=0)
+        ok = tl.load(ok_ptr + seg, mask=mask, other=0.0)
+        accepted = mask & (ok > 0.5)
+        p = tl.load(p_ptr + offs, mask=mask, other=0.0)
+        d = tl.load(d_ptr + offs, mask=mask, other=0.0)
+        eff = tl.load(eff_ptr + seg, mask=mask, other=0.0)
+        upd = -lr * eff * d
+        p = tl.where(accepted, p * (1.0 - decay) + upd, p)
+        tl.store(p_ptr + offs, p, mask=mask)
+        tl.store(upd_ptr + offs, tl.where(accepted, upd, 0.0), mask=mask)
+        cm = tl.load(cm_ptr + offs, mask=mask, other=0.0)
+        cv = tl.load(cv_ptr + offs, mask=mask, other=0.0)
+        tl.store(m_ptr + offs, cm, mask=accepted)
+        tl.store(v_ptr + offs, cv, mask=accepted)
+
+
+def flat_fused_supported():
+    return triton is not None
+
+
+def _require_triton():
+    if triton is None:
+        raise RuntimeError("Triton not available")
+
+
+def _check_flat(*tensors):
+    for t in tensors:
+        if not t.is_contiguous():
+            raise ValueError("flat fused path requires contiguous buffers")
+        if t.dtype != torch.float32:
+            raise ValueError("flat fused path requires float32 buffers")
+
+
+def flat_step_candidates(g, m, v, cand_m, cand_v, pp, dsign, *,
+                         b1, b2, eps, alpha, sign_tau):
+    """K1 launch: fused elementwise candidate moments + preconditioner.
+
+    Requires contiguous fp32 buffers of identical length on one CUDA device.
+    """
+    _require_triton()
+    _check_flat(g, m, v, cand_m, cand_v, pp, dsign)
+    if g.device.type != "cuda":
+        raise RuntimeError("flat fused path requires CUDA")
+    n = g.numel()
+    _flat_cand_kernel[((n + 1023) // 1024,)](
+        g, m, v, cand_m, cand_v, pp, dsign, n, b1, b2, eps, alpha, sign_tau,
+        BLOCK=1024)
+
+
+def flat_seg_stats(cand_m, cand_v, p_flat, x, starts, ends, out):
+    """K2/K4 launch: per-segment [amax_m, amax_v, amax_p, amax_x, ssq_scaled].
+
+    out[j*5+4] holds the *amax-scaled* sum of squares of cand_m, so the
+    stable per-segment norm is amax_m * sqrt(ssq_scaled / seg_len) — no
+    overflow for finite moments near the FP32 limit.
+    """
+    _require_triton()
+    _check_flat(cand_m, cand_v, p_flat, x, out)
+    if starts.numel() != ends.numel():
+        raise ValueError("starts/ends length mismatch")
+    if out.numel() < 5 * starts.numel():
+        raise ValueError("out buffer too small")
+    if starts.dtype not in (torch.int32, torch.int64):
+        raise ValueError("starts/ends must be integer tensors")
+    _flat_seg_stats_kernel[(starts.numel(),)](
+        cand_m, cand_v, p_flat, x, starts, ends, out, BLOCK=1024)
+
+
+def flat_direction(cand_m, pp, dsign, rms, seg_idx, d, *, sblend, eps):
+    """K3 launch: d = (1-sblend)*dsign + sblend*(cm/(rms+eps))*P.
+
+    `rms` holds the raw per-segment root-mean-square; eps is added inside
+    the kernel to match the eager denominator (_rms(m)+eps).
+    """
+    _require_triton()
+    _check_flat(cand_m, pp, dsign, rms, d)
+    n = cand_m.numel()
+    _flat_dir_kernel[((n + 1023) // 1024,)](
+        cand_m, pp, dsign, rms, seg_idx, d, n, sblend, eps, BLOCK=1024)
+
+
+def flat_apply(p_flat, m, v, cand_m, cand_v, d, eff, seg_idx, ok, upd, *,
+               decay, lr):
+    """K5 launch: where ok[seg], p = p*(1-decay) - lr*eff*d and m,v <- cand.
+
+    Rejected segments (ok=0) are left completely untouched — no decay, no
+    update, no moment commit; upd receives 0 there.
+    """
+    _require_triton()
+    _check_flat(p_flat, m, v, cand_m, cand_v, d, eff, ok, upd)
+    n = p_flat.numel()
+    _flat_apply_kernel[((n + 1023) // 1024,)](
+        p_flat, m, v, cand_m, cand_v, d, eff, seg_idx, ok, upd, n, decay, lr,
+        BLOCK=1024)

@@ -80,6 +80,13 @@ def build(mode, model):
                   qkv_lr_autoadapt=True, lora_density_adapt=True)
     if mode == "adamw":
         return torch.optim.AdamW(model.parameters(), lr=3e-4, betas=(0.9, 0.999), weight_decay=0.01)
+    if mode == "tiger_v13_compat":
+        return Tiger(groups, factored=True, precond_alpha=1.0, use_foreach_update=False,
+                     bucket_standardize=False, skip_if_nonfinite=False, use_trust_ratio=False)
+    if mode == "tiger_lean":
+        return Tiger(groups, factored=False, precond_alpha=1.0, use_foreach_update=True,
+                     bucket_standardize=False, skip_if_nonfinite=True, use_trust_ratio=False,
+                     qkv_lr_autoadapt=False, lora_density_adapt=False)
     return Tiger(groups, **common)
 
 
@@ -89,6 +96,7 @@ def main():
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--steps", type=int, default=150)
     ap.add_argument("--reps", type=int, default=3)
+    ap.add_argument("--modes", default="adamw,tiger_lean,tiger_v21_full")
     args = ap.parse_args()
     if args.steps <= 0 or args.reps <= 0:
         raise ValueError("--steps and --reps must be positive")
@@ -99,22 +107,28 @@ def main():
     if dev.type == "cuda":
         print("gpu:", gpu_info())
     results = []
-    for rep in range(args.reps):
-        torch.manual_seed(0)
-        model = TinyMix().to(dev)
-        x = torch.randn(16, 32, 256, device=dev)
-        y = torch.randn(16, 32, 256, device=dev)
-        lf = torch.nn.MSELoss()
-        opt = build("tiger_v21_full", model)
-        r = measure(opt, model, lf, x, y, steps=args.steps, dev=dev,
-                    tag=f"tiger_v21_full rep{rep}")
-        results.append(r)
-        print(json.dumps(r))
-        del opt, model
-        torch.cuda.empty_cache()
-    print("gpu:", gpu_info())
-    meds = [r["median"] for r in results]
-    print("median-of-medians:", statistics.median(meds), "spread:", min(meds), "-", max(meds))
+    for mode in args.modes.split(","):
+        mode = mode.strip()
+        meds = []
+        for rep in range(args.reps):
+            torch.manual_seed(0)
+            model = TinyMix().to(dev)
+            x = torch.randn(16, 32, 256, device=dev)
+            y = torch.randn(16, 32, 256, device=dev)
+            lf = torch.nn.MSELoss()
+            opt = build(mode, model)
+            r = measure(opt, model, lf, x, y, steps=args.steps, dev=dev,
+                        tag=f"{mode} rep{rep}")
+            results.append(r)
+            print(json.dumps(r))
+            meds.append(r["median"])
+            del opt, model
+            if dev.type == "cuda":
+                torch.cuda.empty_cache()
+        print(f"== {mode}: median-of-medians {statistics.median(meds):.4f} ms  "
+              f"spread {min(meds):.4f}-{max(meds):.4f}")
+    if dev.type == "cuda":
+        print("gpu:", gpu_info())
 
 
 if __name__ == "__main__":
