@@ -1065,18 +1065,30 @@ class Tiger(Optimizer):
                 len(params), dtype=torch.bool, device=dev),
             "route_lr": e(len(params)),
             "chunked_t": torch.empty(len(params), dtype=torch.bool, device=dev),
-            # [sblend, decay_growth, trust_growth] — per-step dynamic values
-            # read by the captured graph.
-            "scalars": e(3),
+            # Per-step dynamic values read by the captured graphs:
+            # [sblend, decay_growth, trust_growth, decay_rate, agc_clip,
+            #  agc_eps, trust_beta, trust_cap, lora_density_k, lr_eff]
+            "scalars": e(10),
             "eff": e(nseg), "ok_t": e(nseg), "tval": e(nseg),
+            # Apply-graph (graph B) state.
+            "qemas": e(nseg), "hasemq": torch.zeros(nseg, device=dev),
+            "hasem": torch.zeros(len(params), device=dev),
+            "sm": e(len(params)), "qsm": e(nseg),
+            "agc_sc": e(len(params)), "qscale": torch.ones(nseg, device=dev),
+            "fac": e(len(params)), "acc": torch.zeros(8, device=dev),
+            "kzero": torch.zeros((), device=dev),
+            "split_t": torch.empty(nseg, dtype=torch.bool, device=dev),
+            "ssq2": e(len(params)), "n2": e(len(params)),
         }
         F["B"] = B
         F["graph"] = {"warm": 0, "g": None, "bad": False}
+        F["graph2"] = {"warm": 0, "g": None, "bad": False}
         while len(cache) >= self._flat_cache_max:
             evicted = cache.popitem(last=False)[1]
-            eg = evicted.get("graph")
-            if eg is not None:
-                eg["g"] = None
+            for egn in ("graph", "graph2"):
+                eg = evicted.get(egn)
+                if eg is not None:
+                    eg["g"] = None
         cache[key] = F
         return F
 
@@ -1577,7 +1589,11 @@ class Tiger(Optimizer):
                 trust_growth = max(1.0, trust_clip) if use_trust else 1.0
                 # Dynamic scalars -> device buffer (graph reads live values).
                 B["scalars"].copy_(torch.tensor(
-                    [sblend, decay_growth, trust_growth], dtype=torch.float32))
+                    [sblend, decay_growth, trust_growth, decay_rate,
+                     agc_clip if agc_clip and agc_clip > 0.0 else 0.0,
+                     agc_eps, trust_beta, trust_clip,
+                     float(self.defaults["lora_density_k"]), lr * lr_scale],
+                    dtype=torch.float32))
                 has_qkv_lr = any(
                     qkv_rules.get(id(p)) is not None and qkv_lr is not None
                     for p in fast_params)
@@ -1609,6 +1625,48 @@ class Tiger(Optimizer):
                          else _scalar_like(group_ref, float(o), dtype=torch.float32, device=dev_f) if o is not None
                          else torch.ones((), device=dev_f)) for o in _emas])
                     B["emas_t"].copy_(emas)
+                    _hasem = torch.zeros(Nf, dtype=torch.float32)
+                    _hasem[has_ema_idx] = 1.0
+                    B["hasem"].copy_(_hasem)
+                split_list = [bool(chunked_flags[i] and qkv_split
+                                   and qkv_rules.get(id(fast_params[i])) is not None)
+                              for i in range(Nf)]
+                # Per-seg split flags + per-seg qkv-EMA load for graph B.
+                _ss = []
+                _qh = []
+                s0 = 0
+                _qkv_ema_ok = use_trust and trust_beta > 0.0 and any(split_list)
+                for i, p in enumerate(fast_params):
+                    k = F["param_nseg"][i]
+                    _ss.extend([split_list[i]] * k)
+                    if _qkv_ema_ok and split_list[i]:
+                        prev = self._qkv_trust_ema.get(
+                            (gi, param_indices[id(p)]))
+                        if prev is not None and prev.numel() == k:
+                            B["qemas"][s0:s0 + k].copy_(
+                                prev.to(torch.float32).reshape(-1))
+                            _qh.extend([1.0] * k)
+                        else:
+                            _qh.extend([0.0] * k)
+                    else:
+                        _qh.extend([0.0] * k)
+                    s0 += k
+                B["split_t"].copy_(torch.tensor(_ss))
+                if _qkv_ema_ok:
+                    B["hasemq"].copy_(torch.tensor(_qh, dtype=torch.float32))
+                if has_qkv_lr:
+                    _keys3 = ("q", "k", "v")
+                    _qs = []
+                    for i, p in enumerate(fast_params):
+                        k = F["param_nseg"][i]
+                        if qkv_rules.get(id(p)) is not None:
+                            _qs.extend(float(qkv_lr.get(_keys3[j], 1.0))
+                                       if j < 3 else 1.0 for j in range(k))
+                        else:
+                            _qs.extend([1.0] * k)
+                    B["qscale"].copy_(torch.tensor(_qs, dtype=torch.float32))
+                else:
+                    B["qscale"].fill_(1.0)
 
                 def _preguard():
                     flat_step_candidates(flat_g, F["flat_m"], F["flat_v"], cand_m, cand_v,
@@ -1832,7 +1890,54 @@ class Tiger(Optimizer):
                     "id_seg": id_seg, "par_ok": par_ok,
                 }
 
+            # Batched moment update for "simple" slow params: dense fp32
+            # m/v with fp32 grads run one foreach pass instead of ~6 kernel
+            # launches per param. Rare flags (unsanitized state, prune,
+            # low-precision storage) keep their per-param ops so the math is
+            # identical. Guard checks and apply stay in the loop below.
+            _prebatched: Dict[int, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = {}
+            if len(slow_params) > 1 and hasattr(torch, "_foreach_mul_"):
+                _bp = []
+                for p in slow_params:
+                    _bs = self.state[p]
+                    if ((factored and p.ndim >= 2) or "m" not in _bs
+                            or "v" not in _bs
+                            or _bs["m"].dtype != torch.float32
+                            or _bs["v"].dtype != torch.float32
+                            or p.grad is None
+                            or p.grad.dtype != torch.float32):
+                        continue
+                    _bp.append((p, _bs["m"], _bs["v"], p.grad))
+                if _bp:
+                    _skip_nf = bool(self.defaults["skip_if_nonfinite"])
+                    _after = not _skip_nf
+                    _thr = (float(self.defaults["state_prune_threshold"])
+                            if do_prune else 0.0)
+                    mws = [m.clone() if _skip_nf else m for _, m, _, _ in _bp]
+                    vws = [v.clone() if _skip_nf else v for _, _, v, _ in _bp]
+                    gws = [g for _, _, _, g in _bp]
+                    for (p, _, _, _), mw, vw in zip(_bp, mws, vws):
+                        if not self.state[p].get("_state_sane"):
+                            _nan_to_num_(mw, posinf=0.0, neginf=0.0)
+                            _nan_to_num_(vw, posinf=0.0, neginf=0.0)
+                            vw.clamp_(min=0.0)
+                    torch._foreach_mul_(mws, b1)
+                    torch._foreach_add_(mws, gws, alpha=1.0 - b1)
+                    torch._foreach_mul_(vws, b2)
+                    torch._foreach_addcmul_(vws, gws, gws, value=1.0 - b2)
+                    for (p, _, _, _), mw, vw in zip(_bp, mws, vws):
+                        if _after:
+                            _nan_to_num_(mw)
+                            _nan_to_num_(vw, neginf=0.0)
+                            vw.clamp_(min=0.0)
+                        if _thr > 0.0:
+                            mw.masked_fill_(mw.abs() < _thr, 0.0)
+                            vw.masked_fill_(vw.abs() < _thr, 0.0)
+                    for (p, _, _, g), mw, vw in zip(_bp, mws, vws):
+                        _prebatched[id(p)] = (mw, g, vw)
+
             for p in slow_params:
+                _pb = _prebatched.get(id(p))
                 pi = param_indices[id(p)]
                 g = p.grad
                 st = self.state[p]
@@ -1860,20 +1965,25 @@ class Tiger(Optimizer):
                 sanitize_after_update = not bool(self.defaults["skip_if_nonfinite"])
 
                 # m update
-                m32 = _to_dtype(m, torch.float32); g32 = _to_dtype(g, torch.float32)
-                if self.defaults["skip_if_nonfinite"] and m32 is m:
-                    m32 = m32.clone()
-                if sanitize_loaded_state:
-                    _nan_to_num_(m32, posinf=0.0, neginf=0.0)
-                m32.mul_(b1).add_(g32, alpha=1.0-b1)
-                if sanitize_after_update:
-                    _nan_to_num_(m32)
-                if do_prune and float(self.defaults["state_prune_threshold"]) > 0.0:
-                    thr = float(self.defaults["state_prune_threshold"])
-                    m32.masked_fill_(m32.abs() < thr, 0.0)
+                if _pb is not None:
+                    m32, g32, v32 = _pb
+                else:
+                    m32 = _to_dtype(m, torch.float32); g32 = _to_dtype(g, torch.float32)
+                    if self.defaults["skip_if_nonfinite"] and m32 is m:
+                        m32 = m32.clone()
+                    if sanitize_loaded_state:
+                        _nan_to_num_(m32, posinf=0.0, neginf=0.0)
+                    m32.mul_(b1).add_(g32, alpha=1.0-b1)
+                    if sanitize_after_update:
+                        _nan_to_num_(m32)
+                    if do_prune and float(self.defaults["state_prune_threshold"]) > 0.0:
+                        thr = float(self.defaults["state_prune_threshold"])
+                        m32.masked_fill_(m32.abs() < thr, 0.0)
 
                 # vhat
-                if factored and p.ndim>=2:
+                if _pb is not None:
+                    vhat = v32
+                elif factored and p.ndim>=2:
                     g2 = g32.view(p.shape[0], -1).square()
                     vr32 = _to_dtype(vr, torch.float32); vc32 = _to_dtype(vc, torch.float32)
                     if self.defaults["skip_if_nonfinite"]:
@@ -2370,6 +2480,216 @@ class Tiger(Optimizer):
                 if bad_idx:
                     prof_c["nonfinite_skips"] += len(bad_idx)
                 if valid_idx:
+                    B2 = F["B"]
+                    _agc_on = bool(agc_clip and agc_clip > 0.0)
+                    _den_on = (lora_dense_sum_t is not None
+                               or cross_density_sum_t is not None
+                               or up_s2_t is not None or dn_s2_t is not None)
+                    _any_split = any(split_list)
+                    seg_g = F["seg_idx"]
+
+                    def _applyg():
+                        sc = B2["scalars"]
+                        ok_par = B2["par_ok"].to(torch.float32)
+                        ok_seg = ok_par if id_seg else ok_par[seg_par]
+                        eff = B2["eff"].fill_(1.0)
+                        pn_use = dn_use = None
+                        if pn_par is not None:
+                            pn_use = pn_par * (1.0 - sc[3]).abs()
+                            dn_use = dn_par
+                        agc_scale = None
+                        if _agc_on:
+                            agc_scale = torch.minimum(
+                                (pn_use + sc[5]) * sc[4] / dn_use.clamp(min=1e-12),
+                                torch.ones_like(pn_use))
+                            eff *= agc_scale if id_seg else agc_scale[seg_par]
+                            dn_use = dn_use * agc_scale
+                            if agc_clips_t is not None:
+                                B2["acc"][7].copy_((agc_scale < 1.0).sum())
+                        if _den_on:
+                            if agc_scale is None:
+                                d_den = d_f
+                            else:
+                                d_den = d_f * (
+                                    agc_scale if id_seg else agc_scale[seg_par])[seg_g]
+                            flat_seg_ssq(d_den, F["starts"], F["ends"], B2["ssq"])
+                            if id_seg:
+                                ssq_par = B2["ssq"]; n_par = numel_f
+                            else:
+                                ssq_par = B2["ssq2"].zero_().index_add_(
+                                    0, seg_par, B2["ssq"])
+                                n_par = B2["n2"].zero_().index_add_(
+                                    0, seg_par, numel_f)
+                            if up_s2_t is not None:
+                                B2["acc"][0].copy_(ssq_par.sum())
+                            elif dn_s2_t is not None:
+                                B2["acc"][1].copy_(ssq_par.sum())
+                            if (lora_dense_sum_t is not None
+                                    or cross_density_sum_t is not None):
+                                drms = (ssq_par / n_par).sqrt()
+                                thr = (drms * sc[8] if id_seg
+                                       else (drms * sc[8])[seg_par])[seg_g]
+                                flat_seg_ssq((d_den.abs() > thr).to(torch.float32),
+                                             F["starts"], F["ends"], B2["cnt"])
+                                if id_seg:
+                                    dens = B2["cnt"] / n_par
+                                else:
+                                    dens = (B2["ssq2"].zero_().index_add_(
+                                        0, seg_par, B2["cnt"]) / n_par)
+                                if lora_dense_sum_t is not None:
+                                    B2["acc"][2].copy_(dens.sum())
+                                if cross_density_sum_t is not None:
+                                    B2["acc"][3].copy_(dens.sum())
+                        if use_trust:
+                            # Norms are post-decay (p) and post-AGC (d), as in
+                            # the slow path.
+                            pn_g_use = fast_ctx["pn_g"]
+                            if pn_g_use is not None:
+                                pn_g_use = pn_g_use * (1.0 - sc[3]).abs()
+                            if trust_space == "update":
+                                den_par = dn_use
+                                den_seg = fast_ctx["dn_g"]
+                                if den_seg is not None and agc_scale is not None:
+                                    den_seg = den_seg * (
+                                        agc_scale if id_seg else agc_scale[seg_par])
+                            elif trust_space == "precond":
+                                den_par = fast_ctx["pre_n_par"]
+                                den_seg = fast_ctx["pre_n"]
+                            else:
+                                den_par = None; den_seg = fast_ctx["dn_g"]
+                            raw_par = torch.ones(Nf, device=dev_f)
+                            if den_par is not None:
+                                valid_v = (pn_use * den_par > 0).to(torch.float32)
+                                raw_par = 1.0 + valid_v * (
+                                    pn_use / den_par.clamp(min=1e-12) - 1.0)
+                            raw_seg = None
+                            if _any_split and den_seg is not None:
+                                valid_s = (pn_g_use * den_seg > 0).to(torch.float32)
+                                raw_seg = 1.0 + valid_s * (
+                                    pn_g_use / den_seg.clamp(min=1e-12) - 1.0)
+                            if trust_beta > 0.0:
+                                sm = torch.where(
+                                    B2["hasem"] > 0,
+                                    sc[6] * B2["emas_t"] + (1.0 - sc[6]) * raw_par,
+                                    raw_par)
+                                B2["sm"].copy_(sm)
+                                base = sm[seg_par]
+                                if _any_split and raw_seg is not None:
+                                    qsm = torch.where(
+                                        B2["hasemq"] > 0,
+                                        sc[6] * B2["qemas"] + (1.0 - sc[6]) * raw_seg,
+                                        raw_seg)
+                                    B2["qsm"].copy_(qsm)
+                                    base = torch.where(B2["split_t"], qsm, base)
+                            else:
+                                base = raw_par[seg_par]
+                                if _any_split and raw_seg is not None:
+                                    base = torch.where(B2["split_t"], raw_seg, base)
+                            tval = torch.minimum(base, sc[7])
+                            eff *= tval
+                        eff *= B2["qscale"]
+                        eff *= ok_seg
+                        # Rejected params keep factor 1.0 — no decay, no update.
+                        B2["fac"].copy_(1.0 - sc[3] * ok_par)
+                        torch._foreach_mul_(
+                            fast_params, [B2["fac"][i] for i in range(Nf)])
+                        flat_apply(fast_ctx["flat_p"], F["flat_m"], F["flat_v"],
+                                   fast_ctx["cand_m"], fast_ctx["cand_v"], d_f,
+                                   eff, seg_g, ok_seg, B2["upd"],
+                                   decay=B2["kzero"], lr=sc[9])
+                        if F.get("fact_meta") is not None:
+                            from .triton_kernels import flat_fact_commit
+                            flat_fact_commit(F["flat_vr"], F["flat_vc"],
+                                             F["cand_vr"], F["cand_vc"],
+                                             F["fact_meta"]["rok"], ok_seg)
+                        _views = [B2["upd"][o:o + n].view_as(p)
+                                  for p, o, n in zip(fast_params, F["offsets"],
+                                                     F["lengths"])]
+                        if use_foreach_upd:
+                            _dir_p = [p for p, c in zip(fast_params, chunked_fl) if c]
+                            _dir_u = [u for u, c in zip(_views, chunked_fl) if c]
+                            if _dir_p:
+                                torch._foreach_add_(_dir_p, _dir_u)
+                        else:
+                            torch._foreach_add_(fast_params, _views)
+
+                    # Graph B: post-par_ok apply tail. Rejected params fall
+                    # back to the eager tail so bucket membership and EMA
+                    # semantics stay identical.
+                    gs2 = F["graph2"]
+                    _gkey2 = (_gkey, use_foreach_upd,
+                              agc_clips_t is not None,
+                              lora_dense_sum_t is not None,
+                              cross_density_sum_t is not None,
+                              up_s2_t is not None, dn_s2_t is not None,
+                              _any_split)
+                    if gs2["g"] is not None and gs2["key"] != _gkey2:
+                        gs2["g"] = None; gs2["warm"] = 0
+                    _g2_done = False
+                    if not bad_idx and not gs2["bad"]:
+                        # Give the graph the host-masked par_ok.
+                        if fast_ctx["par_ok"] is not B2["par_ok"]:
+                            B2["par_ok"].copy_(fast_ctx["par_ok"])
+                        if gs2["g"] is not None:
+                            gs2["g"].replay()
+                            _g2_done = True
+                        elif gs2["warm"] >= 2:
+                            try:
+                                pool = self._graph_pools.get(group_ref.device)
+                                if pool is None:
+                                    pool = torch.cuda.graph_pool_handle()
+                                    self._graph_pools[group_ref.device] = pool
+                                gcap2 = torch.cuda.CUDAGraph()
+                                with torch.cuda.device(group_ref.device):
+                                    with torch.cuda.graph(gcap2, pool=pool):
+                                        _applyg()
+                                gs2["g"] = gcap2; gs2["key"] = _gkey2
+                                gs2["g"].replay()
+                                _g2_done = True
+                            except Exception as _ge2:
+                                gs2["bad"] = True; gs2["g"] = None
+                                gs2["err"] = repr(_ge2)
+                        else:
+                            gs2["warm"] += 1
+                    if _g2_done:
+                        # Host bookkeeping the graph cannot do: EMA dicts,
+                        # scalar accumulators, and bucket membership.
+                        if up_s2_t is not None:
+                            up_s2_t.add_(B2["acc"][0])
+                            up_n += sum(F["lengths"])
+                        elif dn_s2_t is not None:
+                            dn_s2_t.add_(B2["acc"][1])
+                            dn_n += sum(F["lengths"])
+                        if lora_dense_sum_t is not None:
+                            lora_dense_sum_t.add_(B2["acc"][2])
+                            lora_count += Nf
+                        if cross_density_sum_t is not None:
+                            cross_density_sum_t.add_(B2["acc"][3])
+                            cross_density_count += Nf
+                        if agc_clips_t is not None:
+                            agc_clips_t.add_(B2["acc"][7])
+                        if group["weight_decay"]:
+                            prof_c["scalar_wd"] += Nf
+                        if use_trust and trust_beta > 0.0:
+                            _s0 = 0
+                            for i, p in enumerate(fast_params):
+                                a = _s0; _s0 += param_nseg[i]
+                                tkey = (gi, param_indices[id(p)])
+                                if split_list[i]:
+                                    self._qkv_trust_ema[tkey] = (
+                                        B2["qsm"][a:a + param_nseg[i]].detach())
+                                else:
+                                    self._trust_ema[tkey] = B2["sm"][i].detach()
+                        if use_foreach_upd:
+                            for i, p in enumerate(fast_params):
+                                if chunked_fl[i]:
+                                    continue
+                                o = F["offsets"][i]; n = F["lengths"][i]
+                                u = B2["upd"][o:o + n].view_as(p)
+                                b_params.append(p); b_updates.append(u)
+                                if bucket_std:
+                                    b_updates_f32.append(u)
+                if valid_idx and not _g2_done:
                     eff = torch.ones(Nseg, device=dev_f)
                     agc_scale = None
                     if pn_par is not None and decay_rate != 0.0:
@@ -2513,7 +2833,7 @@ class Tiger(Optimizer):
                     flat_apply(fast_ctx["flat_p"], F["flat_m"], F["flat_v"],
                                fast_ctx["cand_m"], fast_ctx["cand_v"], d_f, eff,
                                F["seg_idx"], ok_t, upd,
-                               decay=0.0, lr=lr * lr_scale)
+                               decay=B2["kzero"], lr=lr * lr_scale)
                     if F.get("fact_meta") is not None:
                         from .triton_kernels import flat_fact_commit
                         flat_fact_commit(F["flat_vr"], F["flat_vc"],
