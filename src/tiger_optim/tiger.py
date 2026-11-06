@@ -876,7 +876,7 @@ class Tiger(Optimizer):
             "cbf_vc": [], "cbf_p0": [], "cbf_np": [], "cbf_rem": [],
             "fact_vroff": [], "fact_R": [],
             "elem_pos": [], "elem_fact": [],
-            "rok": [],
+            "rok_r": [], "rok_c": [],
         }
         off_to_fact: Dict[int, int] = {}
         CBLOCK = 128
@@ -918,7 +918,7 @@ class Tiger(Optimizer):
                 for r in range(R):
                     fm["row_start"].append(off + r * C)
                     fm["row_len"].append(C)
-                    fm["rok"].append(seg0)
+                    fm["rok_r"].append(seg0)
                 for c0 in range(0, C, CBLOCK):
                     if R <= RBLOCK:
                         fm["cb_start"].append(off)
@@ -941,7 +941,7 @@ class Tiger(Optimizer):
                             fm["pb_R"].append(R)
                             npb += 1
                 for c in range(C):
-                    fm["rok"].append(seg0)
+                    fm["rok_c"].append(seg0)
                 fm["fact_vroff"].append(vr_off)
                 fm["fact_R"].append(R)
                 ar = torch.arange(n, dtype=torch.long)
@@ -1005,7 +1005,9 @@ class Tiger(Optimizer):
                 "fact_R": torch.tensor(fm["fact_R"], device=dev, dtype=torch.long),
                 "elem_pos": torch.cat(fm["elem_pos"]).to(dev),
                 "elem_fact": torch.cat(fm["elem_fact"]).to(dev),
-                "rok": torch.tensor(fm["rok"], device=dev, dtype=torch.long),
+                # Commit gating index: all row-owner segs, then all col-owner
+                # segs — matching the kernel's [NR | NC] split.
+                "rok": torch.tensor(fm["rok_r"] + fm["rok_c"], device=dev, dtype=torch.long),
                 "fact_start": torch.tensor(
                     [offsets[i] for i in fact_idx], device=dev, dtype=torch.long),
                 "fact_C": torch.tensor(cols_l, device=dev, dtype=torch.long),
@@ -1545,10 +1547,18 @@ class Tiger(Optimizer):
                 else:
                     # The direction's _rms(m) denominator is param-level in
                     # the eager path; recombine the amax-scaled per-seg sums.
-                    ssq_true = ssq_m * am_m * am_m
-                    ssq_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, ssq_true)
+                    # Rescale each seg's scaled ssq by the PARAM amax so a
+                    # finite param norm cannot overflow (ssq*am^2 would).
+                    am_m_par = torch.zeros(Nf, device=dev_f).scatter_reduce(
+                        0, seg_par, am_m, reduce="amax")
+                    am_m_safe = torch.where(
+                        torch.isfinite(am_m_par) & (am_m_par > 0),
+                        am_m_par, torch.ones_like(am_m_par))
+                    rescale = (am_m / am_m_safe[seg_par]).square()
+                    ssq_par = torch.zeros(Nf, device=dev_f).index_add_(
+                        0, seg_par, ssq_m * rescale)
                     n_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, numel_f)
-                    rms_par = torch.sqrt(ssq_par / n_par)
+                    rms_par = am_m_safe * torch.sqrt(ssq_par / n_par)
                     rms_seg = rms_par[seg_par]
                     am_p_par = torch.zeros(Nf, device=dev_f).scatter_reduce(
                         0, seg_par, am_p, reduce="amax")
@@ -1625,8 +1635,16 @@ class Tiger(Optimizer):
                     if id_seg:
                         pn_par = pn_g; dn_par = dn_g
                     else:
-                        pn_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, pn_g * pn_g).sqrt()
-                        dn_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, dn_g * dn_g).sqrt()
+                        def _combine_norm(x):
+                            mx = torch.zeros(Nf, device=dev_f).scatter_reduce(
+                                0, seg_par, x, reduce="amax")
+                            mx = torch.where(torch.isfinite(mx) & (mx > 0),
+                                             mx, torch.ones_like(mx))
+                            s = torch.zeros(Nf, device=dev_f).index_add_(
+                                0, seg_par, (x / mx[seg_par]).square())
+                            return mx * s.sqrt()
+                        pn_par = _combine_norm(pn_g)
+                        dn_par = _combine_norm(dn_g)
                     loose_ok = (am_p_par * (decay_growth * n_par.sqrt()) <= fp32_limit) & (am_d_par * n_par.sqrt() <= fp32_limit)
                     exact_ok = (pn_par * decay_growth <= fp32_limit) & (dn_par <= fp32_limit)
                     if use_trust and trust_space == "precond":
@@ -1640,14 +1658,18 @@ class Tiger(Optimizer):
                         else:
                             am_pre_par = torch.zeros(Nf, device=dev_f).scatter_reduce(
                                 0, seg_par, am_pre, reduce="amax")
-                            pre_n_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, pre_n * pre_n).sqrt()
+                            pre_n_par = _combine_norm(pre_n)
                         loose_ok &= am_pre_par * n_par.sqrt() <= fp32_limit
                         exact_ok &= pre_n_par <= fp32_limit
                     par_ok &= loose_ok | exact_ok
 
                 emas = has_ema_idx = None
                 if use_trust and trust_beta > 0.0:
-                    _emas = [self._trust_ema.get((gi, param_indices[id(p)])) for p in fast_params]
+                    _emas = [
+                        (None if (chunked_flags[i] and qkv_split
+                                  and qkv_rules.get(id(p)) is not None)
+                         else self._trust_ema.get((gi, param_indices[id(p)])))
+                        for i, p in enumerate(fast_params)]
                     has_ema_idx = [i for i, o in enumerate(_emas) if o is not None]
                     emas = torch.stack([
                         (o.to(torch.float32).reshape(()) if isinstance(o, torch.Tensor)
@@ -1688,7 +1710,7 @@ class Tiger(Optimizer):
                     "pre_n": pre_n, "pn_par": pn_par, "dn_par": dn_par,
                     "pre_n_par": pre_n_par, "emas": emas, "has_ema_idx": has_ema_idx,
                     "ind": ind, "Nf": Nf, "dev": dev_f, "chunked": chunked_flags,
-                    "id_seg": id_seg,
+                    "id_seg": id_seg, "par_ok": par_ok,
                 }
 
             for p in slow_params:
@@ -2299,17 +2321,17 @@ class Tiger(Optimizer):
                         elif trust_space == "precond":
                             den_par = fast_ctx["pre_n_par"]; den_seg = fast_ctx["pre_n"]
                         else:
-                            den_par = den_seg = None
+                            # Unknown space: scalar trust is 1 (eager), but
+                            # _qkv_chunk_trust still denominates by d-norms.
+                            den_par = None; den_seg = fast_ctx["dn_g"]
+                        raw_par = torch.ones(Nf, device=dev_f)
                         if den_par is not None:
                             valid_v = (pn_par * den_par > 0).to(torch.float32)
                             raw_par = 1.0 + valid_v * (pn_par / den_par.clamp(min=1e-12) - 1.0)
-                            if any(split):
-                                valid_s = (pn_g_use * den_seg > 0).to(torch.float32)
-                                raw_seg = 1.0 + valid_s * (pn_g_use / den_seg.clamp(min=1e-12) - 1.0)
-                        else:
-                            raw_par = torch.ones(Nf, device=dev_f)
-                        if not any(split):
-                            raw_seg = None
+                        raw_seg = None
+                        if any(split) and den_seg is not None:
+                            valid_s = (pn_g_use * den_seg > 0).to(torch.float32)
+                            raw_seg = 1.0 + valid_s * (pn_g_use / den_seg.clamp(min=1e-12) - 1.0)
                         tval = torch.ones(Nseg, device=dev_f)
                         s0 = 0
                         seg_of_param: List[int] = []
@@ -2324,7 +2346,7 @@ class Tiger(Optimizer):
                             for i in valid_idx:
                                 a = seg_of_param[i]; b = a + param_nseg[i]
                                 tkey = (gi, param_indices[id(fast_params[i])])
-                                if split[i]:
+                                if split[i] and raw_seg is not None:
                                     prev = self._qkv_trust_ema.get(tkey)
                                     r = raw_seg[a:b]
                                     sm_i = (trust_beta * prev.to(r.dtype) + (1.0 - trust_beta) * r
@@ -2338,17 +2360,18 @@ class Tiger(Optimizer):
                             tval = torch.minimum(
                                 raw_par if id_seg else raw_par[seg_par], trust_cap_t)
                             for i in valid_idx:
-                                if split[i]:
+                                if split[i] and raw_seg is not None:
                                     a = seg_of_param[i]; b = a + param_nseg[i]
                                     tval[a:b] = torch.minimum(raw_seg[a:b], trust_cap_t)
                         eff = eff * tval
                     # Per-chunk lr scales ride on the per-seg eff.
-                    if qkv_lr is not None and any(k > 1 for k in param_nseg):
+                    if qkv_lr is not None and any(
+                            qkv_rules.get(id(p)) is not None for p in fast_params):
                         _keys = ("q", "k", "v")
                         qscale = []
                         for i, p in enumerate(fast_params):
                             k = param_nseg[i]
-                            if k > 1 and qkv_rules.get(id(p)) is not None:
+                            if qkv_rules.get(id(p)) is not None:
                                 qscale.extend(float(qkv_lr.get(_keys[j], 1.0))
                                               if j < 3 else 1.0 for j in range(k))
                             else:
@@ -2356,20 +2379,15 @@ class Tiger(Optimizer):
                         if any(s != 1.0 for s in qscale):
                             eff = eff * torch.tensor(qscale, device=dev_f)
                     if bad_idx:
-                        ok_par_t = torch.tensor(
-                            [1.0 if fast_ok_list[i] else 0.0 for i in range(Nf)],
-                            dtype=torch.float32, device=dev_f)
+                        ok_par_t = fast_ctx["par_ok"].to(torch.float32)
                         eff = eff * (ok_par_t if id_seg else ok_par_t[seg_par])
                     if group["weight_decay"]:
                         torch._foreach_mul_([fast_params[i] for i in valid_idx], 1.0 - decay_rate)
                         prof_c["scalar_wd"] += len(valid_idx)
                     upd = torch.empty(F["total"], device=dev_f)
-                    ok_t = torch.tensor(
-                        [1.0 if fast_ok_list[i] else 0.0 for i in range(Nf)]
-                        if id_seg else
-                        [1.0 if fast_ok_list[F["seg_param"][s]] else 0.0
-                         for s in range(Nseg)],
-                        dtype=torch.float32, device=dev_f)
+                    ok_t = fast_ctx["par_ok"].to(torch.float32)
+                    if not id_seg:
+                        ok_t = ok_t[seg_par]
                     flat_apply(fast_ctx["flat_p"], F["flat_m"], F["flat_v"],
                                fast_ctx["cand_m"], fast_ctx["cand_v"], d_f, eff,
                                F["seg_idx"], ok_t, upd,
