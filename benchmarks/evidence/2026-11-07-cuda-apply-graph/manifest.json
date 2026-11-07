@@ -1,0 +1,20 @@
+{
+ "title": "CUDA flat fused + fully graphed optimizer step",
+ "date": "2026-11-07",
+ "base_commit": "b457ed7e01bf6125c60644d2c873f92ce29b8262",
+ "hardware": "NVIDIA GeForce RTX 5090, torch 2.13.0+cu132, triton 3.7.1, Python 3.14",
+ "method": "bench_compare_optim --device cuda --steps 150 --warmup 25 --seed 0, eager vs TIGER_FLAT_STEP=1",
+ "source_sha256": {
+  "src/tiger_optim/tiger.py": "8bdeddc2785d4fad650bc8c4040ccd58472b53c81c680715e92b16911ac4b3ae",
+  "src/tiger_optim/triton_kernels.py": "8ef82f5f5a4aa2cde3544f1dba135fdc96aa7217bf247f074033f40dbb501802",
+  "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3"
+ },
+ "results_ms_optimizer_median": {
+  "tiger_v21_full": {"eager": 6.6261, "flat": 2.9427, "delta_pct": -55.6},
+  "tiger_v21_no_ffn": {"eager": 6.6233, "flat": 2.9370, "delta_pct": -55.6},
+  "tiger_v21_no_qkv": {"eager": 6.3781, "flat": 3.2567, "delta_pct": -48.9},
+  "tiger_v13_compat": {"eager": 5.9112, "flat": 3.0502, "delta_pct": -48.4},
+  "adamw_control": {"eager": 0.1922, "flat": 0.1929, "delta_pct": 0.4}
+ },
+ "correctness": "pytest 207 passed with/without TIGER_FLAT_STEP=1; bitwise parity vs eager on v21_full/lean/tall and NaN-injection runs"
+}
