@@ -248,12 +248,15 @@ if triton is not None:
 
     @triton.jit
     def _flat_fact_rows_kernel(g_ptr, vr_ptr, cvr_ptr, rstart_ptr, rlen_ptr,
-                               b2, BLOCK: tl.constexpr):
+                               rvr_ptr, b2, BLOCK: tl.constexpr):
         # One program per matrix row across all factored params: reduce the
-        # row's g^2 mean and EMA-update the candidate row factor.
+        # row's g^2 mean and EMA-update the candidate row factor. rvr maps
+        # each enumerated row to its global vr index (wide rows divert to
+        # the two-phase path, so position != index).
         j = tl.program_id(0)
         s = tl.load(rstart_ptr + j)
         n = tl.load(rlen_ptr + j)
+        vo = tl.load(rvr_ptr + j)
         # Divide before summing, matching the eager (g2 / n).sum(dim=1):
         # a finite mean must not overflow in the intermediate sum.
         acc = 0.0
@@ -262,8 +265,43 @@ if triton is not None:
             mask = off + tl.arange(0, BLOCK) < n
             g = tl.load(g_ptr + idx, mask=mask, other=0.0)
             acc += tl.sum(tl.where(mask, g * g / n, 0.0), axis=0)
-        vr = tl.load(vr_ptr + j)
-        tl.store(cvr_ptr + j, vr * b2 + acc * (1.0 - b2))
+        vr = tl.load(vr_ptr + vo)
+        tl.store(cvr_ptr + vo, vr * b2 + acc * (1.0 - b2))
+
+    @triton.jit
+    def _flat_fact_rows_partial_kernel(g_ptr, rpart_ptr, rbp_start_ptr,
+                                       rbp_c0_ptr, rbp_c1_ptr, rbp_n_ptr,
+                                       BLOCK: tl.constexpr):
+        # Phase 1 of the two-phase row reduce for wide matrices: each
+        # program covers one (row, col-block) pair and writes a scaled
+        # partial sum (already divided by n, matching eager (g2/n).sum(dim=1)).
+        j = tl.program_id(0)
+        s = tl.load(rbp_start_ptr + j)
+        c0 = tl.load(rbp_c0_ptr + j)
+        c1 = tl.load(rbp_c1_ptr + j)
+        n = tl.load(rbp_n_ptr + j)
+        acc = 0.0
+        for off in range(c0, c1, BLOCK):
+            idx = s + off + tl.arange(0, BLOCK)
+            mask = off + tl.arange(0, BLOCK) < c1
+            g = tl.load(g_ptr + idx, mask=mask, other=0.0)
+            acc += tl.sum(tl.where(mask, g * g / n, 0.0), axis=0)
+        tl.store(rpart_ptr + j, acc)
+
+    @triton.jit
+    def _flat_fact_rows_finish_kernel(vr_ptr, cvr_ptr, rpart_ptr, rbf_j_ptr,
+                                      rbf_p0_ptr, rbf_np_ptr, b2):
+        # Phase 2: fold a row's col-block partials into the candidate row
+        # factor EMA update.
+        j = tl.program_id(0)
+        vo = tl.load(rbf_j_ptr + j)
+        p0 = tl.load(rbf_p0_ptr + j)
+        np_ = tl.load(rbf_np_ptr + j)
+        acc = 0.0
+        for t in range(0, np_):
+            acc += tl.load(rpart_ptr + p0 + t)
+        vr = tl.load(vr_ptr + vo)
+        tl.store(cvr_ptr + vo, vr * b2 + acc * (1.0 - b2))
 
     @triton.jit
     def _flat_fact_cols_kernel(g_ptr, vc_ptr, cvc_ptr, cstart_ptr, cc0_ptr,
@@ -546,7 +584,19 @@ def flat_fact_moments(g, flat_vr, flat_vc, cand_vr, cand_vc, fmean, meta,
     if nr:
         _flat_fact_rows_kernel[(nr,)](
             g, flat_vr, cand_vr, meta["row_start"], meta["row_len"],
-            b2, BLOCK=1024)
+            meta["row_vr"], b2, BLOCK=1024)
+    if "rbp_start" in meta:
+        # Wide matrices: two-phase row reduce over (row, col) blocks.
+        nrp = meta["rbp_start"].numel()
+        if nrp:
+            _flat_fact_rows_partial_kernel[(nrp,)](
+                g, meta["rpart"], meta["rbp_start"], meta["rbp_c0"],
+                meta["rbp_c1"], meta["rbp_n"], BLOCK=1024)
+        nrbf = meta["rbf_j"].numel()
+        if nrbf:
+            _flat_fact_rows_finish_kernel[(nrbf,)](
+                flat_vr, cand_vr, meta["rpart"], meta["rbf_j"],
+                meta["rbf_p0"], meta["rbf_np"], b2)
     ncb = meta["cb_start"].numel() if "cb_start" in meta else 0
     if ncb:
         _flat_fact_cols_kernel[(ncb,)](
