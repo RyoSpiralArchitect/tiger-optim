@@ -890,6 +890,8 @@ class Tiger(Optimizer):
             "pb_start": [], "pb_c0": [], "pb_r0": [], "pb_r1": [],
             "pb_C": [], "pb_R": [],
             "cbf_vc": [], "cbf_p0": [], "cbf_np": [], "cbf_rem": [],
+            "rbp_start": [], "rbp_c0": [], "rbp_c1": [], "rbp_n": [],
+            "rbf_j": [], "rbf_p0": [], "rbf_np": [],
             "fact_vroff": [], "fact_R": [],
             "elem_pos": [], "elem_fact": [],
             "rok_r": [], "rok_c": [],
@@ -897,7 +899,12 @@ class Tiger(Optimizer):
         off_to_fact: Dict[int, int] = {}
         CBLOCK = 128
         RBLOCK = 4096  # taller matrices switch to the two-phase col reduce
+        # Wider matrices switch to the two-phase row reduce only past this
+        # width: the partial fold reorders fp32 accumulation, so the gate
+        # stays high to keep bitwise-eager behavior for typical shapes.
+        WBLOCK = 16384
         npb = 0
+        nrpb = 0
         for i, (p, n, fct) in enumerate(zip(params, lengths, factored_flags)):
             st = self.state[p]
             mv = flat_m[off:off + n].view_as(p)
@@ -931,10 +938,26 @@ class Tiger(Optimizer):
                 st["vc"] = vc_v
                 fm = fact_meta_lists
                 seg0 = len(seg_starts)
-                for r in range(R):
-                    fm["row_start"].append(off + r * C)
-                    fm["row_len"].append(C)
-                    fm["rok_r"].append(seg0)
+                if C <= WBLOCK:
+                    for r in range(R):
+                        fm["row_start"].append(off + r * C)
+                        fm["row_len"].append(C)
+                        fm["rok_r"].append(seg0)
+                else:
+                    # Wide matrices: two-phase row reduce over
+                    # (row, col-block) pairs, mirroring the tall col path.
+                    for r in range(R):
+                        fm["rbf_j"].append(vr_off + r)
+                        fm["rbf_p0"].append(nrpb)
+                        nrb = (C + RBLOCK - 1) // RBLOCK
+                        fm["rbf_np"].append(nrb)
+                        for c0 in range(0, C, RBLOCK):
+                            fm["rbp_start"].append(off + r * C)
+                            fm["rbp_c0"].append(c0)
+                            fm["rbp_c1"].append(min(c0 + RBLOCK, C))
+                            fm["rbp_n"].append(C)
+                            nrpb += 1
+                        fm["rok_r"].append(seg0)
                 for c0 in range(0, C, CBLOCK):
                     if R <= RBLOCK:
                         fm["cb_start"].append(off)
@@ -1015,6 +1038,13 @@ class Tiger(Optimizer):
                 "cbf_p0": torch.tensor(fm["cbf_p0"], device=dev, dtype=torch.long),
                 "cbf_np": torch.tensor(fm["cbf_np"], device=dev, dtype=torch.long),
                 "cbf_rem": torch.tensor(fm["cbf_rem"], device=dev, dtype=torch.long),
+                "rbp_start": torch.tensor(fm["rbp_start"], device=dev, dtype=torch.long),
+                "rbp_c0": torch.tensor(fm["rbp_c0"], device=dev, dtype=torch.long),
+                "rbp_c1": torch.tensor(fm["rbp_c1"], device=dev, dtype=torch.long),
+                "rbp_n": torch.tensor(fm["rbp_n"], device=dev, dtype=torch.long),
+                "rbf_j": torch.tensor(fm["rbf_j"], device=dev, dtype=torch.long),
+                "rbf_p0": torch.tensor(fm["rbf_p0"], device=dev, dtype=torch.long),
+                "rbf_np": torch.tensor(fm["rbf_np"], device=dev, dtype=torch.long),
                 "fact_vroff": torch.tensor(fm["fact_vroff"], device=dev, dtype=torch.long),
                 "fact_R": torch.tensor(fm["fact_R"], device=dev, dtype=torch.long),
                 "elem_pos": torch.cat(fm["elem_pos"]).to(dev),
@@ -1040,6 +1070,8 @@ class Tiger(Optimizer):
             F["fmean"] = torch.empty(len(fact_idx), dtype=torch.float32, device=dev)
             if npb:
                 fact_meta["part"] = torch.empty(npb * CBLOCK, dtype=torch.float32, device=dev)
+            if nrpb:
+                fact_meta["rpart"] = torch.empty(nrpb, dtype=torch.float32, device=dev)
             F["fact_meta"] = fact_meta
         # Persistent buffers for the CUDA-graphable pre-guard pipeline.
         # Every intermediate lives here so the K1->par_ok sequence can be
