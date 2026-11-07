@@ -643,6 +643,12 @@ class Tiger(Optimizer):
         # transient capture allocations are recycled instead of each graph
         # keeping a private pool.
         self._graph_pools: Dict[torch.device, object] = {}
+        # Segments longer than this run the two-phase reduce (per-1024-elem
+        # chunk partials + ordered fold — bitwise-equal to sequential).
+        try:
+            self._SEG2P_MIN = int(os.environ.get("TIGER_SEG2P_MIN", "8192"))
+        except ValueError:
+            self._SEG2P_MIN = 8192
         self._fused_apply_failures: List[str] = []
 
     # ---------- Public API ----------
@@ -1019,6 +1025,35 @@ class Tiger(Optimizer):
             "param_nseg": subsegs,
             "seg_starts_l": seg_starts, "seg_lens_l": seg_lens,
         }
+        # Two-phase segmented reduce: segments longer than _SEG2P_MIN are
+        # covered by per-1024-element chunk partials plus an ordered fold
+        # (bitwise-identical to the sequential loop). Small segments keep
+        # the single-program kernel via map_small.
+        map_small: List[int] = []
+        pb_s: List[int] = []; pb_e: List[int] = []; pb_seg: List[int] = []
+        sf_j: List[int] = []; sf_p0: List[int] = []; sf_np: List[int] = []
+        for j, (s_, l_) in enumerate(zip(seg_starts, seg_lens)):
+            if l_ > self._SEG2P_MIN:
+                sf_j.append(j); sf_p0.append(len(pb_s))
+                np_ = 0
+                bs = s_
+                while bs < s_ + l_:
+                    pb_s.append(bs); pb_e.append(min(bs + 1024, s_ + l_))
+                    pb_seg.append(j)
+                    np_ += 1; bs += 1024
+                sf_np.append(np_)
+            else:
+                map_small.append(j)
+        if sf_j:
+            lt = lambda v: torch.tensor(v, device=dev, dtype=torch.long)
+            npart = len(pb_s)
+            F["seg2p"] = {
+                "map_small": lt(map_small),
+                "pb_s": lt(pb_s), "pb_e": lt(pb_e), "pb_seg": lt(pb_seg),
+                "sf_j": lt(sf_j), "sf_p0": lt(sf_p0), "sf_np": lt(sf_np),
+                "apart": torch.empty(4 * npart, dtype=torch.float32, device=dev),
+                "spart": torch.empty(npart, dtype=torch.float32, device=dev),
+            }
         if fact_idx:
             fm = fact_meta_lists
             fact_meta = {
@@ -1116,8 +1151,14 @@ class Tiger(Optimizer):
             "kzero": torch.zeros((), device=dev),
             "split_t": torch.empty(nseg, dtype=torch.bool, device=dev),
             "ssq2": e(len(params)), "n2": e(len(params)),
+            # Async par_ok D2H staging: ping-pong pinned buffers so a queued
+            # copy from the next step can never overwrite an unread result.
+            "pok_h": [torch.empty(len(params), dtype=torch.bool,
+                                  pin_memory=True) for _ in range(2)],
         }
         F["B"] = B
+        F["pok_ev"] = torch.cuda.Event()
+        F["pok_flip"] = 0
         F["graph"] = {"warm": 0, "g": None, "bad": False}
         F["graph2"] = {"warm": 0, "g": None, "bad": False}
         while len(cache) >= self._flat_cache_max:
@@ -1647,7 +1688,12 @@ class Tiger(Optimizer):
                     B["route_lr"].copy_(torch.tensor(_rls, dtype=torch.float32))
                 else:
                     B["route_lr"].fill_(abs(lr * lr_scale))
-                B["chunked_t"].copy_(torch.tensor(chunked_flags))
+                # Static-per-membership uploads: skip the H2D copy while the
+                # signature matches (B buffers are persistent).
+                _sig = tuple(chunked_flags)
+                if F.get("_sig_chunked") != _sig:
+                    B["chunked_t"].copy_(torch.tensor(chunked_flags))
+                    F["_sig_chunked"] = _sig
                 bucket_route = (
                     use_foreach_upd and bucket_std and hasattr(torch, "_foreach_add_")
                     and len(active_params) >= foreach_min_bucket)
@@ -1664,9 +1710,12 @@ class Tiger(Optimizer):
                          else _scalar_like(group_ref, float(o), dtype=torch.float32, device=dev_f) if o is not None
                          else torch.ones((), device=dev_f)) for o in _emas])
                     B["emas_t"].copy_(emas)
-                    _hasem = torch.zeros(Nf, dtype=torch.float32)
-                    _hasem[has_ema_idx] = 1.0
-                    B["hasem"].copy_(_hasem)
+                    _sig = tuple(has_ema_idx)
+                    if F.get("_sig_hasem") != _sig:
+                        _hasem = torch.zeros(Nf, dtype=torch.float32)
+                        _hasem[has_ema_idx] = 1.0
+                        B["hasem"].copy_(_hasem)
+                        F["_sig_hasem"] = _sig
                 split_list = [bool(chunked_flags[i] and qkv_split
                                    and qkv_rules.get(id(fast_params[i])) is not None)
                               for i in range(Nf)]
@@ -1690,9 +1739,15 @@ class Tiger(Optimizer):
                     else:
                         _qh.extend([0.0] * k)
                     s0 += k
-                B["split_t"].copy_(torch.tensor(_ss))
+                _sig = tuple(_ss)
+                if F.get("_sig_split") != _sig:
+                    B["split_t"].copy_(torch.tensor(_ss))
+                    F["_sig_split"] = _sig
                 if _qkv_ema_ok:
-                    B["hasemq"].copy_(torch.tensor(_qh, dtype=torch.float32))
+                    _sig = tuple(_qh)
+                    if F.get("_sig_hasemq") != _sig:
+                        B["hasemq"].copy_(torch.tensor(_qh, dtype=torch.float32))
+                        F["_sig_hasemq"] = _sig
                 if has_qkv_lr:
                     _keys3 = ("q", "k", "v")
                     _qs = []
@@ -1725,7 +1780,8 @@ class Tiger(Optimizer):
                             b2=b2, eps=eps, alpha=alpha,
                             sign_tau=float(group["sign_tau"]), vtiny=1e-30)
                     stats = B["stats"]
-                    flat_seg_stats(cand_m, cand_v, flat_p, ds_b, F["starts"], F["ends"], stats)
+                    flat_seg_stats(cand_m, cand_v, flat_p, ds_b, F["starts"], F["ends"], stats,
+                                   seg2p=F.get("seg2p"))
                     st5 = stats.view(Nseg, 5)
                     am_m = st5[:, 0]; am_v = st5[:, 1]; am_p = st5[:, 2]
                     am_ds = st5[:, 3]; ssq_m = st5[:, 4]
@@ -1755,7 +1811,8 @@ class Tiger(Optimizer):
                     flat_direction(cand_m, pp_b, ds_b, rms_seg, seg, d_f,
                                    sblend=B["scalars"][0], eps=eps)
                     stats2 = B["stats2"]
-                    flat_seg_stats(cand_m, cand_v, flat_p, d_f, F["starts"], F["ends"], stats2)
+                    flat_seg_stats(cand_m, cand_v, flat_p, d_f, F["starts"], F["ends"], stats2,
+                                   seg2p=F.get("seg2p"))
                     am_d = stats2.view(Nseg, 5)[:, 3]
 
                     # Finite checks are per-seg; magnitude bounds are
@@ -1800,7 +1857,8 @@ class Tiger(Optimizer):
                             # Gather via seg_idx (repeat_interleave would
                             # sync for its output size — illegal in capture).
                             scaled = B["scaled"].copy_(x / safe[seg])
-                            flat_seg_ssq(scaled, F["starts"], F["ends"], ssq_buf)
+                            flat_seg_ssq(scaled, F["starts"], F["ends"], ssq_buf,
+                                         seg2p=F.get("seg2p"))
                             return safe * ssq_buf.sqrt()
                         pn_g = _seg_norm(flat_p, am_p)
                         dn_g = _seg_norm(d_f, am_d)
@@ -1911,7 +1969,12 @@ class Tiger(Optimizer):
                         par_ok = par_ok.clone()
                         par_ok[torch.tensor(qidx, device=dev_f)] &= torch.stack(
                             [q.reshape(()) for q in qok])
-                fast_ok_list = par_ok.cpu().tolist()
+                # Async D2H: the flag is only needed ~600 lines later, so the
+                # copy rides the stream and the host keeps enqueuing work.
+                pok_h = B["pok_h"][F["pok_flip"]]
+                F["pok_flip"] ^= 1
+                pok_h.copy_(par_ok, non_blocking=True)
+                F["pok_ev"].record(torch.cuda.current_stream(dev_f))
                 _norms = use_trust or (agc_clip and agc_clip > 0.0)
                 _precond = use_trust and trust_space == "precond" and _norms
                 fast_ctx = {
@@ -1926,7 +1989,7 @@ class Tiger(Optimizer):
                     "pre_n_par": B["pre_n_par"] if _precond else None,
                     "emas": emas, "has_ema_idx": has_ema_idx,
                     "Nf": Nf, "dev": dev_f, "chunked": chunked_flags,
-                    "id_seg": id_seg, "par_ok": par_ok,
+                    "id_seg": id_seg, "par_ok": par_ok, "pok_h": pok_h,
                 }
 
             # Batched moment update for "simple" slow params: dense fp32
@@ -2514,6 +2577,8 @@ class Tiger(Optimizer):
                 id_seg = fast_ctx["id_seg"]
                 lens = F["lens_t"]; numel_f = F["numel_f"]
                 pn_par = fast_ctx["pn_par"]; dn_par = fast_ctx["dn_par"]
+                F["pok_ev"].synchronize()
+                fast_ok_list = fast_ctx["pok_h"].tolist()
                 valid_idx = [i for i, b in enumerate(fast_ok_list) if b]
                 bad_idx = [i for i, b in enumerate(fast_ok_list) if not b]
                 if bad_idx:
@@ -2551,7 +2616,8 @@ class Tiger(Optimizer):
                             else:
                                 d_den = d_f * (
                                     agc_scale if id_seg else agc_scale[seg_par])[seg_g]
-                            flat_seg_ssq(d_den, F["starts"], F["ends"], B2["ssq"])
+                            flat_seg_ssq(d_den, F["starts"], F["ends"], B2["ssq"],
+                                         seg2p=F.get("seg2p"))
                             if id_seg:
                                 ssq_par = B2["ssq"]; n_par = numel_f
                             else:
@@ -2569,7 +2635,8 @@ class Tiger(Optimizer):
                                 thr = (drms * sc[8] if id_seg
                                        else (drms * sc[8])[seg_par])[seg_g]
                                 flat_seg_ssq((d_den.abs() > thr).to(torch.float32),
-                                             F["starts"], F["ends"], B2["cnt"])
+                                             F["starts"], F["ends"], B2["cnt"],
+                                             seg2p=F.get("seg2p"))
                                 if id_seg:
                                     dens = B2["cnt"] / n_par
                                 else:
@@ -2751,7 +2818,8 @@ class Tiger(Optimizer):
                             d_f * torch.repeat_interleave(
                                 agc_scale if id_seg else agc_scale[seg_par], lens))
                         ssq_par = torch.empty(Nseg, device=dev_f)
-                        flat_seg_ssq(d_den, F["starts"], F["ends"], ssq_par)
+                        flat_seg_ssq(d_den, F["starts"], F["ends"], ssq_par,
+                                     seg2p=F.get("seg2p"))
                         n_par = numel_f
                         if not id_seg:
                             n_par = torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, numel_f)
@@ -2771,7 +2839,8 @@ class Tiger(Optimizer):
                                 drms * k if id_seg else (drms * k)[seg_par], lens)
                             cnt = torch.empty(Nseg, device=dev_f)
                             flat_seg_ssq((d_den.abs() > thr).to(torch.float32),
-                                         F["starts"], F["ends"], cnt)
+                                         F["starts"], F["ends"], cnt,
+                                         seg2p=F.get("seg2p"))
                             dens = cnt / n_par if id_seg else (
                                 torch.zeros(Nf, device=dev_f).index_add_(0, seg_par, cnt) / n_par)
                             if bad_idx:

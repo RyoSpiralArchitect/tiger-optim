@@ -212,6 +212,128 @@ if triton is not None:
         tl.store(out_ptr + j * 5 + 4, ssq_m)
 
     @triton.jit
+    def _flat_seg_stats_sub_kernel(cm_ptr, cv_ptr, p_ptr, x_ptr, start, end,
+                                   jmap_ptr, out_ptr, BLOCK: tl.constexpr):
+        # _flat_seg_stats_kernel for a subset of segments: jmap maps each
+        # program to its global segment index (two-phase path handles the
+        # large ones, so position != index).
+        j = tl.load(jmap_ptr + tl.program_id(0))
+        s = tl.load(start + j)
+        e = tl.load(end + j)
+        n = e - s
+        am_m = 0.0
+        am_v = 0.0
+        am_p = 0.0
+        am_x = 0.0
+        for off in range(0, n, BLOCK):
+            idx = s + off + tl.arange(0, BLOCK)
+            mask = idx < e
+            cm = tl.load(cm_ptr + idx, mask=mask, other=0.0)
+            cv = tl.load(cv_ptr + idx, mask=mask, other=0.0)
+            pp = tl.load(p_ptr + idx, mask=mask, other=0.0)
+            xx = tl.load(x_ptr + idx, mask=mask, other=0.0)
+            am_m = tl.maximum(am_m, tl.max(tl.abs(cm), axis=0))
+            am_v = tl.maximum(am_v, tl.max(tl.abs(cv), axis=0))
+            am_p = tl.maximum(am_p, tl.max(tl.abs(pp), axis=0))
+            am_x = tl.maximum(am_x, tl.max(tl.abs(xx), axis=0))
+        ssq_m = 0.0
+        if am_m > 0.0:
+            inv = 1.0 / am_m
+            for off in range(0, n, BLOCK):
+                idx = s + off + tl.arange(0, BLOCK)
+                mask = idx < e
+                cm = tl.load(cm_ptr + idx, mask=mask, other=0.0)
+                cs = cm * inv
+                ssq_m += tl.sum(tl.where(mask, cs * cs, 0.0), axis=0)
+        tl.store(out_ptr + j * 5 + 0, am_m)
+        tl.store(out_ptr + j * 5 + 1, am_v)
+        tl.store(out_ptr + j * 5 + 2, am_p)
+        tl.store(out_ptr + j * 5 + 3, am_x)
+        tl.store(out_ptr + j * 5 + 4, ssq_m)
+
+    @triton.jit
+    def _flat_seg_amax_partial_kernel(cm_ptr, cv_ptr, p_ptr, x_ptr,
+                                      pb_s_ptr, pb_e_ptr, part_ptr,
+                                      BLOCK: tl.constexpr):
+        # Phase 1 of the two-phase stats reduce for large segments: each
+        # program covers exactly one BLOCK-aligned chunk (the same chunk the
+        # sequential loop would process) and writes its 4 amaxes.
+        j = tl.program_id(0)
+        s = tl.load(pb_s_ptr + j)
+        e = tl.load(pb_e_ptr + j)
+        idx = s + tl.arange(0, BLOCK)
+        mask = idx < e
+        cm = tl.load(cm_ptr + idx, mask=mask, other=0.0)
+        cv = tl.load(cv_ptr + idx, mask=mask, other=0.0)
+        pp = tl.load(p_ptr + idx, mask=mask, other=0.0)
+        xx = tl.load(x_ptr + idx, mask=mask, other=0.0)
+        tl.store(part_ptr + j * 4 + 0, tl.max(tl.abs(cm), axis=0))
+        tl.store(part_ptr + j * 4 + 1, tl.max(tl.abs(cv), axis=0))
+        tl.store(part_ptr + j * 4 + 2, tl.max(tl.abs(pp), axis=0))
+        tl.store(part_ptr + j * 4 + 3, tl.max(tl.abs(xx), axis=0))
+
+    @triton.jit
+    def _flat_seg_amax_finish_kernel(part_ptr, sf_p0_ptr, sf_np_ptr,
+                                     jmap_ptr, out_ptr):
+        # Phase 2: fold a segment's chunk amaxes (order-free) into
+        # out[j*5+0..3]. Same init and fold order as the sequential loop.
+        j = tl.program_id(0)
+        jo = tl.load(jmap_ptr + j)
+        p0 = tl.load(sf_p0_ptr + j)
+        np_ = tl.load(sf_np_ptr + j)
+        am_m = 0.0
+        am_v = 0.0
+        am_p = 0.0
+        am_x = 0.0
+        for t in range(0, np_):
+            base = (p0 + t) * 4
+            am_m = tl.maximum(am_m, tl.load(part_ptr + base + 0))
+            am_v = tl.maximum(am_v, tl.load(part_ptr + base + 1))
+            am_p = tl.maximum(am_p, tl.load(part_ptr + base + 2))
+            am_x = tl.maximum(am_x, tl.load(part_ptr + base + 3))
+        tl.store(out_ptr + jo * 5 + 0, am_m)
+        tl.store(out_ptr + jo * 5 + 1, am_v)
+        tl.store(out_ptr + jo * 5 + 2, am_p)
+        tl.store(out_ptr + jo * 5 + 3, am_x)
+
+    @triton.jit
+    def _flat_seg_statssq_partial_kernel(cm_ptr, out_ptr, pb_s_ptr, pb_e_ptr,
+                                         pb_seg_ptr, part_ptr,
+                                         BLOCK: tl.constexpr):
+        # Phase 3 of the stats reduce: scaled-ssq partials for one
+        # BLOCK-aligned chunk each. inv = 1/am_m is read from the finished
+        # stats row so (cm*inv)^2 rounds exactly like the sequential pass.
+        j = tl.program_id(0)
+        s = tl.load(pb_s_ptr + j)
+        e = tl.load(pb_e_ptr + j)
+        seg = tl.load(pb_seg_ptr + j)
+        am = tl.load(out_ptr + seg * 5 + 0)
+        acc = 0.0
+        if am > 0.0:
+            inv = 1.0 / am
+            idx = s + tl.arange(0, BLOCK)
+            mask = idx < e
+            cm = tl.load(cm_ptr + idx, mask=mask, other=0.0)
+            cs = cm * inv
+            acc = tl.sum(tl.where(mask, cs * cs, 0.0), axis=0)
+        tl.store(part_ptr + j, acc)
+
+    @triton.jit
+    def _flat_seg_ordfold_kernel(part_ptr, sf_p0_ptr, sf_np_ptr, jmap_ptr,
+                                 out_ptr, OUT_STRIDE: tl.constexpr,
+                                 OUT_OFF: tl.constexpr):
+        # Ordered scalar fold of chunk partials: identical add order to the
+        # sequential loop's acc +=, so the result is bitwise-equal.
+        j = tl.program_id(0)
+        jo = tl.load(jmap_ptr + j)
+        p0 = tl.load(sf_p0_ptr + j)
+        np_ = tl.load(sf_np_ptr + j)
+        acc = 0.0
+        for t in range(0, np_):
+            acc += tl.load(part_ptr + p0 + t)
+        tl.store(out_ptr + jo * OUT_STRIDE + OUT_OFF, acc)
+
+    @triton.jit
     def _flat_seg_ssq_kernel(x_ptr, start, end, out_ptr, BLOCK: tl.constexpr):
         # Per-segment sum of squares, sequential within each segment so the
         # result is deterministic — and, unlike a dense indicator GEMV, a
@@ -227,6 +349,35 @@ if triton is not None:
             x = tl.load(x_ptr + idx, mask=mask, other=0.0)
             acc += tl.sum(tl.where(mask, x * x, 0.0), axis=0)
         tl.store(out_ptr + j, acc)
+
+    @triton.jit
+    def _flat_seg_ssq_sub_kernel(x_ptr, start, end, jmap_ptr, out_ptr,
+                                 BLOCK: tl.constexpr):
+        # _flat_seg_ssq_kernel for a subset of segments (position != index).
+        j = tl.load(jmap_ptr + tl.program_id(0))
+        s = tl.load(start + j)
+        e = tl.load(end + j)
+        n = e - s
+        acc = 0.0
+        for off in range(0, n, BLOCK):
+            idx = s + off + tl.arange(0, BLOCK)
+            mask = idx < e
+            x = tl.load(x_ptr + idx, mask=mask, other=0.0)
+            acc += tl.sum(tl.where(mask, x * x, 0.0), axis=0)
+        tl.store(out_ptr + j, acc)
+
+    @triton.jit
+    def _flat_seg_ssq_partial_kernel(x_ptr, pb_s_ptr, pb_e_ptr, part_ptr,
+                                     BLOCK: tl.constexpr):
+        # Phase 1 of the two-phase ssq reduce: one program per BLOCK-aligned
+        # chunk, identical tl.sum to the sequential loop's per-chunk term.
+        j = tl.program_id(0)
+        s = tl.load(pb_s_ptr + j)
+        e = tl.load(pb_e_ptr + j)
+        idx = s + tl.arange(0, BLOCK)
+        mask = idx < e
+        x = tl.load(x_ptr + idx, mask=mask, other=0.0)
+        tl.store(part_ptr + j, tl.sum(tl.where(mask, x * x, 0.0), axis=0))
 
     @triton.jit
     def _flat_dir_kernel(cm_ptr, pp_ptr, ds_ptr, rms_ptr, seg_ptr, d_ptr,
@@ -496,12 +647,18 @@ def flat_step_candidates(g, m, v, cand_m, cand_v, pp, dsign, *,
         BLOCK=1024)
 
 
-def flat_seg_stats(cand_m, cand_v, p_flat, x, starts, ends, out):
+def flat_seg_stats(cand_m, cand_v, p_flat, x, starts, ends, out, *,
+                   seg2p=None):
     """K2/K4 launch: per-segment [amax_m, amax_v, amax_p, amax_x, ssq_scaled].
 
     out[j*5+4] holds the *amax-scaled* sum of squares of cand_m, so the
     stable per-segment norm is amax_m * sqrt(ssq_scaled / seg_len) — no
     overflow for finite moments near the FP32 limit.
+
+    When `seg2p` (built by Tiger._flat_group) partitions long segments into
+    BLOCK-aligned chunks, those segments run a two-phase reduce: per-chunk
+    partials in parallel, then an ordered fold that adds partials in the
+    same sequence as the sequential loop — bitwise-identical output.
     """
     _require_triton()
     _check_flat(cand_m, cand_v, p_flat, x, out)
@@ -511,16 +668,41 @@ def flat_seg_stats(cand_m, cand_v, p_flat, x, starts, ends, out):
         raise ValueError("out buffer too small")
     if starts.dtype not in (torch.int32, torch.int64):
         raise ValueError("starts/ends must be integer tensors")
-    _flat_seg_stats_kernel[(starts.numel(),)](
-        cand_m, cand_v, p_flat, x, starts, ends, out, BLOCK=1024)
+    if seg2p is None:
+        _flat_seg_stats_kernel[(starts.numel(),)](
+            cand_m, cand_v, p_flat, x, starts, ends, out, BLOCK=1024)
+        return
+    ns = seg2p["map_small"].numel()
+    if ns:
+        _flat_seg_stats_sub_kernel[(ns,)](
+            cand_m, cand_v, p_flat, x, starts, ends, seg2p["map_small"],
+            out, BLOCK=1024)
+    npart = seg2p["pb_s"].numel()
+    if npart:
+        apart = seg2p["apart"]
+        spart = seg2p["spart"]
+        sf_j = seg2p["sf_j"]
+        nl = sf_j.numel()
+        _flat_seg_amax_partial_kernel[(npart,)](
+            cand_m, cand_v, p_flat, x, seg2p["pb_s"], seg2p["pb_e"],
+            apart, BLOCK=1024)
+        _flat_seg_amax_finish_kernel[(nl,)](
+            apart, seg2p["sf_p0"], seg2p["sf_np"], sf_j, out)
+        _flat_seg_statssq_partial_kernel[(npart,)](
+            cand_m, out, seg2p["pb_s"], seg2p["pb_e"], seg2p["pb_seg"],
+            spart, BLOCK=1024)
+        _flat_seg_ordfold_kernel[(nl,)](
+            spart, seg2p["sf_p0"], seg2p["sf_np"], sf_j, out,
+            OUT_STRIDE=5, OUT_OFF=4)
 
 
-def flat_seg_ssq(x, starts, ends, out):
+def flat_seg_ssq(x, starts, ends, out, *, seg2p=None):
     """Per-segment sum of squares for an arbitrary flat vector.
 
-    Deterministic (sequential per segment) and NaN-localizing: unlike a
-    dense indicator-matrix GEMV, a nonfinite element contaminates only
-    the segment it belongs to.
+    Deterministic and NaN-localizing: unlike a dense indicator-matrix
+    GEMV, a nonfinite element contaminates only the segment it belongs
+    to. With `seg2p`, long segments use the two-phase partial+ordered-
+    fold scheme (bitwise identical to the sequential fold).
     """
     _require_triton()
     _check_flat(x, out)
@@ -528,7 +710,21 @@ def flat_seg_ssq(x, starts, ends, out):
         raise ValueError("starts/ends length mismatch")
     if out.numel() < starts.numel():
         raise ValueError("out buffer too small")
-    _flat_seg_ssq_kernel[(starts.numel(),)](x, starts, ends, out, BLOCK=1024)
+    if seg2p is None:
+        _flat_seg_ssq_kernel[(starts.numel(),)](x, starts, ends, out,
+                                               BLOCK=1024)
+        return
+    ns = seg2p["map_small"].numel()
+    if ns:
+        _flat_seg_ssq_sub_kernel[(ns,)](x, starts, ends,
+                                       seg2p["map_small"], out, BLOCK=1024)
+    npart = seg2p["pb_s"].numel()
+    if npart:
+        _flat_seg_ssq_partial_kernel[(npart,)](
+            x, seg2p["pb_s"], seg2p["pb_e"], seg2p["spart"], BLOCK=1024)
+        _flat_seg_ordfold_kernel[(seg2p["sf_j"].numel(),)](
+            seg2p["spart"], seg2p["sf_p0"], seg2p["sf_np"], seg2p["sf_j"],
+            out, OUT_STRIDE=1, OUT_OFF=0)
 
 
 def flat_direction(cand_m, pp, dsign, rms, seg_idx, d, *, sblend, eps):
