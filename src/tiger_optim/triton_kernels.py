@@ -248,12 +248,15 @@ if triton is not None:
 
     @triton.jit
     def _flat_fact_rows_kernel(g_ptr, vr_ptr, cvr_ptr, rstart_ptr, rlen_ptr,
-                               b2, BLOCK: tl.constexpr):
+                               rvr_ptr, b2, BLOCK: tl.constexpr):
         # One program per matrix row across all factored params: reduce the
-        # row's g^2 mean and EMA-update the candidate row factor.
+        # row's g^2 mean and EMA-update the candidate row factor. rvr maps
+        # each enumerated row to its global vr index (wide rows divert to
+        # the two-phase path, so position != index).
         j = tl.program_id(0)
         s = tl.load(rstart_ptr + j)
         n = tl.load(rlen_ptr + j)
+        vo = tl.load(rvr_ptr + j)
         # Divide before summing, matching the eager (g2 / n).sum(dim=1):
         # a finite mean must not overflow in the intermediate sum.
         acc = 0.0
@@ -262,8 +265,8 @@ if triton is not None:
             mask = off + tl.arange(0, BLOCK) < n
             g = tl.load(g_ptr + idx, mask=mask, other=0.0)
             acc += tl.sum(tl.where(mask, g * g / n, 0.0), axis=0)
-        vr = tl.load(vr_ptr + j)
-        tl.store(cvr_ptr + j, vr * b2 + acc * (1.0 - b2))
+        vr = tl.load(vr_ptr + vo)
+        tl.store(cvr_ptr + vo, vr * b2 + acc * (1.0 - b2))
 
     @triton.jit
     def _flat_fact_rows_partial_kernel(g_ptr, rpart_ptr, rbp_start_ptr,
@@ -581,7 +584,7 @@ def flat_fact_moments(g, flat_vr, flat_vc, cand_vr, cand_vc, fmean, meta,
     if nr:
         _flat_fact_rows_kernel[(nr,)](
             g, flat_vr, cand_vr, meta["row_start"], meta["row_len"],
-            b2, BLOCK=1024)
+            meta["row_vr"], b2, BLOCK=1024)
     if "rbp_start" in meta:
         # Wide matrices: two-phase row reduce over (row, col) blocks.
         nrp = meta["rbp_start"].numel()

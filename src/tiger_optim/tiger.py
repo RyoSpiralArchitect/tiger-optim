@@ -885,7 +885,7 @@ class Tiger(Optimizer):
         off = 0
         vr_off = 0; vc_off = 0
         fact_meta_lists = {
-            "row_start": [], "row_len": [],
+            "row_start": [], "row_len": [], "row_vr": [],
             "cb_start": [], "cb_c0": [], "cb_R": [], "cb_C": [], "cb_vc": [],
             "pb_start": [], "pb_c0": [], "pb_r0": [], "pb_r1": [],
             "pb_C": [], "pb_R": [],
@@ -942,6 +942,7 @@ class Tiger(Optimizer):
                     for r in range(R):
                         fm["row_start"].append(off + r * C)
                         fm["row_len"].append(C)
+                        fm["row_vr"].append(vr_off + r)
                         fm["rok_r"].append(seg0)
                 else:
                     # Wide matrices: two-phase row reduce over
@@ -1023,6 +1024,7 @@ class Tiger(Optimizer):
             fact_meta = {
                 "row_start": torch.tensor(fm["row_start"], device=dev, dtype=torch.long),
                 "row_len": torch.tensor(fm["row_len"], device=dev, dtype=torch.long),
+                "row_vr": torch.tensor(fm["row_vr"], device=dev, dtype=torch.long),
                 "cb_start": torch.tensor(fm["cb_start"], device=dev, dtype=torch.long),
                 "cb_c0": torch.tensor(fm["cb_c0"], device=dev, dtype=torch.long),
                 "cb_R": torch.tensor(fm["cb_R"], device=dev, dtype=torch.long),
