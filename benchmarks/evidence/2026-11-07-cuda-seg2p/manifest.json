@@ -5,16 +5,16 @@
  "hardware": "NVIDIA GeForce RTX 5090, torch 2.13.0+cu132, triton 3.7.1, Python 3.14",
  "method": "bench_compare_optim --device cuda --steps 150 --warmup 25 --seed 0, eager vs TIGER_FLAT_STEP=1",
  "source_sha256": {
-  "src/tiger_optim/tiger.py": "45aa6f67ccf9fd33a1b1b26743f9657843cdbb34a9097dd8f4bc01903463d11b",
+  "src/tiger_optim/tiger.py": "a68555e2c41a08aaf888cde18efba67d3d678c99da4175aee92eb8ac7d79cb05",
   "src/tiger_optim/triton_kernels.py": "bc994be91d45b08c5f9ed7e888a7739591cb7def3008cf2af4e2c51b520773b6",
   "benchmarks/bench_compare_optim.py": "c24454b51bfc72f76d992f8c31a823a3c535487888b02b6b14bde7dfd7c199d3"
  },
  "results_ms_optimizer_median": {
-  "tiger_v21_full": {"eager": 6.8645, "flat": 1.9547, "delta_pct": -71.5},
-  "tiger_v21_no_ffn": {"eager": 6.8564, "flat": 1.9554, "delta_pct": -71.5},
-  "tiger_v21_no_qkv": {"eager": 6.6110, "flat": 1.7554, "delta_pct": -73.4},
-  "tiger_v13_compat": {"eager": 6.1045, "flat": 1.6168, "delta_pct": -73.5},
-  "adamw_control": {"eager": 0.1956, "flat": 0.1906, "delta_pct": -2.6}
+  "tiger_v21_full": {"eager": 6.5237, "flat": 1.9633, "delta_pct": -69.9},
+  "tiger_v21_no_ffn": {"eager": 6.5130, "flat": 1.9564, "delta_pct": -70.0},
+  "tiger_v21_no_qkv": {"eager": 6.2731, "flat": 1.7578, "delta_pct": -72.0},
+  "tiger_v13_compat": {"eager": 5.7786, "flat": 1.6195, "delta_pct": -72.0},
+  "adamw_control": {"eager": 0.1919, "flat": 0.1867, "delta_pct": -2.7}
  },
  "correctness": "pytest 207 passed with TIGER_FLAT_STEP=1; bitwise parity vs eager on v21_full/lean/tall and NaN-injection runs"
 }

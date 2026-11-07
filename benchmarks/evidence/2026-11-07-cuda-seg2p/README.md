@@ -3,18 +3,16 @@
 ## Claim
 
 `TIGER_FLAT_STEP=1` reduces Tiger's optimizer-step latency by roughly
-**71–74%** on an RTX 5090 (TinyMix d=256/ff=512 model, fp32, batch 16×32
+**70–72%** on an RTX 5090 (TinyMix d=256/ff=512 model, fp32, batch 16×32
 tokens) across all four Tiger modes, versus the eager path.
 
 Follow-up to the same-day apply-graph evidence: the per-segment reduce
 kernels (`_flat_seg_stats`, `_flat_seg_ssq`) — ~32% of flat-path GPU
 time — now run two-phase (per-1024-element chunk partials + ordered
 fold, bitwise-identical to the sequential loop) for segments longer
-than `TIGER_SEG2P_MIN` (default 8192). The factored column reduce also
-uses its existing two-phase path from R>256 instead of R>4096 (same
-ordered left fold — bitwise). On the host side, `par_ok` moves via an
-async pinned copy + CUDA event and static per-membership uploads are
-signature-skipped, cutting CPU enqueue time.
+than `TIGER_SEG2P_MIN` (default 8192). On the host side, `par_ok` moves
+via an async pinned copy + CUDA event and static per-membership uploads
+are signature-skipped, cutting CPU enqueue time.
 
 ## Method
 
@@ -28,11 +26,11 @@ signature-skipped, cutting CPU enqueue time.
 
 | mode | eager (ms) | flat (ms) | delta |
 |---|---|---|---|
-| tiger_v21_full | 6.8645 | 1.9547 | −71.5% |
-| tiger_v21_no_ffn | 6.8564 | 1.9554 | −71.5% |
-| tiger_v21_no_qkv | 6.6110 | 1.7554 | −73.4% |
-| tiger_v13_compat | 6.1045 | 1.6168 | −73.5% |
-| adamw (control) | 0.1956 | 0.1906 | −2.6% |
+| tiger_v21_full | 6.5237 | 1.9633 | −69.9% |
+| tiger_v21_no_ffn | 6.5130 | 1.9564 | −70.0% |
+| tiger_v21_no_qkv | 6.2731 | 1.7578 | −72.0% |
+| tiger_v13_compat | 5.7786 | 1.6195 | −72.0% |
+| adamw (control) | 0.1919 | 0.1867 | −2.7% |
 
 ## Correctness
 

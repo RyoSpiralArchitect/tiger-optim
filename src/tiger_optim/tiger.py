@@ -904,11 +904,7 @@ class Tiger(Optimizer):
         }
         off_to_fact: Dict[int, int] = {}
         CBLOCK = 128
-        # Column reduce two-phase: matrices taller than COL_RBLOCK split the
-        # per-column g^2 accumulation into row-block partials folded in row
-        # order — identical left-fold to the single-phase loop (bitwise).
-        COL_RBLOCK = 256
-        RBLOCK = 4096  # col-block width for the wide-matrix row two-phase
+        RBLOCK = 4096  # taller matrices switch to the two-phase col reduce
         # Wider matrices switch to the two-phase row reduce only past this
         # width: the partial fold reorders fp32 accumulation, so the gate
         # stays high to keep bitwise-eager behavior for typical shapes.
@@ -970,7 +966,7 @@ class Tiger(Optimizer):
                             nrpb += 1
                         fm["rok_r"].append(seg0)
                 for c0 in range(0, C, CBLOCK):
-                    if R <= COL_RBLOCK:
+                    if R <= RBLOCK:
                         fm["cb_start"].append(off)
                         fm["cb_c0"].append(c0)
                         fm["cb_R"].append(R)
@@ -979,14 +975,14 @@ class Tiger(Optimizer):
                     else:
                         fm["cbf_vc"].append(vc_off + c0)
                         fm["cbf_p0"].append(npb)
-                        nrb = (R + COL_RBLOCK - 1) // COL_RBLOCK
+                        nrb = (R + RBLOCK - 1) // RBLOCK
                         fm["cbf_np"].append(nrb)
                         fm["cbf_rem"].append(min(CBLOCK, C - c0))
-                        for r0 in range(0, R, COL_RBLOCK):
+                        for r0 in range(0, R, RBLOCK):
                             fm["pb_start"].append(off)
                             fm["pb_c0"].append(c0)
                             fm["pb_r0"].append(r0)
-                            fm["pb_r1"].append(min(r0 + COL_RBLOCK, R))
+                            fm["pb_r1"].append(min(r0 + RBLOCK, R))
                             fm["pb_C"].append(C)
                             fm["pb_R"].append(R)
                             npb += 1
@@ -1978,7 +1974,7 @@ class Tiger(Optimizer):
                 pok_h = B["pok_h"][F["pok_flip"]]
                 F["pok_flip"] ^= 1
                 pok_h.copy_(par_ok, non_blocking=True)
-                F["pok_ev"].record()
+                F["pok_ev"].record(torch.cuda.current_stream(dev_f))
                 _norms = use_trust or (agc_clip and agc_clip > 0.0)
                 _precond = use_trust and trust_space == "precond" and _norms
                 fast_ctx = {
