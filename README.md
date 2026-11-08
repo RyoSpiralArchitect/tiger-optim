@@ -68,6 +68,12 @@ from tiger_optim import summarize_param_groups
 print(summarize_param_groups(optimizer.param_groups))
 ```
 
+The experimental CUDA flat-step path is disabled by default. Set
+`TIGER_FLAT_STEP=1` to enable it; add `TIGER_FLAT_STEP_TWO_PHASE=1` to queue
+independent parameter groups' pre-apply checks before their apply stages. The
+two-phase scheduler remains opt-in and uses the legacy ordering when groups
+share parameters or storage.
+
 ## What Tiger adds
 
 | Component | Behavior | Main controls |

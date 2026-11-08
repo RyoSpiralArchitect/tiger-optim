@@ -1484,9 +1484,9 @@ class Tiger(Optimizer):
         pending_lora_blocks: List[Tuple[int, str, Dict[str, float], float]] = []
         ffn_asym_enabled = any(g.get("auto_ffn_asym", self.defaults["auto_ffn_asym"]) for g in self.param_groups)
 
-        for gi, (group, active_params) in enumerate(zip(self.param_groups, active_params_by_group)):
+        def _process_group(gi, group, active_params):
             if not active_params:
-                continue
+                return
             param_indices = {id(param): index for index, param in enumerate(group["params"])}
             group_ref = active_params[0]
             lr = float(group["lr"]); (b1,b2) = group["betas"]; eps = float(group["eps"])
@@ -1991,6 +1991,8 @@ class Tiger(Optimizer):
                     "Nf": Nf, "dev": dev_f, "chunked": chunked_flags,
                     "id_seg": id_seg, "par_ok": par_ok, "pok_h": pok_h,
                 }
+
+            yield
 
             # Batched moment update for "simple" slow params: dense fp32
             # m/v with fp32 grads run one foreach pass instead of ~6 kernel
@@ -3312,6 +3314,63 @@ class Tiger(Optimizer):
                 if prev is None:
                     prev = obs
                 tag_map[tag] = cross_beta*prev + (1.0 - cross_beta)*obs
+
+        # This phase scheduler is opt-in on top of TIGER_FLAT_STEP; leave
+        # groups with shared parameters or storage in their legacy order.
+        _flat_step_two_phase = (
+            os.environ.get("TIGER_FLAT_STEP", "").lower() not in ("", "0", "false", "no", "off")
+            and os.environ.get("TIGER_FLAT_STEP_TWO_PHASE", "").lower() not in ("", "0", "false", "no", "off")
+            and sum(bool(params) and params[0].is_cuda for params in active_params_by_group) >= 2
+        )
+        if _flat_step_two_phase:
+            _active_ids = [id(p) for params in active_params_by_group for p in params]
+            _flat_step_two_phase = len(_active_ids) == len(set(_active_ids))
+        if _flat_step_two_phase:
+            _storage_groups = {}
+            for _gi, _params in enumerate(active_params_by_group):
+                for _param in _params:
+                    if _param.layout != torch.strided:
+                        _flat_step_two_phase = False
+                        break
+                    if not _param.numel():
+                        continue
+                    _storage = _param.untyped_storage().data_ptr()
+                    _storage_key = (_param.device, _storage)
+                    _previous_group = _storage_groups.setdefault(_storage_key, _gi)
+                    if _previous_group != _gi:
+                        _flat_step_two_phase = False
+                        break
+                if not _flat_step_two_phase:
+                    break
+
+        if _flat_step_two_phase:
+            # Run every group's pre-apply phase before waiting on any pinned
+            # par_ok copy. Each generator retains its group-local state at the
+            # yield point; resuming them in order preserves group bookkeeping.
+            _group_phases = []
+            for gi, (group, active_params) in enumerate(zip(self.param_groups, active_params_by_group)):
+                _phase = _process_group(gi, group, active_params)
+                try:
+                    next(_phase)
+                except StopIteration:
+                    continue
+                _group_phases.append(_phase)
+            for _phase in _group_phases:
+                try:
+                    next(_phase)
+                except StopIteration:
+                    pass
+        else:
+            for gi, (group, active_params) in enumerate(zip(self.param_groups, active_params_by_group)):
+                _phase = _process_group(gi, group, active_params)
+                try:
+                    next(_phase)
+                except StopIteration:
+                    continue
+                try:
+                    next(_phase)
+                except StopIteration:
+                    pass
 
         if cross_enabled:
             tag_map = cross_state.setdefault("tag_density", {})
