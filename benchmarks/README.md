@@ -166,3 +166,8 @@ including negative outcomes, when comparing an implementation change.
 `python benchmarks/diagnose_spectral.py` reproduces paired validation attainment
 and leave-one-seed-out loss diagnostics using the frozen CUDA receipts, with no
 PyTorch dependency. See the [analysis and limitations](evidence/2026-11-10-spectral-diagnostics/README.md).
+
+[Fresh-seed late spectral replication](evidence/2026-11-10-spectral-late/README.md)
+adds 15 CUDA BF16 runs: full spectral has worse average final test loss, but its
+validation disadvantage does not generally widen after step 800. Fade improves
+4/5 seeds here; the limited replication does not establish a new default.
