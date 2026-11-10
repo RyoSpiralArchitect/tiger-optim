@@ -160,3 +160,9 @@ Records apply to their own source revision/environment. New speed claims need
 controlled host load and repeated measurements; new quality claims need
 matched budgets, held-out data, and multiple seeds. Preserve raw results,
 including negative outcomes, when comparing an implementation change.
+
+### Spectral seed influence diagnostics
+
+`python benchmarks/diagnose_spectral.py` reproduces paired validation attainment
+and leave-one-seed-out loss diagnostics using the frozen CUDA receipts, with no
+PyTorch dependency. See the [analysis and limitations](evidence/2026-11-10-spectral-diagnostics/README.md).
