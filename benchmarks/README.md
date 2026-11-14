@@ -171,3 +171,8 @@ PyTorch dependency. See the [analysis and limitations](evidence/2026-11-10-spect
 adds 15 CUDA BF16 runs: full spectral has worse average final test loss, but its
 validation disadvantage does not generally widen after step 800. Fade improves
 4/5 seeds here; the limited replication does not establish a new default.
+
+[Matched FP32 replication](evidence/2026-11-14-spectral-precision/README.md)
+reuses the five late-study seeds and frozen implementation, with an exact BF16
+bridge. Fade improves 4/5 seeds at both precisions but its mean improvement is
+smaller in FP32; earlier adverse FP32 seeds remain part of the evidence.

@@ -1,0 +1,70 @@
+{
+  "plan_sha256": "9870bcefe50d3c92ec201b5ca9c7a309066fea6483a04c63853a07e6a7a147db",
+  "complete": true,
+  "results": [
+    {
+      "file": "confirm-bf16-tiger-full-701.json",
+      "sha256": "0b41b2eb8c64a82583578f13176fc5e91a28338a139e739558899e170d60978a"
+    },
+    {
+      "file": "confirm-fp32-tiger-full-701.json",
+      "sha256": "b955569bea08baf16bcd313e269dfb77eb779e833f706279fddd418733d6f033"
+    },
+    {
+      "file": "confirm-fp32-tiger-no-spectral-701.json",
+      "sha256": "2819774d50087c8dfc32569ec1cf554a6cb504da77e62270035b632ae90534d6"
+    },
+    {
+      "file": "confirm-fp32-tiger-spectral-fade-701.json",
+      "sha256": "e328a56ff5322c8d9b2e0715f553ed3f5ea8d4bc9798f27a2d4c18d762a1b10a"
+    },
+    {
+      "file": "confirm-fp32-tiger-no-spectral-709.json",
+      "sha256": "bcf76c223f6927d7decb01a43c71491adbd40101f95399921555f5c9bbc38715"
+    },
+    {
+      "file": "confirm-fp32-tiger-spectral-fade-709.json",
+      "sha256": "b1accaded2a4aeac8764952205c280ad401a6fd05d767b82827e0799569fa3f4"
+    },
+    {
+      "file": "confirm-fp32-tiger-full-709.json",
+      "sha256": "cc576efdc5e7b101e49d0e3cb054aacd84c6bbde9b3e2aab055e93c8785290e5"
+    },
+    {
+      "file": "confirm-fp32-tiger-spectral-fade-719.json",
+      "sha256": "e36c55c556216db985ec1be37a34c764d41e403fe30364f479e8d69e8f09aa87"
+    },
+    {
+      "file": "confirm-fp32-tiger-full-719.json",
+      "sha256": "e7cc10f599c6adcb72cc7be3fa97a467a5aa5f391eadb4349829815d278355e3"
+    },
+    {
+      "file": "confirm-fp32-tiger-no-spectral-719.json",
+      "sha256": "ef7e1f4a1bbd68eb640e0f7ed7267cf272e1b60b6a201f6842a49523a83e7621"
+    },
+    {
+      "file": "confirm-fp32-tiger-full-727.json",
+      "sha256": "966947c40f8eba091846283ed4f2ee48535392b650769f3fea7c642a6643d1af"
+    },
+    {
+      "file": "confirm-fp32-tiger-no-spectral-727.json",
+      "sha256": "d75d0b77d7d8cf3ffddff1e0978c38bd908c13587d3600362413708ea0ae58f8"
+    },
+    {
+      "file": "confirm-fp32-tiger-spectral-fade-727.json",
+      "sha256": "d88b3d1fa4f14218126a3f06db9e1059a15cae795ab8460777e80aee308ec6c8"
+    },
+    {
+      "file": "confirm-fp32-tiger-no-spectral-733.json",
+      "sha256": "ab8f1c03c9f307edf092c69b3c6bbde5667c3de7e3a3e3845807aaffcc1de74a"
+    },
+    {
+      "file": "confirm-fp32-tiger-spectral-fade-733.json",
+      "sha256": "817823da64ca7f371deedb87f8bd71c61d436eca9db763d63d51b1e9d4febbda"
+    },
+    {
+      "file": "confirm-fp32-tiger-full-733.json",
+      "sha256": "afde80c79401e7b3ae18de377e01fd37e90f1b94bf32a0bcfdce888d39ce007b"
+    }
+  ]
+}
