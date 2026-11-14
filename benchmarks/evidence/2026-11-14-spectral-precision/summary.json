@@ -1,0 +1,186 @@
+{
+  "plan_sha256": "9870bcefe50d3c92ec201b5ca9c7a309066fea6483a04c63853a07e6a7a147db",
+  "source_commit": "3cb4b78ce5f04837ad14d16305e7f5b505bbbe99",
+  "runs": 16,
+  "updates": 25600,
+  "bridge_exact": true,
+  "environment": {
+    "python": "3.14.4",
+    "torch": "2.13.0+cu132",
+    "cuda": "13.2",
+    "device": "NVIDIA GeForce RTX 5090",
+    "precision": "fp32",
+    "cpu_threads": 2,
+    "tf32": false
+  },
+  "binding": [
+    {
+      "mode": "tiger-full",
+      "seed": 701,
+      "test_ce": 3.5318984402010756e-05,
+      "passed": true
+    },
+    {
+      "mode": "tiger-no-spectral",
+      "seed": 701,
+      "test_ce": 0.0030674712493521383,
+      "passed": true
+    },
+    {
+      "mode": "tiger-spectral-fade",
+      "seed": 701,
+      "test_ce": 1.2775840652068382e-05,
+      "passed": true
+    },
+    {
+      "mode": "tiger-full",
+      "seed": 709,
+      "test_ce": 0.0005900610832512143,
+      "passed": true
+    },
+    {
+      "mode": "tiger-no-spectral",
+      "seed": 709,
+      "test_ce": 0.00029292079626230816,
+      "passed": true
+    },
+    {
+      "mode": "tiger-spectral-fade",
+      "seed": 709,
+      "test_ce": 1.8627503713730675e-05,
+      "passed": true
+    },
+    {
+      "mode": "tiger-full",
+      "seed": 719,
+      "test_ce": 7.520367763902414e-05,
+      "passed": true
+    },
+    {
+      "mode": "tiger-no-spectral",
+      "seed": 719,
+      "test_ce": 4.179936109238724e-06,
+      "passed": true
+    },
+    {
+      "mode": "tiger-spectral-fade",
+      "seed": 719,
+      "test_ce": 3.2953892592502143e-06,
+      "passed": true
+    },
+    {
+      "mode": "tiger-full",
+      "seed": 727,
+      "test_ce": 8.620432467409955e-06,
+      "passed": true
+    },
+    {
+      "mode": "tiger-no-spectral",
+      "seed": 727,
+      "test_ce": 0.009293927811100389,
+      "passed": true
+    },
+    {
+      "mode": "tiger-spectral-fade",
+      "seed": 727,
+      "test_ce": 0.0015983922357918345,
+      "passed": true
+    },
+    {
+      "mode": "tiger-full",
+      "seed": 733,
+      "test_ce": 0.002728040419370359,
+      "passed": true
+    },
+    {
+      "mode": "tiger-no-spectral",
+      "seed": 733,
+      "test_ce": 3.745149606970699e-05,
+      "passed": true
+    },
+    {
+      "mode": "tiger-spectral-fade",
+      "seed": 733,
+      "test_ce": 1.7363915219448245e-05,
+      "passed": true
+    }
+  ],
+  "contrasts": {
+    "tiger-full_minus_tiger-no-spectral": {
+      "seeds": [
+        {
+          "seed": 701,
+          "fp32_delta": -0.0030321522649501276,
+          "bf16_delta": -0.004595734807345764,
+          "precision_delta": 0.0015635825423956362
+        },
+        {
+          "seed": 709,
+          "fp32_delta": 0.00029714028698890615,
+          "bf16_delta": 0.016946932460399466,
+          "precision_delta": -0.01664979217341056
+        },
+        {
+          "seed": 719,
+          "fp32_delta": 7.102374152978541e-05,
+          "bf16_delta": 0.006646133588180447,
+          "precision_delta": -0.006575109846650662
+        },
+        {
+          "seed": 727,
+          "fp32_delta": -0.009285307378632979,
+          "bf16_delta": -7.387110962397969e-05,
+          "precision_delta": -0.009211436269008999
+        },
+        {
+          "seed": 733,
+          "fp32_delta": 0.002690588923300652,
+          "bf16_delta": 0.00227434334852461,
+          "precision_delta": 0.00041624557477604185
+        }
+      ],
+      "mean_fp32_delta": -0.0018517413383527526,
+      "median_fp32_delta": 7.102374152978541e-05,
+      "fp32_improved_seeds": 2,
+      "mean_precision_delta": -0.006091302034379709
+    },
+    "tiger-spectral-fade_minus_tiger-full": {
+      "seeds": [
+        {
+          "seed": 701,
+          "fp32_delta": -2.2543143749942374e-05,
+          "bf16_delta": 0.00026503914105902027,
+          "precision_delta": -0.00028758228480896264
+        },
+        {
+          "seed": 709,
+          "fp32_delta": -0.0005714335795374836,
+          "bf16_delta": -0.025707438209131794,
+          "precision_delta": 0.02513600462959431
+        },
+        {
+          "seed": 719,
+          "fp32_delta": -7.190828837977392e-05,
+          "bf16_delta": -0.0048369491081086124,
+          "precision_delta": 0.0047650408197288385
+        },
+        {
+          "seed": 727,
+          "fp32_delta": 0.0015897718033244246,
+          "bf16_delta": -2.8279076634163403e-05,
+          "precision_delta": 0.001618050879958588
+        },
+        {
+          "seed": 733,
+          "fp32_delta": -0.0027106765041509107,
+          "bf16_delta": -0.00293237540842739,
+          "precision_delta": 0.00022169890427647942
+        }
+      ],
+      "mean_fp32_delta": -0.0003573579424987372,
+      "median_fp32_delta": -7.190828837977392e-05,
+      "fp32_improved_seeds": 4,
+      "mean_precision_delta": 0.0062906425897498505
+    }
+  }
+}

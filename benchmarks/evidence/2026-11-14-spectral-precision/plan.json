@@ -1,0 +1,52 @@
+{
+  "model": {
+    "symbols": 32,
+    "pairs": 8,
+    "gap": 8,
+    "queries": 4,
+    "width": 128,
+    "layers": 3,
+    "heads": 4
+  },
+  "device": "cuda",
+  "cpu_threads": 2,
+  "batch_size": 64,
+  "steps": 1600,
+  "eval_interval": 50,
+  "eval_size": 512,
+  "test_size": 2048,
+  "lr": 0.001,
+  "modes": [
+    "tiger-full",
+    "tiger-no-spectral",
+    "tiger-spectral-fade"
+  ],
+  "binding_gate": {
+    "original_min": 0.9,
+    "rebound_min": 0.9,
+    "obsolete_max": 0.2
+  },
+  "date": "2026-11-14",
+  "source_commit": "3cb4b78ce5f04837ad14d16305e7f5b505bbbe99",
+  "precisions": {
+    "fp32": [
+      701,
+      709,
+      719,
+      727,
+      733
+    ]
+  },
+  "bridge": {
+    "precision": "bf16",
+    "seed": 701,
+    "mode": "tiger-full"
+  },
+  "primary_metrics": [
+    "paired test CE full minus off and fade minus full in FP32",
+    "per-seed difference of those contrasts between FP32 and archived BF16"
+  ],
+  "scope": "Five matched synthetic retrieval seeds. No default change or general precision claim. All runs retained; no replacement seeds or tuning.",
+  "gate": "Before FP32 runs, BF16 bridge must match archived initial/final model hashes and loss/LR traces exactly. Compare cross-precision source/input/initialization hashes.",
+  "timing": "Diagnostic only. Not a throughput study."
+}
